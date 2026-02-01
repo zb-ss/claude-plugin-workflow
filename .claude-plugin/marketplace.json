@@ -1,5 +1,5 @@
 {
-  "name": "claude-plugin-workflow",
+  "name": "zb-ss-workflow",
   "description": "Automated development workflow orchestration for Claude Code",
   "owner": {
     "name": "zb-ss"

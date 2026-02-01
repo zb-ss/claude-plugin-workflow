@@ -4,17 +4,22 @@ Automated development workflow orchestration with org-mode tracking.
 
 ## Installation
 
-Add to your Claude Code configuration:
-
-```bash
-claude --plugin-dir /path/to/workflow
-```
-
-Or add to your settings:
+Add to your Claude Code `settings.json`:
 
 ```json
 {
-  "plugins": ["/path/to/workflow"]
+  "extraKnownMarketplaces": {
+    "zb-ss-workflow": {
+      "source": {
+        "source": "github",
+        "owner": "zb-ss",
+        "repo": "claude-plugin-workflow"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "workflow@zb-ss-workflow": true
+  }
 }
 ```
 
