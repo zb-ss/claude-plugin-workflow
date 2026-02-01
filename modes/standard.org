@@ -1,0 +1,63 @@
+#+TITLE: Standard Mode Configuration
+#+MODE_NAME: standard
+#+DESCRIPTION: Balanced approach with good quality and reasonable speed
+
+* Overview
+
+Standard mode provides a balanced approach between speed and quality.
+Uses sonnet model for most tasks with single-pass code review.
+
+* Agent Routing
+
+| Phase | Agent | Model | Purpose |
+|-------|-------|-------|---------|
+| Planning | Plan | sonnet | Built-in planning agent |
+| Implementation | focused-build | sonnet | Built-in implementation agent |
+| Code Review | reviewer | sonnet | Standard code review |
+| Security | security | sonnet | Standard security audit |
+| Tests | test-writer | sonnet | Test generation |
+
+* Review Chain
+
+#+BEGIN_SRC text
+Implementation
+     ↓
+Code Review (reviewer) → FAIL → Fix → Retry (max 2)
+     ↓ PASS
+Security Review (security) → FAIL → Fix → Retry (max 1)
+     ↓ PASS
+COMPLETE
+#+END_SRC
+
+* Settings
+:PROPERTIES:
+:MAX_CODE_REVIEW_ITERATIONS: 2
+:MAX_SECURITY_ITERATIONS: 1
+:REQUIRE_TESTS: false
+:MIN_COVERAGE: 0
+:PARALLEL_AGENTS: false
+:END:
+
+* Phase Defaults
+
+** Planning
+- Use built-in Plan agent
+- Create org file for state tracking
+- Explore codebase before planning
+
+** Implementation
+- Use focused-build agent
+- Follow plan strictly
+- Minimal deviation allowed
+
+** Review
+- Single code review pass
+- Security review required
+- Performance review optional
+
+* When to Use
+
+- Regular feature development
+- Standard bug fixes
+- Routine refactoring
+- Default choice for most tasks

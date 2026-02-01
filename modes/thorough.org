@@ -1,0 +1,114 @@
+#+TITLE: Thorough Mode Configuration
+#+MODE_NAME: thorough
+#+DESCRIPTION: Maximum quality with multi-agent review chain
+
+* Overview
+
+Thorough mode maximizes code quality using opus models for reviews
+and requiring ALL review gates to pass. Best for critical features,
+security-sensitive code, and production releases.
+
+* Agent Routing
+
+| Phase | Agent | Model | Purpose |
+|-------|-------|-------|---------|
+| Planning | architect | opus | Deep architectural analysis |
+| Implementation | executor | sonnet | Careful implementation |
+| Code Review | reviewer-deep | opus | Comprehensive review |
+| Security | security-deep | opus | Deep security audit |
+| Tests | test-writer | sonnet | Full test coverage |
+| Performance | perf-reviewer | sonnet | Performance analysis |
+| Documentation | doc-writer | haiku | Documentation updates |
+
+* Review Chain
+
+ALL gates must pass:
+
+#+BEGIN_SRC text
+Implementation
+     ↓
+Code Review (reviewer-deep) → FAIL → Fix → Retry (max 3)
+     ↓ PASS
+Security Review (security-deep) → FAIL → Fix → Retry (max 2)
+     ↓ PASS
+Test Coverage Check (80% minimum) → FAIL → Add tests → Retry
+     ↓ PASS
+[Advisory] Performance Review (perf-reviewer) → Warn only
+     ↓
+[Advisory] Documentation Check (doc-writer) → Warn only
+     ↓
+COMPLETE
+#+END_SRC
+
+* Settings
+:PROPERTIES:
+:MAX_CODE_REVIEW_ITERATIONS: 3
+:MAX_SECURITY_ITERATIONS: 2
+:REQUIRE_TESTS: true
+:MIN_COVERAGE: 80
+:PARALLEL_AGENTS: false
+:REQUIRE_ALL_GATES: true
+:END:
+
+* Gate Requirements
+
+** Code Review Gate (REQUIRED)
+- No CRITICAL issues
+- Maximum 2 MAJOR issues (must be documented)
+- All logic paths verified
+- Error handling complete
+
+** Security Review Gate (REQUIRED)
+- No CRITICAL findings
+- No HIGH findings (or documented exception)
+- OWASP Top 10 verified
+- Input validation complete
+
+** Test Coverage Gate (REQUIRED)
+- Minimum 80% coverage on new code
+- All critical paths tested
+- Edge cases covered
+- Tests passing
+
+** Performance Review (ADVISORY)
+- No CRITICAL performance issues
+- Warnings logged for review
+- Does not block completion
+
+** Documentation Check (ADVISORY)
+- Documentation updated
+- Warnings if missing
+- Does not block completion
+
+* Phase Defaults
+
+** Planning
+- Use architect (opus)
+- Full codebase exploration
+- Risk assessment required
+- Comprehensive plan
+
+** Implementation
+- Use executor (sonnet)
+- Strict plan adherence
+- Full error handling
+- Clean code required
+
+** Review
+- All mandatory gates must pass
+- Multiple iteration allowed
+- Deep analysis on each pass
+
+* When to Use
+
+- Production releases
+- Security-sensitive features
+- Financial/payment code
+- PII/PHI handling
+- Critical infrastructure
+- High-visibility features
+
+* Cost Consideration
+
+Thorough mode uses opus for reviews which increases cost.
+Reserve for critical code paths where quality is paramount.

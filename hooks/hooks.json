@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Workflow plugin hooks for automated validation",
+  "enabled": true,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "tool == 'Edit' && tool_input.file_path matches '\\.ts$'",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsc --noEmit 2>&1 | grep -E \"$(basename \"$CLAUDE_FILE_PATH\")\" | head -5 || true",
+            "description": "Type-check TypeScript files after edit"
+          }
+        ]
+      },
+      {
+        "matcher": "tool == 'Edit' && tool_input.file_path matches '\\.tsx$'",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsc --noEmit 2>&1 | grep -E \"$(basename \"$CLAUDE_FILE_PATH\")\" | head -5 || true",
+            "description": "Type-check TSX files after edit"
+          }
+        ]
+      },
+      {
+        "matcher": "tool == 'Edit' && tool_input.file_path matches '\\.php$'",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "php -l \"$CLAUDE_FILE_PATH\" 2>&1 || true",
+            "description": "Syntax-check PHP files after edit"
+          }
+        ]
+      },
+      {
+        "matcher": "tool == 'Edit' && tool_input.file_path matches '\\.py$'",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m py_compile \"$CLAUDE_FILE_PATH\" 2>&1 || true",
+            "description": "Syntax-check Python files after edit"
+          }
+        ]
+      },
+      {
+        "matcher": "tool == 'Write' && tool_input.file_path matches '\\.json$'",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json; json.load(open('$CLAUDE_FILE_PATH'))\" 2>&1 || true",
+            "description": "Validate JSON files after write"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "tool == 'Bash' && tool_input.command matches 'rm -rf'",
+        "hooks": [
+          {
+            "type": "block",
+            "message": "Blocking dangerous rm -rf command. Use targeted file deletion instead."
+          }
+        ]
+      },
+      {
+        "matcher": "tool == 'Bash' && tool_input.command matches 'git push --force'",
+        "hooks": [
+          {
+            "type": "block",
+            "message": "Blocking force push. This is a destructive operation that requires explicit user approval."
+          }
+        ]
+      }
+    ]
+  },
+  "notes": {
+    "environment_variables": [
+      "CLAUDE_FILE_PATH - Path to the file being operated on",
+      "CLAUDE_TOOL_NAME - Name of the tool being used",
+      "CLAUDE_WORKFLOW_ID - Current workflow ID (if in workflow)"
+    ],
+    "hook_types": [
+      "command - Run a shell command, output shown to user",
+      "block - Block the tool use with a message"
+    ]
+  }
+}

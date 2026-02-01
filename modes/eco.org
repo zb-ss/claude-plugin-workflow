@@ -1,0 +1,92 @@
+#+TITLE: Eco Mode Configuration
+#+MODE_NAME: eco
+#+DESCRIPTION: Token-efficient with haiku-first approach
+
+* Overview
+
+Eco mode minimizes token usage by preferring haiku models
+and limiting exploration depth. Best for budget-conscious
+usage or simple, well-defined tasks.
+
+* Agent Routing
+
+| Phase | Agent | Model | Purpose |
+|-------|-------|-------|---------|
+| Planning | architect-lite | haiku | Minimal planning |
+| Implementation | executor-lite | haiku | Direct implementation |
+| Code Review | reviewer-lite | haiku | Basic review |
+| Security | security-lite | haiku | Quick scan |
+
+* Review Chain
+
+#+BEGIN_SRC text
+Implementation
+     ↓
+Code Review (reviewer-lite) → FAIL → Fix → Retry (max 1)
+     ↓ PASS
+COMPLETE
+#+END_SRC
+
+* Settings
+:PROPERTIES:
+:MAX_CODE_REVIEW_ITERATIONS: 1
+:MAX_SECURITY_ITERATIONS: 0
+:REQUIRE_TESTS: false
+:MIN_COVERAGE: 0
+:PARALLEL_AGENTS: false
+:EXPLORATION_DEPTH: shallow
+:END:
+
+* Token Optimization
+
+** Exploration
+- Read only essential files
+- Skip deep dependency tracing
+- Limit context gathering
+
+** Planning
+- Concise plans
+- Skip optional sections
+- Focus on core changes
+
+** Implementation
+- Direct changes only
+- Minimal validation
+- No exploratory refactoring
+
+** Review
+- Pattern-based only
+- Skip edge case analysis
+- Essential checks only
+
+* Phase Defaults
+
+** Planning
+- Use --style=light (JSON state)
+- Skip org file creation
+- Minimal exploration
+
+** Implementation
+- Follow plan exactly
+- No deviations
+- Minimal error handling additions
+
+** Review
+- Security scan optional
+- Performance review skipped
+- Documentation update skipped
+
+* When to Use
+
+- Simple, clear tasks
+- Well-defined bug fixes
+- Budget-conscious development
+- Tasks with good specifications
+- When manual review will follow
+
+* Limitations
+
+- May miss edge cases
+- Limited security coverage
+- No deep analysis
+- Best with clear requirements

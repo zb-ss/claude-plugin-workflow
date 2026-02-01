@@ -1,0 +1,78 @@
+#+TITLE: Turbo Mode Configuration
+#+MODE_NAME: turbo
+#+DESCRIPTION: Maximum speed with parallel execution
+
+* Overview
+
+Turbo mode optimizes for speed using parallel agent execution
+and haiku models where possible. Best for experienced developers
+who will review the output themselves.
+
+* Agent Routing
+
+| Phase | Agent | Model | Purpose |
+|-------|-------|-------|---------|
+| Planning | architect-lite | haiku | Quick analysis |
+| Implementation | executor-lite | haiku | Fast implementation |
+| Code Review | reviewer-lite | haiku | Quick review |
+| Security | security-lite | haiku | Basic security scan |
+
+* Review Chain
+
+#+BEGIN_SRC text
+Implementation
+     ↓
+Quick Review (reviewer-lite) → Advisory only
+     ↓
+Quick Security (security-lite) → Advisory only
+     ↓
+COMPLETE (with warnings if any)
+#+END_SRC
+
+* Settings
+:PROPERTIES:
+:MAX_CODE_REVIEW_ITERATIONS: 1
+:MAX_SECURITY_ITERATIONS: 0
+:REQUIRE_TESTS: false
+:MIN_COVERAGE: 0
+:PARALLEL_AGENTS: true
+:REVIEW_BLOCKING: false
+:END:
+
+* Phase Defaults
+
+** Planning
+- Minimal exploration
+- Quick file identification
+- Skip deep analysis
+
+** Implementation
+- Direct implementation
+- Minimal validation
+- Trust the plan
+
+** Review
+- Advisory only (non-blocking)
+- Quick pattern matching
+- User responsible for final review
+
+* Parallel Execution
+
+Turbo mode runs these phases in parallel where possible:
+- Code review and security scan run simultaneously
+- Multiple file implementations can run in parallel
+
+* When to Use
+
+- Quick prototypes
+- Simple bug fixes
+- Time-sensitive changes
+- Developer will do manual review
+- Non-critical code paths
+
+* Warnings
+
+- Reviews are advisory, not blocking
+- May miss subtle issues
+- Recommended for experienced developers
+- Always do manual review before merge
