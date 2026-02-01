@@ -36,9 +36,18 @@ COMPLETE (with warnings if any)
 :MAX_SECURITY_ITERATIONS: 0
 :REQUIRE_TESTS: false
 :MIN_COVERAGE: 0
-:PARALLEL_AGENTS: true
+:PARALLEL_REVIEWS: true
+:PARALLEL_IMPLEMENTATION: true
 :REVIEW_BLOCKING: false
+:AUTONOMOUS_MODE: true
 :END:
+
+* Parallel Execution
+
+Turbo mode maximizes parallelism:
+- Code review + Security review ALWAYS parallel
+- Multiple file implementations can run in parallel
+- All reviews are advisory (non-blocking)
 
 * Phase Defaults
 

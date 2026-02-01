@@ -36,8 +36,15 @@ COMPLETE
 :MAX_SECURITY_ITERATIONS: 1
 :REQUIRE_TESTS: false
 :MIN_COVERAGE: 0
-:PARALLEL_AGENTS: false
+:PARALLEL_REVIEWS: true
+:AUTONOMOUS_MODE: true
 :END:
+
+* Parallel Execution
+
+Reviews can run in parallel on first pass:
+- Code review + Security review (first iteration)
+- If either fails, subsequent iterations are sequential
 
 * Phase Defaults
 

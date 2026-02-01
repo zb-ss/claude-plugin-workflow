@@ -34,9 +34,16 @@ COMPLETE
 :MAX_SECURITY_ITERATIONS: 0
 :REQUIRE_TESTS: false
 :MIN_COVERAGE: 0
-:PARALLEL_AGENTS: false
+:PARALLEL_REVIEWS: false
 :EXPLORATION_DEPTH: shallow
+:AUTONOMOUS_MODE: true
 :END:
+
+* Parallel Execution
+
+Eco mode minimizes parallelism to save tokens:
+- Sequential execution only
+- Fewer agents = lower overhead
 
 * Token Optimization
 

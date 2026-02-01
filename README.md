@@ -171,6 +171,8 @@ The plugin includes automated hooks (enabled by default):
 ## Features
 
 - **Codebase analysis** before planning (extracts conventions)
+- **Parallel agent execution** where phases are independent
+- **Fully autonomous mode** - no permission prompts for safe operations
 - Org-mode based state tracking (default)
 - JSON state for light style
 - Tiered agent routing by mode
@@ -179,6 +181,30 @@ The plugin includes automated hooks (enabled by default):
 - Progress persistence
 - Error recovery
 - Branch management
+
+## Autonomous Execution
+
+Workflows run **without asking permission** for:
+- File read/write/edit operations
+- Branch creation
+- Validation commands (lint, type-check)
+- Build and test commands
+- Subagent spawning
+
+**User confirmation required only for:**
+- Git commits (user reviews first)
+- Git push
+- File deletion
+- Destructive operations
+
+## Parallel Execution
+
+| Mode | Parallel Behavior |
+|------|-------------------|
+| turbo | Code + Security reviews parallel, multi-file implementation |
+| standard | Code + Security reviews parallel on first pass |
+| thorough | Performance + Documentation checks parallel |
+| eco | Sequential only (minimize tokens) |
 
 ## Workflow Best Practices
 
@@ -202,6 +228,44 @@ The plugin includes automated hooks (enabled by default):
 
 - Claude Code with Task tool access
 - Git repository
+
+## Recommended Settings
+
+For optimal autonomous workflow execution, copy the recommended settings to your project:
+
+```bash
+# For shared settings (committed to git)
+cp ~/.claude/plugins/workflow/resources/recommended-settings.json .claude/settings.json
+
+# For personal settings (git-ignored)
+cp ~/.claude/plugins/workflow/resources/recommended-settings.json .claude/settings.local.json
+```
+
+Or manually add to your `.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite",
+      "Bash(git status)", "Bash(git diff *)", "Bash(git add *)",
+      "Bash(git checkout -b *)", "Bash(npm run *)", "Bash(npm test *)",
+      "Bash(composer *)", "Bash(php -l *)", "Bash(python -m pytest *)"
+    ],
+    "ask": [
+      "Bash(git commit *)", "Bash(git push *)", "Bash(rm *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)", "Bash(git reset --hard *)", "Bash(git push --force *)"
+    ]
+  }
+}
+```
+
+See `resources/recommended-settings.json` for the full configuration.
+
+**Note:** Plugins cannot set permissions directly. Users must configure their project settings.
 
 ## License
 

@@ -4,20 +4,48 @@ Start an automated development workflow with configurable execution modes and pl
 
 ## AGENTIC MODE ACTIVE
 
-This workflow runs in **agentic mode** with expanded permissions:
+This workflow runs in **fully autonomous agentic mode**. Do NOT ask for permission on non-destructive operations.
 
-**ALLOWED without asking:**
-- Read/Write/Edit files in the project
+> **Note:** For optimal autonomous execution, ensure the project has recommended permissions configured.
+> See `resources/recommended-settings.json` or run:
+> `cp ~/.claude/plugins/workflow/resources/recommended-settings.json .claude/settings.local.json`
+
+### Permission Model
+
+**DO WITHOUT ASKING (autonomous):**
+- Read any file in the project
+- Write/Edit files in the project
+- Create directories
 - Create feature branches (`git checkout -b`, `git switch -c`)
-- Run validation (`php -l`, `npm run lint`, `composer validate`)
-- Run builds and tests
+- Run validation commands (`php -l`, `npm run lint`, `tsc --noEmit`)
+- Run build commands (`npm run build`, `composer install`)
+- Run test suites (`npm test`, `phpunit`, `pytest`)
 - Spawn subagents via Task tool
-- File operations (`mkdir`, `cp`, `mv`)
+- File operations (`mkdir`, `cp`, `mv` within project)
+- Git operations (`git add`, `git status`, `git diff`, `git stash`)
 
-**BLOCKED (user does manually):**
+**ASK BEFORE (requires user confirmation):**
 - `git commit` - User reviews and commits
 - `git push` - User pushes when ready
-- Destructive operations (`rm -rf`, `reset --hard`)
+- Deleting files (`rm`) - Confirm before removal
+- Operations outside project directory
+
+**ALWAYS BLOCKED:**
+- `rm -rf` on directories
+- `git reset --hard`
+- `git push --force`
+- System file modifications
+- Package publishing
+
+### Autonomous Execution Principle
+
+**CRITICAL:** During workflow execution, proceed autonomously through all phases without stopping to ask "Should I continue?" or "Is this okay?" for routine operations. The user has already approved the workflow by starting it.
+
+Only pause for:
+1. Explicit user intervention (they type something)
+2. Review gate failures after max iterations
+3. Truly destructive operations
+4. Ambiguous requirements needing clarification
 
 **Best Practice:** Work incrementally, validate often, keep state updated.
 
@@ -198,19 +226,71 @@ For each step:
 9. CHECK for user input before proceeding
 ```
 
+### Parallel Execution
+
+**IMPORTANT:** Use parallel Task tool calls where phases are independent to maximize efficiency.
+
+#### Parallel Opportunities
+
+1. **Turbo/Standard Reviews** - Code review + Security scan (no dependencies):
+   ```
+   # Send BOTH in a single message with multiple Task calls:
+   Task(subagent_type="reviewer-lite", prompt=..., run_in_background=true)
+   Task(subagent_type="security-lite", prompt=..., run_in_background=true)
+   # Then collect results from both
+   ```
+
+2. **Thorough Mode Advisory Checks** - Performance + Documentation (after gates pass):
+   ```
+   # These are advisory, run in parallel:
+   Task(subagent_type="perf-reviewer", prompt=..., run_in_background=true)
+   Task(subagent_type="doc-writer", prompt=..., run_in_background=true)
+   ```
+
+3. **Multi-file Implementation** - When plan has independent file changes:
+   ```
+   # If files are independent (e.g., new service + new test):
+   Task(subagent_type="executor-lite", prompt="Implement service...", run_in_background=true)
+   Task(subagent_type="executor-lite", prompt="Implement tests...", run_in_background=true)
+   ```
+
+#### When NOT to Parallelize
+
+- Code review must complete before security review **in thorough mode** (security may depend on fixes)
+- Implementation must complete before any review
+- Test writing should follow implementation
+- Dependent file changes (imports, shared state)
+
+#### Background Agent Pattern
+
+```python
+# Launch parallel agents
+agent1 = Task(subagent_type="reviewer", run_in_background=true, ...)
+agent2 = Task(subagent_type="security", run_in_background=true, ...)
+
+# Collect results (use TaskOutput or read output files)
+result1 = TaskOutput(task_id=agent1.id)
+result2 = TaskOutput(task_id=agent2.id)
+
+# Process combined results
+```
+
 ### Review Loops by Mode
 
 #### Standard Mode
 - Code review: max 2 iterations, blocking
 - Security: max 1 iteration, blocking
+- **Parallel:** Code + Security can run in parallel on first pass
 
 #### Turbo Mode
 - Code review: 1 iteration, advisory (non-blocking)
 - Security: advisory only
+- **Parallel:** ALWAYS run Code + Security in parallel (both advisory)
 
 #### Eco Mode
 - Code review: max 1 iteration, blocking
 - Security: skipped
+- **Parallel:** None (minimal phases)
 
 #### Thorough Mode
 - Code review: max 3 iterations, blocking (reviewer-deep)
@@ -218,6 +298,7 @@ For each step:
 - Test coverage: 80% minimum, blocking
 - Performance: advisory
 - Documentation: advisory
+- **Parallel:** Performance + Documentation run in parallel (both advisory)
 
 ```
 iteration = 0

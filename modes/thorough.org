@@ -47,9 +47,17 @@ COMPLETE
 :MAX_SECURITY_ITERATIONS: 2
 :REQUIRE_TESTS: true
 :MIN_COVERAGE: 80
-:PARALLEL_AGENTS: false
+:PARALLEL_ADVISORY: true
 :REQUIRE_ALL_GATES: true
+:AUTONOMOUS_MODE: true
 :END:
+
+* Parallel Execution
+
+Thorough mode uses selective parallelism:
+- Blocking gates are sequential (code → security → tests)
+- Advisory checks run in parallel (performance + documentation)
+- This ensures quality gates are properly enforced
 
 * Gate Requirements
 
