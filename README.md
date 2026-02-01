@@ -4,23 +4,11 @@ Automated development workflow orchestration with org-mode tracking.
 
 ## Installation
 
-Add to your Claude Code `settings.json`:
+In Claude Code, run:
 
-```json
-{
-  "extraKnownMarketplaces": {
-    "zb-ss-workflow": {
-      "source": {
-        "source": "github",
-        "owner": "zb-ss",
-        "repo": "claude-plugin-workflow"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "workflow@zb-ss-workflow": true
-  }
-}
+```
+/plugin marketplace add zb-ss/claude-plugin-workflow
+/plugin install workflow@zb-ss-claude-plugin-workflow
 ```
 
 ## Skills
