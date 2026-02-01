@@ -2,36 +2,39 @@
   "name": "workflow",
   "description": "Automated development workflow orchestration with tiered agents and execution modes",
   "version": "2.3.0",
+  "author": {
+    "name": "zb-ss"
+  },
+  "homepage": "https://github.com/zb-ss/claude-plugin-workflow",
+  "repository": "https://github.com/zb-ss/claude-plugin-workflow",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "agents",
+    "automation",
+    "code-review",
+    "security",
+    "tiered-agents"
+  ],
   "agents": [
-    "agents/codebase-analyzer.md",
-    "agents/architect-lite.md",
-    "agents/architect.md",
-    "agents/executor-lite.md",
-    "agents/executor.md",
-    "agents/reviewer-lite.md",
-    "agents/reviewer.md",
-    "agents/reviewer-deep.md",
-    "agents/security-lite.md",
-    "agents/security.md",
-    "agents/security-deep.md",
-    "agents/explorer.md",
-    "agents/test-writer.md",
-    "agents/perf-lite.md",
-    "agents/perf-reviewer.md",
-    "agents/doc-writer.md"
+    "./agents/codebase-analyzer.md",
+    "./agents/architect-lite.md",
+    "./agents/architect.md",
+    "./agents/executor-lite.md",
+    "./agents/executor.md",
+    "./agents/reviewer-lite.md",
+    "./agents/reviewer.md",
+    "./agents/reviewer-deep.md",
+    "./agents/security-lite.md",
+    "./agents/security.md",
+    "./agents/security-deep.md",
+    "./agents/explorer.md",
+    "./agents/test-writer.md",
+    "./agents/perf-lite.md",
+    "./agents/perf-reviewer.md",
+    "./agents/doc-writer.md"
   ],
   "skills": [
-    "skills/start",
-    "skills/status",
-    "skills/resume",
-    "skills/mode",
-    "skills/verify"
-  ],
-  "hooks": "hooks/hooks.json",
-  "modes": [
-    "modes/standard.org",
-    "modes/turbo.org",
-    "modes/eco.org",
-    "modes/thorough.org"
+    "./skills/"
   ]
 }

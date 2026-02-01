@@ -1,7 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Workflow plugin hooks for automated validation",
-  "enabled": true,
   "hooks": {
     "PostToolUse": [
       {
@@ -10,7 +8,7 @@
           {
             "type": "command",
             "command": "npx tsc --noEmit 2>&1 | grep -E \"$(basename \"$CLAUDE_FILE_PATH\")\" | head -5 || true",
-            "description": "Type-check TypeScript files after edit"
+            "timeout": 10
           }
         ]
       },
@@ -20,7 +18,7 @@
           {
             "type": "command",
             "command": "npx tsc --noEmit 2>&1 | grep -E \"$(basename \"$CLAUDE_FILE_PATH\")\" | head -5 || true",
-            "description": "Type-check TSX files after edit"
+            "timeout": 10
           }
         ]
       },
@@ -30,7 +28,7 @@
           {
             "type": "command",
             "command": "php -l \"$CLAUDE_FILE_PATH\" 2>&1 || true",
-            "description": "Syntax-check PHP files after edit"
+            "timeout": 5
           }
         ]
       },
@@ -40,7 +38,7 @@
           {
             "type": "command",
             "command": "python3 -m py_compile \"$CLAUDE_FILE_PATH\" 2>&1 || true",
-            "description": "Syntax-check Python files after edit"
+            "timeout": 5
           }
         ]
       },
@@ -50,7 +48,7 @@
           {
             "type": "command",
             "command": "python3 -c \"import json; json.load(open('$CLAUDE_FILE_PATH'))\" 2>&1 || true",
-            "description": "Validate JSON files after write"
+            "timeout": 3
           }
         ]
       }
@@ -74,17 +72,6 @@
           }
         ]
       }
-    ]
-  },
-  "notes": {
-    "environment_variables": [
-      "CLAUDE_FILE_PATH - Path to the file being operated on",
-      "CLAUDE_TOOL_NAME - Name of the tool being used",
-      "CLAUDE_WORKFLOW_ID - Current workflow ID (if in workflow)"
-    ],
-    "hook_types": [
-      "command - Run a shell command, output shown to user",
-      "block - Block the tool use with a message"
     ]
   }
 }
