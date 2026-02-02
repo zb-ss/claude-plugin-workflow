@@ -11,10 +11,19 @@ In Claude Code, run:
 /plugin install workflow@zb-ss-claude-plugin-workflow
 ```
 
+After installation, run the setup command to configure permissions:
+
+```
+/workflow:setup
+```
+
+This will check your settings and offer to add the required permissions for autonomous workflow execution.
+
 ## Skills
 
 | Skill | Command | Description |
 |-------|---------|-------------|
+| setup | `/workflow:setup` | Configure permissions for workflow plugin |
 | start | `/workflow:start` | Start a new development workflow |
 | status | `/workflow:status` | Check workflow status |
 | resume | `/workflow:resume` | Resume an existing workflow |
@@ -249,6 +258,12 @@ Or manually add to your `.claude/settings.json`:
     "defaultMode": "acceptEdits",
     "allow": [
       "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite",
+      "Edit(~/.claude/workflows/**)",
+      "Write(~/.claude/workflows/**)",
+      "Edit(~/.claude/plans/**)",
+      "Write(~/.claude/plans/**)",
+      "Bash(mkdir -p ~/.claude/workflows)",
+      "Bash(mkdir -p ~/.claude/plans)",
       "Bash(git status)", "Bash(git diff *)", "Bash(git add *)",
       "Bash(git checkout -b *)", "Bash(npm run *)", "Bash(npm test *)",
       "Bash(composer *)", "Bash(php -l *)", "Bash(python -m pytest *)"
@@ -262,6 +277,8 @@ Or manually add to your `.claude/settings.json`:
   }
 }
 ```
+
+**Important:** The `~/.claude/workflows/**` and `~/.claude/plans/**` permissions allow the workflow to manage state files without prompts.
 
 See `resources/recommended-settings.json` for the full configuration.
 
