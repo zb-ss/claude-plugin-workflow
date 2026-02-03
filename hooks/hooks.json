@@ -3,72 +3,24 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "tool == 'Edit' && tool_input.file_path matches '\\.ts$'",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "npx tsc --noEmit 2>&1 | grep -E \"$(basename \"$CLAUDE_FILE_PATH\")\" | head -5 || true",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "tool == 'Edit' && tool_input.file_path matches '\\.tsx$'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx tsc --noEmit 2>&1 | grep -E \"$(basename \"$CLAUDE_FILE_PATH\")\" | head -5 || true",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "tool == 'Edit' && tool_input.file_path matches '\\.php$'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "php -l \"$CLAUDE_FILE_PATH\" 2>&1 || true",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "tool == 'Edit' && tool_input.file_path matches '\\.py$'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -m py_compile \"$CLAUDE_FILE_PATH\" 2>&1 || true",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "tool == 'Write' && tool_input.file_path matches '\\.json$'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -c \"import json; json.load(open('$CLAUDE_FILE_PATH'))\" 2>&1 || true",
-            "timeout": 3
+            "command": "FILE=\"$CLAUDE_FILE_PATH\"; case \"$FILE\" in *.ts|*.tsx) npx tsc --noEmit 2>&1 | grep -E \"$(basename \"$FILE\")\" | head -5 || true ;; *.php) php -l \"$FILE\" 2>&1 || true ;; *.py) python3 -m py_compile \"$FILE\" 2>&1 || true ;; *.json) python3 -c \"import json; json.load(open('$FILE'))\" 2>&1 || true ;; esac",
+            "timeout": 15
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "tool == 'Bash' && tool_input.command matches 'rm -rf'",
+        "matcher": "Bash",
         "hooks": [
           {
-            "type": "block",
-            "message": "Blocking dangerous rm -rf command. Use targeted file deletion instead."
-          }
-        ]
-      },
-      {
-        "matcher": "tool == 'Bash' && tool_input.command matches 'git push --force'",
-        "hooks": [
-          {
-            "type": "block",
-            "message": "Blocking force push. This is a destructive operation that requires explicit user approval."
+            "type": "command",
+            "command": "INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r '.tool_input.command // empty'); if echo \"$CMD\" | grep -qE 'rm -rf|git push --force'; then echo \"Blocking dangerous command: rm -rf and git push --force are not allowed\" >&2; exit 2; fi; exit 0",
+            "timeout": 5
           }
         ]
       }
