@@ -19,8 +19,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r '.tool_input.command // empty'); if echo \"$CMD\" | grep -qE 'rm -rf|git push --force'; then echo \"Blocking dangerous command: rm -rf and git push --force are not allowed\" >&2; exit 2; fi; exit 0",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/workflow-permission-check.sh\"",
+            "timeout": 10
           }
         ]
       }
