@@ -87,24 +87,83 @@ Context file: `~/.claude/workflows/context/<project-slug>.md`
 | eco | - | - | Skipped |
 | thorough | doc-writer | haiku | No (advisory) |
 
-## Review Chain by Mode
+### Quality Gate Phase (MANDATORY)
+
+| Mode | Agent | Model | Checks | Blocking |
+|------|-------|-------|--------|----------|
+| standard | quality-gate | sonnet | Full (build, type, lint, test, security) | **YES** |
+| turbo | quality-gate | haiku | Abbreviated (build, lint) | **YES** |
+| eco | quality-gate | haiku | Minimal (build, lint) | **YES** |
+| thorough | quality-gate | sonnet | Full + coverage check | **YES** |
+
+### Completion Guard Phase (MANDATORY)
+
+| Mode | Agent | Model | Verification | Blocking |
+|------|-------|-------|--------------|----------|
+| standard | completion-guard | sonnet | Requirements + Build + Tests + TODOs | **YES** |
+| turbo | completion-guard | haiku | Quick check (build + tests) | **YES** |
+| eco | completion-guard | haiku | Minimal (build + TODOs) | **YES** |
+| thorough | completion-guard | opus | Full verification (all checks) | **YES** |
+
+## Review Chain by Mode - MANDATORY GATES
+
+**CRITICAL:** All modes now have mandatory quality gates. NO reviews can be skipped.
 
 ### Standard Mode
 ```
-Codebase Analysis → Planning → Implementation → Code Review (max 2) → Security Review (max 1) → Complete
+Codebase Analysis
+     ↓
+Planning
+     ↓
+Implementation
+     ↓
+Code Review (max 2) ──────────┐
+     ↓ PASS                   │ FAIL → Fix → Retry
+Security Review (max 1) ──────┘
+     ↓ PASS
+QUALITY GATE (MANDATORY) ─────┐
+     ↓ PASS                   │ FAIL → Auto-fix → Retry (max 3)
+COMPLETION GUARD (MANDATORY) ─┘
+     ↓ APPROVED
+Complete
 ```
 
 ### Turbo Mode
 ```
-Codebase Analysis (cached) → Planning → Implementation → [Advisory: Quick Review + Quick Security] → Complete
+Codebase Analysis (cached)
+     ↓
+Planning (quick)
+     ↓
+Implementation
+     ↓
+Code Review (1 iter) ─────────┐
+Security Review (1 iter) ─────┤ Run in parallel, but BLOCKING
+     ↓ BOTH PASS              │ FAIL → Fix → Retry
+QUALITY GATE (abbreviated) ───┘
+     ↓ PASS
+COMPLETION GUARD (quick) ─────
+     ↓ APPROVED
+Complete
 ```
-(Reviews run in parallel, non-blocking)
+(Reviews run in parallel but are still BLOCKING - not advisory)
 
 ### Eco Mode
 ```
-[Use existing context] → Planning → Implementation → Quick Code Review (max 1) → Complete
+[Use existing context]
+     ↓
+Planning (minimal)
+     ↓
+Implementation
+     ↓
+Code Review (max 1) ──────────┐
+Security Review (1 iter) ─────┤ BLOCKING
+     ↓ PASS                   │ FAIL → Fix → Retry
+QUALITY GATE (build+lint) ────┘
+     ↓ PASS
+COMPLETION GUARD (MANDATORY) ─
+     ↓ APPROVED
+Complete
 ```
-(Codebase analysis and security review skipped)
 
 ### Thorough Mode
 ```
@@ -114,18 +173,31 @@ Planning (architect/opus)
      ↓
 Implementation
      ↓
-Code Review (max 3) ──────────────────┐
-     ↓ PASS                           │ FAIL → Fix → Retry
-Security Review (max 2) ──────────────┤
-     ↓ PASS                           │ FAIL → Fix → Retry
-Test Coverage (80%) ──────────────────┘
-     ↓ PASS                           │ FAIL → Add tests → Retry
+Code Review (max 3) ──────────┐
+     ↓ PASS                   │ FAIL → Fix → Retry
+Security Review (max 2) ──────┤
+     ↓ PASS                   │ FAIL → Fix → Retry
+Test Coverage (80%) ──────────┘
+     ↓ PASS                   │ FAIL → Add tests → Retry
+QUALITY GATE (FULL) ──────────┐
+     ↓ PASS                   │ FAIL → Auto-fix → Retry (max 3)
+COMPLETION GUARD (opus) ──────┘
+     ↓ APPROVED
 [Advisory] Performance Review
      ↓
 [Advisory] Documentation Check
      ↓
 Complete
 ```
+
+## Zero Tolerance Policy
+
+**All modes enforce:**
+- NO skipping quality gates
+- NO advisory-only reviews (everything blocks)
+- NO partial completion
+- NO scope reduction to pass
+- MANDATORY completion guard approval
 
 ## Model Selection Rationale
 

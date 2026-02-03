@@ -275,30 +275,81 @@ result2 = TaskOutput(task_id=agent2.id)
 # Process combined results
 ```
 
-### Review Loops by Mode
+### Review Loops by Mode - MANDATORY QUALITY GATES
+
+**CRITICAL:** Reviews are NOT optional. ALL gates must PASS before completion.
 
 #### Standard Mode
-- Code review: max 2 iterations, blocking
-- Security: max 1 iteration, blocking
-- **Parallel:** Code + Security can run in parallel on first pass
+- Code review: max 2 iterations, **BLOCKING**
+- Security: max 1 iteration, **BLOCKING**
+- Quality Gate: **MANDATORY** before completion
+- Completion Guard: **MANDATORY** architect sign-off
 
 #### Turbo Mode
-- Code review: 1 iteration, advisory (non-blocking)
-- Security: advisory only
-- **Parallel:** ALWAYS run Code + Security in parallel (both advisory)
+- Code review: 1 iteration, **BLOCKING** (not advisory)
+- Security: 1 iteration, **BLOCKING** (not advisory)
+- Quality Gate: **MANDATORY** (abbreviated)
+- Completion Guard: **MANDATORY** (quick check)
 
 #### Eco Mode
-- Code review: max 1 iteration, blocking
-- Security: skipped
-- **Parallel:** None (minimal phases)
+- Code review: max 1 iteration, **BLOCKING**
+- Security: 1 iteration, **BLOCKING**
+- Quality Gate: **MANDATORY** (build + lint only)
+- Completion Guard: **MANDATORY**
 
 #### Thorough Mode
-- Code review: max 3 iterations, blocking (reviewer-deep)
-- Security: max 2 iterations, blocking (security-deep)
-- Test coverage: 80% minimum, blocking
-- Performance: advisory
-- Documentation: advisory
-- **Parallel:** Performance + Documentation run in parallel (both advisory)
+- Code review: max 3 iterations, **BLOCKING** (reviewer-deep)
+- Security: max 2 iterations, **BLOCKING** (security-deep)
+- Test coverage: 80% minimum, **BLOCKING**
+- Quality Gate: **FULL** (all checks)
+- Completion Guard: **FULL** verification with opus
+- Performance: advisory (after all gates pass)
+- Documentation: advisory (after all gates pass)
+
+### Zero Tolerance Policy
+
+**NEVER:**
+- Skip review gates
+- Accept "advisory" results as passes
+- Allow partial completion
+- Reduce scope to pass tests
+- Delete failing tests
+- Comment out problematic code
+
+### Quality Gate Pipeline
+
+After implementation, ALWAYS run:
+
+```
+Implementation Complete
+        ↓
+┌───────────────────────────────────────┐
+│          QUALITY GATE                 │
+│  (quality-gate agent - MANDATORY)     │
+│                                       │
+│  Build → Type → Lint → Test → Security│
+│           ↓ FAIL                      │
+│      Auto-fix loop (max 3)            │
+└───────────────────────────────────────┘
+        ↓ ALL PASS
+┌───────────────────────────────────────┐
+│        COMPLETION GUARD               │
+│  (completion-guard agent - MANDATORY) │
+│                                       │
+│  ✓ Requirements verified              │
+│  ✓ No incomplete code                 │
+│  ✓ Build passes                       │
+│  ✓ Tests pass                         │
+│  ✓ TODO list complete (0 pending)     │
+│  ✓ Quality gates passed               │
+└───────────────────────────────────────┘
+        ↓ APPROVED
+    Workflow Complete
+
+If REJECTED → Fix issues → Re-run guards (max 3)
+```
+
+### Review Loop Implementation
 
 ```
 iteration = 0
@@ -308,7 +359,6 @@ while iteration < max_iterations:
     Run review agent
     if verdict == PASS:
         Mark step complete
-        Proceed to next step
         break
     else:
         iteration++
@@ -316,14 +366,82 @@ while iteration < max_iterations:
         Log in Review Log
         if iteration < max_iterations:
             Report: "Review found issues. Sending back to implementation."
-            Re-run implementation with feedback
+            # Spawn executor to fix issues
+            Task(
+              subagent_type="workflow:executor",
+              prompt="FIX: {review_issues}"
+            )
         else:
-            if mode == "turbo":
-                Log advisory and continue
-            else:
-                Report: "Max review iterations reached."
-                Ask user: "Should I continue anyway?"
+            # MAX ITERATIONS REACHED - DO NOT SKIP
+            Report: "Max review iterations reached. BLOCKING."
+            Report: "Issues that could not be resolved:"
+            List remaining issues
+            Ask user: "Manual intervention required. Fix these issues and run /workflow:resume"
+            PAUSE workflow - DO NOT CONTINUE
 ```
+
+### Mandatory Quality Gate Invocation
+
+After implementation phase, ALWAYS spawn quality-gate:
+
+```
+Task(
+  subagent_type="workflow:quality-gate",
+  model="sonnet",
+  prompt="""
+  QUALITY GATE CHECK
+
+  Project: {project_path}
+  Changed files: {changed_files}
+  Mode: {workflow_mode}
+
+  Run ALL applicable checks:
+  - Build verification
+  - Type checking
+  - Lint checking
+  - Test suite
+  - Security scan
+
+  Auto-fix issues up to 3 iterations.
+  Report final verdict: PASS or FAIL with details.
+  """
+)
+```
+
+### Mandatory Completion Guard Invocation
+
+After quality gate passes, ALWAYS spawn completion-guard:
+
+```
+Task(
+  subagent_type="workflow:completion-guard",
+  model="opus",  # Always opus for final verification
+  prompt="""
+  COMPLETION GUARD - FINAL VERIFICATION
+
+  Original Task: {original_task_description}
+  Workflow ID: {workflow_id}
+  Mode: {workflow_mode}
+
+  Verify:
+  1. ALL requirements from original task are implemented
+  2. NO incomplete code markers (TODO, FIXME, etc.)
+  3. Build passes
+  4. Tests pass
+  5. TODO list has 0 pending/in_progress items
+  6. Quality gate has passed
+
+  Return APPROVED or REJECTED with specific issues.
+  """
+)
+```
+
+If completion-guard returns REJECTED:
+1. Send issues to executor for fixes
+2. Re-run quality-gate
+3. Re-run completion-guard
+4. Repeat max 3 times
+5. If still failing, PAUSE for manual intervention
 
 ### Handling User Intervention
 

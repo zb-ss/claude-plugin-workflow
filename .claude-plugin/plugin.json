@@ -1,7 +1,7 @@
 {
   "name": "workflow",
   "description": "Automated development workflow orchestration with tiered agents and execution modes",
-  "version": "2.4.0",
+  "version": "3.0.0",
   "author": {
     "name": "zb-ss"
   },
@@ -32,7 +32,9 @@
     "./agents/test-writer.md",
     "./agents/perf-lite.md",
     "./agents/perf-reviewer.md",
-    "./agents/doc-writer.md"
+    "./agents/doc-writer.md",
+    "./agents/quality-gate.md",
+    "./agents/completion-guard.md"
   ],
   "skills": [
     "./skills/"

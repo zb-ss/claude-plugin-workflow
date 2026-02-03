@@ -99,7 +99,7 @@ This will check your settings and offer to add the required permissions for auto
 
 ## Agents
 
-The plugin includes 16 tiered agents:
+The plugin includes 18 tiered agents:
 
 ### Codebase Analysis
 - `codebase-analyzer` (sonnet) - Extracts conventions, patterns, best practices
@@ -122,6 +122,10 @@ The plugin includes 16 tiered agents:
 - `security` (sonnet) - OWASP coverage
 - `security-deep` (opus) - Deep security audit
 
+### Quality Gates (MANDATORY)
+- `quality-gate` (sonnet) - Mandatory verification with auto-fix loop
+- `completion-guard` (opus) - Final architect sign-off before completion
+
 ### Other
 - `explorer` (haiku) - Codebase exploration
 - `test-writer` (sonnet) - Test generation
@@ -131,7 +135,7 @@ The plugin includes 16 tiered agents:
 
 ## Workflow Pipeline
 
-All workflows start with codebase analysis to ensure consistency:
+All workflows have MANDATORY quality gates that CANNOT be skipped:
 
 ```
 Codebase Analysis → Extracts conventions and patterns
@@ -141,11 +145,46 @@ Planning → Creates implementation plan using context
 Implementation → Follows conventions from context
      ↓
 Review Chain → Validates against codebase patterns
+     ↓
+QUALITY GATE (MANDATORY) → Build, Type, Lint, Test, Security
+     ↓
+COMPLETION GUARD (MANDATORY) → Architect verification
+     ↓
+COMPLETE
 ```
 
-## Thorough Mode Review Chain
+## Zero Tolerance Policy
 
-In thorough mode, ALL gates must pass:
+**ALL modes enforce:**
+- NO skipping quality gates
+- NO advisory-only reviews (everything blocks)
+- NO partial completion
+- NO scope reduction to pass tests
+- MANDATORY completion guard approval
+
+## Standard Mode Pipeline
+
+```
+Codebase Analysis
+     ↓
+Planning
+     ↓
+Implementation
+     ↓
+Code Review (max 2) → FAIL → Fix → Retry
+     ↓ PASS
+Security Review (max 1) → FAIL → Fix → Retry
+     ↓ PASS
+QUALITY GATE → Auto-fix loop (max 3)
+     ↓ PASS
+COMPLETION GUARD → Architect sign-off
+     ↓ APPROVED
+COMPLETE
+```
+
+## Thorough Mode Pipeline
+
+In thorough mode, ALL gates must pass with deeper verification:
 
 ```
 Codebase Analysis (fresh)
@@ -160,6 +199,10 @@ Security Review (opus) → FAIL → Fix → Retry (max 2)
      ↓ PASS
 Test Coverage (80% min) → FAIL → Add tests → Retry
      ↓ PASS
+QUALITY GATE (full) → FAIL → Auto-fix → Retry (max 3)
+     ↓ PASS
+COMPLETION GUARD (opus) → Full verification
+     ↓ APPROVED
 [Advisory] Performance Review
      ↓
 [Advisory] Documentation Check
