@@ -27,22 +27,33 @@ if [[ -n "$ACTIVE_WORKFLOW" && -f "$ACTIVE_WORKFLOW" ]]; then
 fi
 
 # ALWAYS BLOCKED - regardless of mode
-BLOCKED_PATTERNS=(
+# Patterns that must match at START of command (to avoid false positives in arguments)
+BLOCKED_START_PATTERNS=(
     "git push"
     "git reset --hard"
+    "sudo rm"
+)
+
+# Patterns that can match ANYWHERE (truly dangerous regardless of context)
+BLOCKED_ANYWHERE_PATTERNS=(
     "rm -rf /"
     "rm -rf ~"
     "rm -rf \$HOME"
-    "sudo rm"
     ":(){:|:&};:"
     "mkfs"
     "dd if="
     "> /dev/sd"
 )
 
-for pattern in "${BLOCKED_PATTERNS[@]}"; do
+for pattern in "${BLOCKED_START_PATTERNS[@]}"; do
+    if [[ "$COMMAND" == "$pattern"* ]]; then
+        echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: $pattern is not allowed. User must run manually.\"}}"
+        exit 0
+    fi
+done
+
+for pattern in "${BLOCKED_ANYWHERE_PATTERNS[@]}"; do
     if [[ "$COMMAND" == *"$pattern"* ]]; then
-        # Output JSON to deny the command
         echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: $pattern is not allowed. User must run manually.\"}}"
         exit 0
     fi
