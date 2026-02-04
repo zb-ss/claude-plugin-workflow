@@ -360,14 +360,40 @@ This ensures:
 - Code style is consistent
 - Testing patterns match existing tests
 
+### MANDATORY: State File Updates
+
+**CRITICAL:** The state file (`.org` or `.md`) is the source of truth. You MUST update it:
+
+1. **BEFORE each step** - Mark status as `in-progress`, set `STARTED_AT`
+2. **AFTER each step** - Write outputs, check off objectives, set `COMPLETED_AT`
+3. **After planning** - Write the FULL plan to the Plan section
+4. **After implementation** - List all changed files
+5. **After reviews** - Record findings and verdicts
+6. **On any error** - Log the error in the state file
+
+**State Update Pattern:**
+```
+# Read current state
+Read(file_path="<HOME>/.claude/workflows/active/<id>.org")
+
+# Update the relevant section using Edit tool
+Edit(file_path="<HOME>/.claude/workflows/active/<id>.org",
+     old_string="**Status:** pending",
+     new_string="**Status:** in-progress")
+
+# Or for larger updates, use Write to replace sections
+```
+
+**NEVER skip state updates.** The user may be following along in their editor.
+
 ### Step Execution Pattern
 
 For each step:
 
 ```
 1. READ the step from state file (may have been modified by user)
-2. LOAD codebase context from ~/.claude/workflows/context/<project>.md
-3. UPDATE state: set STARTED_AT, STATUS: in-progress
+2. LOAD codebase context from <HOME>/.claude/workflows/context/<project>.md
+3. **UPDATE STATE FILE:** set STARTED_AT, STATUS: in-progress
 4. REPORT to user: "Starting Step X: <name> (using <agent>)"
 5. SPAWN subagent with mode-appropriate agent:
    Task(
@@ -382,14 +408,21 @@ For each step:
      """
    )
 6. CAPTURE output from subagent
-7. UPDATE state:
+7. **UPDATE STATE FILE IMMEDIATELY:**
    - Write output to appropriate section
-   - Check off completed objectives
-   - Set COMPLETED_AT
-   - Mark as DONE
+   - Check off completed objectives (change [ ] to [x])
+   - Set COMPLETED_AT timestamp
+   - Mark step as DONE
 8. REPORT to user: "Step X complete. <brief summary>"
 9. CHECK for user input before proceeding
 ```
+
+**After Planning Phase - REQUIRED:**
+Write the COMPLETE plan to the state file's Plan section. Include:
+- All files to modify/create
+- Implementation steps
+- Testing strategy
+- Risks identified
 
 ### Parallel Execution
 

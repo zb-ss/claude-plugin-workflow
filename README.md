@@ -2,6 +2,16 @@
 
 Automated development workflow orchestration with tiered agents and execution modes.
 
+**State tracking in Emacs org-mode or Markdown** - edit your plans live while Claude works!
+
+## Highlights
+
+- **📋 Org-mode & Markdown plans** - Human-readable, editable workflow state files
+- **🤖 20 tiered agents** - From quick haiku checks to deep opus reviews
+- **🐝 Swarm mode** - 4 parallel executors with 3-architect validation
+- **🧠 Memory persistence** - Learnings saved across sessions
+- **🔒 Mandatory quality gates** - No shortcuts, all reviews blocking
+
 ## Installation
 
 In Claude Code, run:
@@ -134,6 +144,83 @@ Use `--format=md` to create markdown state files:
 ```bash
 /workflow:start feature "Add user auth" --format=md
 ```
+
+## Workflow State Files
+
+Workflows are tracked in human-readable state files that you can **view and edit in real-time**.
+
+### For Emacs Users (org-mode)
+
+State files are stored at `~/.claude/workflows/active/<id>.org`:
+
+```org
+#+TITLE: Feature: Add user authentication
+#+PROPERTY: WORKFLOW_ID 20260204-abc123
+#+PROPERTY: MODE thorough
+
+* Workflow Steps
+
+** DONE Step 0: Planning
+:PROPERTIES:
+:STATUS: completed
+:COMPLETED_AT: 2026-02-04T10:30:00Z
+:END:
+
+*** Plan
+#+BEGIN_SRC markdown
+# Implementation Plan
+...
+#+END_SRC
+
+** IN-PROGRESS Step 1: Implementation
+:PROPERTIES:
+:STATUS: in-progress
+:STARTED_AT: 2026-02-04T10:35:00Z
+:END:
+```
+
+**Emacs tips:**
+- Use `org-mode` for collapsible sections (`TAB` to fold/unfold)
+- Edit objectives, add notes - Claude reads the file before each step
+- Use `org-todo` to manually mark steps if needed
+
+### For Other Editors (Markdown)
+
+Use `--format=md` for GitHub-friendly markdown:
+
+```bash
+/workflow:start feature "Add feature" --format=md
+```
+
+```markdown
+# Feature: Add user authentication
+
+**Workflow ID:** 20260204-abc123
+**Mode:** thorough
+
+## Workflow Steps
+
+### Step 0: Planning
+**Status:** completed
+**Completed:** 2026-02-04T10:30:00Z
+
+#### Plan
+...
+
+### Step 1: Implementation
+**Status:** in-progress
+**Started:** 2026-02-04T10:35:00Z
+```
+
+### Live Editing
+
+You can edit the state file while the workflow runs:
+- Add notes or context for Claude to see
+- Manually check off objectives
+- Modify the plan before implementation starts
+- Add intervention notes
+
+Claude reads the state file before each step, so your edits are respected.
 
 ### Switch Mode Mid-Workflow
 
