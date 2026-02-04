@@ -53,7 +53,7 @@ Only pause for:
 
 ## Usage
 ```
-/workflow:start <type> <description> [--mode=<mode>] [--style=<style>]
+/workflow:start <type> <description> [--mode=<mode>] [--style=<style>] [--format=<format>]
 ```
 
 ## Available Workflow Types
@@ -84,8 +84,17 @@ Swarm mode enables:
 
 | Style | State Storage | Use Case |
 |-------|---------------|----------|
-| `full` | Org file (default) | Complex features, audit trail |
-| `light` | JSON file | Quick fixes, simple tasks |
+| `full` | State file (default) | Complex features, audit trail, user-editable |
+| `light` | JSON file | Quick fixes, simple tasks, minimal overhead |
+
+## State File Formats
+
+| Format | Extension | Use Case |
+|--------|-----------|----------|
+| `org` | `.org` (default) | Emacs org-mode, structured sections, collapsible |
+| `md` | `.md` | Markdown, GitHub-friendly, easier to read |
+
+**Note:** Both formats support the same features. Choose based on your editor preference.
 
 ## Examples
 ```
@@ -94,6 +103,7 @@ Swarm mode enables:
 /workflow:start refactor Extract validation logic --mode=eco --style=light
 /workflow:start feature swarm: Build complete notification system with email, SMS, push
 /workflow:start feature Implement user management --mode=swarm
+/workflow:start feature Add API endpoint --format=md
 ```
 
 ## Input
@@ -115,14 +125,44 @@ You are the **supervisor agent** for this workflow. You coordinate the entire pr
 
 ### Initialization
 
+**IMPORTANT:** Follow these steps in order. Do NOT skip the directory initialization.
+
+#### Step 0: Pre-flight Directory Check (CRITICAL)
+
+**BEFORE doing anything else**, ensure workflow directories exist. Use the Write tool to create `.gitkeep` files (this implicitly creates directories without bash permission prompts):
+
+```
+Required directories:
+~/.claude/workflows/active/
+~/.claude/workflows/completed/
+~/.claude/workflows/context/
+~/.claude/workflows/memory/
+~/.claude/plans/
+```
+
+For each missing directory, use:
+```
+Write(file_path="<path>/.gitkeep", content="")
+```
+
+**Why this matters:**
+- Avoids permission prompts during workflow
+- Ensures state files can be created
+- Write tool creates parent directories automatically
+
+If directories cannot be created, **STOP** and inform the user to run `/workflow:setup`.
+
+#### Step 1: Parse input
+
 1. **Parse input**:
    - First word = workflow type
    - Look for `--mode=<mode>` flag (if present, skip auto-detection)
    - Look for `--style=<style>` flag (default: `full`)
+   - Look for `--format=<format>` flag (default: `org`, options: `org`, `md`)
    - Rest = description
    - If type unknown, list available types and ask
 
-2. **Auto-detect mode** (if no `--mode` flag):
+#### Step 2: Auto-detect mode (if no `--mode` flag)
 
    **Step 2a: Check for explicit keyword prefixes**
    ```
@@ -183,15 +223,32 @@ You are the **supervisor agent** for this workflow. You coordinate the entire pr
    - Suggest: `feature/<short-description>` or `fix/<short-description>`
    - Or use current branch
 
-5. **Create workflow state**:
-   - Generate ID: `YYYYMMDD-<random>`
-   - **If style=full**:
-     - Find plugin templates in `templates/` directory
-     - Copy template `<type>-development.org` to `~/.claude/workflows/active/<id>.org`
-     - Add `#+MODE: <mode>` header
-   - **If style=light**:
-     - Create/update `~/.claude/workflows/state.json`
-     - Use TodoWrite for step tracking
+5. **Create workflow state** (CRITICAL - use Write tool, NOT bash):
+   - Generate ID: `YYYYMMDD-<random>` (e.g., `20260204-a1b2c3`)
+
+   **If style=full**:
+   - Determine file extension from format: `.org` or `.md`
+   - Read template from plugin: `templates/<type>-development.<format>`
+   - Replace placeholders in template:
+     - `{{WORKFLOW_ID}}` → generated ID
+     - `{{TITLE}}` → description (first 50 chars)
+     - `{{DESCRIPTION}}` → full description
+     - `{{DATE}}` → current date (YYYY-MM-DD)
+     - `{{TIMESTAMP}}` → current ISO timestamp
+     - `{{BRANCH}}` → branch name
+     - `{{BASE_BRANCH}}` → base branch (main/master)
+     - `{{MODE}}` → selected mode
+   - **Use Write tool** to create: `~/.claude/workflows/active/<id>.<format>`
+   - **VERIFY** the file was created by reading it back
+
+   **If style=light**:
+   - **Use Write tool** to create/update `~/.claude/workflows/state.json`
+   - Use TodoWrite for step tracking
+
+   **IMPORTANT:** Always use the Write tool, never bash commands. This ensures:
+   - No permission prompts
+   - Directories are created implicitly
+   - Reliable cross-platform operation
 
 6. **Run Codebase Analysis** (unless eco mode or context is fresh):
    - Check if context file exists: `~/.claude/workflows/context/<project-slug>.md`
@@ -651,14 +708,26 @@ If a subagent fails or returns unexpected results:
 ### State File Locations
 
 - Mode configs: `modes/` in plugin directory
-- Templates: `templates/` in plugin directory
-- Active org files: `~/.claude/workflows/active/`
-- JSON state: `~/.claude/workflows/state.json`
+- Templates: `templates/` in plugin directory (both `.org` and `.md` formats)
+- **Active state files**: `~/.claude/workflows/active/<id>.org` or `<id>.md`
+- JSON state (light style): `~/.claude/workflows/state.json`
 - Completed: `~/.claude/workflows/completed/`
 - Codebase context: `~/.claude/workflows/context/`
 - **Project memory**: `~/.claude/workflows/memory/`
 - Learned skills: `~/.claude/skills/learned/`
 - Hook logs: `~/.claude/workflows/hook.log`
+
+### File Format Reference
+
+**Org format (default):**
+- Extension: `.org`
+- Features: Collapsible sections, property drawers, TODO states
+- Best for: Emacs users, structured note-taking
+
+**Markdown format:**
+- Extension: `.md`
+- Features: GitHub-compatible, easy to read in any editor
+- Best for: GitHub users, general text editors
 
 ### Agent Reference
 

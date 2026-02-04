@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__github__get_file_contents",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "mcp__github__search_repositories"
     ]
   }
 }

@@ -120,8 +120,20 @@ Swarm mode enables aggressive parallel execution with competitive 3-architect va
 
 | Style | Storage | Use Case |
 |-------|---------|----------|
-| `full` | Org file (default) | Complex features, audit trail |
-| `light` | JSON file | Quick fixes, simple tasks |
+| `full` | State file (default) | Complex features, audit trail, user-editable |
+| `light` | JSON file | Quick fixes, simple tasks, minimal overhead |
+
+### State File Formats
+
+| Format | Extension | Use Case |
+|--------|-----------|----------|
+| `org` | `.org` (default) | Emacs org-mode, structured sections |
+| `md` | `.md` | Markdown, GitHub-friendly, easier to read |
+
+Use `--format=md` to create markdown state files:
+```bash
+/workflow:start feature "Add user auth" --format=md
+```
 
 ### Switch Mode Mid-Workflow
 
@@ -511,6 +523,36 @@ See `resources/multi-instance-parallelism.md` for the full guide.
 | Security-sensitive | thorough |
 | Production release | thorough |
 | Budget-conscious | eco |
+
+## Troubleshooting
+
+### Permission prompts during workflows
+
+If you're getting permission prompts for mkdir or other operations:
+
+1. **Run setup**: `/workflow:setup` to initialize directories
+2. **Check settings**: Ensure `additionalDirectories` includes workflow paths
+3. **Restart Claude Code** after changing settings
+
+### State files not being created
+
+1. Run `/workflow:setup` to verify directory structure
+2. Check that `~/.claude/workflows/active/` exists and is writable
+3. The plugin uses Write tool (not bash) to create files - this should work without special permissions
+
+### Context/memory not loading
+
+1. Verify directories exist:
+   - `~/.claude/workflows/context/`
+   - `~/.claude/workflows/memory/`
+2. Run `/workflow:setup` if missing
+
+### Switching between org and markdown
+
+Both formats are fully supported. Use `--format=md` or `--format=org` when starting workflows:
+```bash
+/workflow:start feature "My task" --format=md
+```
 
 ## Requirements
 
