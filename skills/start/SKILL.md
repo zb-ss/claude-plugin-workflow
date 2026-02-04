@@ -129,26 +129,34 @@ You are the **supervisor agent** for this workflow. You coordinate the entire pr
 
 #### Step 0: Pre-flight Directory Check (CRITICAL)
 
-**BEFORE doing anything else**, ensure workflow directories exist. Use the Write tool to create `.gitkeep` files (this implicitly creates directories without bash permission prompts):
+**BEFORE doing anything else**, ensure workflow directories exist.
 
-```
-Required directories:
-~/.claude/workflows/active/
-~/.claude/workflows/completed/
-~/.claude/workflows/context/
-~/.claude/workflows/memory/
-~/.claude/plans/
+**Step 0a: Get home directory path**
+First, get the absolute home directory path:
+```bash
+echo $HOME
 ```
 
-For each missing directory, use:
+**Step 0b: Create directories using absolute paths**
+Use the Write tool with ABSOLUTE paths (not `~`). For example, if HOME is `/home/user`:
+
 ```
-Write(file_path="<path>/.gitkeep", content="")
+Write(file_path="/home/user/.claude/workflows/active/.gitkeep", content="")
+Write(file_path="/home/user/.claude/workflows/completed/.gitkeep", content="")
+Write(file_path="/home/user/.claude/workflows/context/.gitkeep", content="")
+Write(file_path="/home/user/.claude/workflows/memory/.gitkeep", content="")
+Write(file_path="/home/user/.claude/plans/.gitkeep", content="")
 ```
+
+**IMPORTANT:**
+- The Write tool does NOT expand `~` - you MUST use absolute paths like `/home/username/...`
+- Get the home directory first, then construct full paths
+- Write tool creates parent directories automatically
 
 **Why this matters:**
 - Avoids permission prompts during workflow
 - Ensures state files can be created
-- Write tool creates parent directories automatically
+- Cross-platform compatible
 
 If directories cannot be created, **STOP** and inform the user to run `/workflow:setup`.
 
@@ -223,8 +231,9 @@ If directories cannot be created, **STOP** and inform the user to run `/workflow
    - Suggest: `feature/<short-description>` or `fix/<short-description>`
    - Or use current branch
 
-5. **Create workflow state** (CRITICAL - use Write tool, NOT bash):
+5. **Create workflow state** (CRITICAL - use Write tool with ABSOLUTE paths):
    - Generate ID: `YYYYMMDD-<random>` (e.g., `20260204-a1b2c3`)
+   - Use the home directory path from Step 0a (e.g., `/home/user`)
 
    **If style=full**:
    - Determine file extension from format: `.org` or `.md`
@@ -238,17 +247,18 @@ If directories cannot be created, **STOP** and inform the user to run `/workflow
      - `{{BRANCH}}` → branch name
      - `{{BASE_BRANCH}}` → base branch (main/master)
      - `{{MODE}}` → selected mode
-   - **Use Write tool** to create: `~/.claude/workflows/active/<id>.<format>`
+   - **Use Write tool with ABSOLUTE path**: `/home/user/.claude/workflows/active/<id>.<format>`
+   - Example: `Write(file_path="/home/zashboy/.claude/workflows/active/20260204-abc123.org", content=<template>)`
    - **VERIFY** the file was created by reading it back
 
    **If style=light**:
-   - **Use Write tool** to create/update `~/.claude/workflows/state.json`
+   - **Use Write tool with ABSOLUTE path**: `/home/user/.claude/workflows/state.json`
    - Use TodoWrite for step tracking
 
-   **IMPORTANT:** Always use the Write tool, never bash commands. This ensures:
-   - No permission prompts
-   - Directories are created implicitly
-   - Reliable cross-platform operation
+   **IMPORTANT:**
+   - The Write tool does NOT expand `~` - always use full absolute paths
+   - Get home directory in Step 0a and reuse it
+   - This ensures no permission prompts and cross-platform operation
 
 6. **Run Codebase Analysis** (unless eco mode or context is fresh):
    - Check if context file exists: `~/.claude/workflows/context/<project-slug>.md`

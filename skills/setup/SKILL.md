@@ -13,26 +13,33 @@ Help the user configure their Claude Code settings and initialize workflow direc
 
 **CRITICAL:** Before checking settings, ensure all required directories exist.
 
-Use the Write tool to create `.gitkeep` files in each directory. This implicitly creates the directories without needing bash mkdir (which may prompt for permission).
+**Step 1a: Get home directory path**
+First, get the absolute home directory path:
+```bash
+echo $HOME
+```
+This returns something like `/home/username` or `/Users/username`.
 
-Required directories to create:
+**Step 1b: Create directories using ABSOLUTE paths**
+Use the Write tool to create `.gitkeep` files. **IMPORTANT:** The Write tool does NOT expand `~` - you MUST use absolute paths.
+
+Required directories (replace `/home/user` with actual home path):
 ```
-~/.claude/workflows/
-~/.claude/workflows/active/
-~/.claude/workflows/completed/
-~/.claude/workflows/context/
-~/.claude/workflows/memory/
-~/.claude/plans/
-~/.claude/skills/
-~/.claude/skills/learned/
+/home/user/.claude/workflows/active/
+/home/user/.claude/workflows/completed/
+/home/user/.claude/workflows/context/
+/home/user/.claude/workflows/memory/
+/home/user/.claude/plans/
+/home/user/.claude/skills/
+/home/user/.claude/skills/learned/
 ```
 
-For each directory, use:
+For each directory, use Write with the FULL absolute path:
 ```
-Write(file_path="~/.claude/workflows/active/.gitkeep", content="")
+Write(file_path="/home/user/.claude/workflows/active/.gitkeep", content="")
 ```
 
-**Alternative:** Run the initialization script (if user prefers bash):
+**Alternative:** Run the initialization script (works with tilde expansion):
 ```bash
 node ~/.claude/plugins/workflow/lib/init-directories.js
 ```
