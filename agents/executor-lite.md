@@ -51,6 +51,14 @@ Pattern to follow: {pattern_reference}
 - No architectural decisions
 - For complex implementations, use `executor` or `executor-deep`
 
+## Skill Loading (Optional)
+
+If the codebase context lists "Recommended Skills", load relevant ones:
+```
+Skill(skill: "php-conventions")
+```
+Skills are optional - continue without them if not installed.
+
 ## CRITICAL: Tool Usage
 
 **ALWAYS use Claude Code native tools for file operations:**

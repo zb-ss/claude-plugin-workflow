@@ -210,10 +210,15 @@ prompt: |
     - NO `echo "..." > file`
   - Write tool does NOT expand ~ - get $HOME first, use absolute paths
 
+  ## Skill Loading (Optional)
+  Load recommended skills from codebase context if available:
+  `Skill(skill: "{skill-name}")`
+
   ## Instructions
-  1. Make the required changes
-  2. Follow existing code style
-  3. Keep changes minimal
+  1. Load recommended skills (if available)
+  2. Make the required changes
+  3. Follow existing code style
+  4. Keep changes minimal
 
   ## Output
   - List of modified files
@@ -247,12 +252,20 @@ prompt: |
     - NO `cat << EOF > file`
   Native tools work cross-platform and respect permissions.
 
+  ## Skill Loading (Optional)
+  If codebase context lists "Recommended Skills", load them first:
+  ```
+  Skill(skill: "{skill-name}")
+  ```
+  Continue without skills if not installed.
+
   ## Instructions
   1. Read the plan file thoroughly
-  2. Implement each step in order
-  3. Follow existing code patterns in the codebase
-  4. Do not add unnecessary features or abstractions
-  5. Focus on clean, working code
+  2. Load recommended skills from codebase context (if available)
+  3. Implement each step in order
+  4. Follow existing code patterns in the codebase
+  5. Do not add unnecessary features or abstractions
+  6. Focus on clean, working code
 
   ## Previous Review Feedback (if any)
   {review_feedback}
@@ -287,12 +300,20 @@ prompt: |
     - NO `cat << EOF > file`
   Native tools work cross-platform and respect permissions.
 
+  ## Skill Loading (Optional)
+  If codebase context lists "Recommended Skills", load them first:
+  ```
+  Skill(skill: "{skill-name}")
+  ```
+  Continue without skills if not installed.
+
   ## Instructions
   1. Read the plan file thoroughly
-  2. Implement each step in order
-  3. Follow existing code patterns
-  4. Handle errors appropriately
-  5. Keep implementations clean and focused
+  2. Load recommended skills from codebase context (if available)
+  3. Implement each step in order
+  4. Follow existing code patterns
+  5. Handle errors appropriately
+  6. Keep implementations clean and focused
 
   ## Previous Review Feedback (if any)
   {review_feedback}

@@ -109,6 +109,25 @@ Note:
 - Inline comment style
 - API documentation approach
 
+### 9. Recommended Skills (Optional)
+Based on detected stack, identify which skills executors should load IF available.
+These are optional - workflows work without them but benefit from them.
+
+Common skill names by stack:
+- PHP: `php-conventions`
+- Laravel: `laravel-conventions`
+- Symfony: `symfony-conventions`
+- Joomla: `joomla-conventions`
+- Vue 3: `vue-conventions`
+- Vue 2: `vue2-legacy`
+- TypeScript: `typescript-conventions`
+- Python: `python-conventions`
+- Bash: `bash-conventions`
+- APIs: `api-design`
+
+Note: List skills that WOULD be helpful. Executors will attempt to load
+them but gracefully continue if not installed.
+
 ## Output Format
 
 Save context document to: {context_file_path}
@@ -198,6 +217,12 @@ project/
 Based on codebase analysis, avoid:
 - {anti-pattern 1}
 - {anti-pattern 2}
+
+## Recommended Skills
+
+Load these skills before implementation (if available):
+- {skill-name-1}
+- {skill-name-2}
 
 ## Notes for Agents
 

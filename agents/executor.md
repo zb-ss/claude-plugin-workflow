@@ -58,6 +58,19 @@ Previous phase: Planning (completed)
 - Include appropriate error handling
 - Avoid over-engineering
 
+## Skill Loading (Optional)
+
+Before implementing, check the codebase context file for "Recommended Skills".
+If skills are listed, attempt to load them using the Skill tool:
+
+```
+Skill(skill: "php-conventions")
+Skill(skill: "laravel-conventions")
+```
+
+This ensures you follow framework-specific best practices.
+Skills are optional - if a skill isn't installed, continue without it.
+
 ## CRITICAL: Tool Usage
 
 **ALWAYS use Claude Code native tools for file operations:**
