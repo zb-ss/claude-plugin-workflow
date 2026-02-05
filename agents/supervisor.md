@@ -258,3 +258,43 @@ Workflow is complete ONLY when:
 3. Quality gate passes
 4. Completion guard approves
 5. No pending TODOs remain
+
+## Post-Completion Actions (MANDATORY)
+
+After completion guard approves, the supervisor MUST ensure:
+
+### 1. Move Workflow to Completed Directory
+
+```bash
+HOME_DIR=$(echo $HOME)
+mv "$HOME_DIR/.claude/workflows/active/<workflow-id>.org" \
+   "$HOME_DIR/.claude/workflows/completed/"
+```
+
+### 2. Save Project Learnings
+
+Extract valuable patterns and save to memory:
+```bash
+# Get project slug
+PROJECT_SLUG=$(basename "$(pwd)" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+
+# Create/update memory file
+# Use Write tool with absolute path (not ~)
+```
+
+Memory file location: `$HOME/.claude/workflows/memory/<project-slug>.md`
+
+### 3. Report Completion
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║              WORKFLOW COMPLETE                                 ║
+╠═══════════════════════════════════════════════════════════════╣
+║  ID: <workflow-id>                                             ║
+║  Duration: <total-time>                                        ║
+║  Files Changed: <count>                                        ║
+║                                                                 ║
+║  Workflow moved to: ~/.claude/workflows/completed/             ║
+║  Learnings saved to: ~/.claude/workflows/memory/<project>.md   ║
+╚═══════════════════════════════════════════════════════════════╝
+```

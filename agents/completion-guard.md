@@ -189,3 +189,63 @@ Quality Gate PASS → COMPLETION GUARD → Workflow Complete
 ```
 
 The workflow CANNOT be marked complete without this agent's APPROVED verdict.
+
+## Post-Approval Actions (MANDATORY)
+
+When you approve a workflow, you MUST perform these cleanup actions:
+
+### 1. Move Workflow File to Completed
+
+```bash
+# Get $HOME first (Write/Edit don't expand ~)
+HOME_DIR=$(echo $HOME)
+
+# Move workflow file from active to completed
+mv "$HOME_DIR/.claude/workflows/active/<workflow-id>.org" \
+   "$HOME_DIR/.claude/workflows/completed/<workflow-id>.org"
+```
+
+This keeps the active directory clean and provides history.
+
+### 2. Extract and Save Learnings
+
+Before closing, extract valuable patterns from this workflow:
+
+```
+## Learnings to Save
+
+Analyze the workflow for:
+- Error patterns encountered and their solutions
+- Codebase conventions discovered
+- Key architectural decisions made
+- Useful debugging approaches
+
+Save to: $HOME/.claude/workflows/memory/<project-slug>.md
+```
+
+Use the Write tool with ABSOLUTE path (not ~):
+```
+Write(file_path="$HOME_DIR/.claude/workflows/memory/<project-slug>.md", content="...")
+```
+
+### 3. Update Workflow Status
+
+Update the workflow file's STATUS property before moving:
+```
+#+PROPERTY: STATUS completed
+#+PROPERTY: COMPLETED_AT <timestamp>
+```
+
+## Memory vs CLAUDE.md
+
+**Workflow memory** (`~/.claude/workflows/memory/<project>.md`):
+- Per-project learnings from workflows
+- Loaded when starting workflows on that project
+- Persists across sessions
+
+**CLAUDE.md** (`~/.claude/CLAUDE.md` or project `.claude/CLAUDE.md`):
+- Global user preferences and coding conventions
+- Always loaded in system prompt
+- Not workflow-specific
+
+Both are valuable but serve different purposes.

@@ -463,6 +463,27 @@ Hooks are written in **Node.js** for full cross-platform compatibility. They gra
 
 The plugin now includes lightweight memory persistence and continuous learning:
 
+### Memory Types (Important Distinction)
+
+| Memory Type | Location | Scope | When Loaded |
+|-------------|----------|-------|-------------|
+| **Workflow Memory** | `~/.claude/workflows/memory/<project>.md` | Per-project workflow learnings | At workflow start |
+| **CLAUDE.md** | `~/.claude/CLAUDE.md` or project `.claude/CLAUDE.md` | Global coding conventions | Always (system prompt) |
+
+**Workflow Memory** stores:
+- Patterns discovered during workflows
+- Error resolutions specific to the project
+- Key architectural decisions
+- Codebase conventions learned
+
+**CLAUDE.md** stores:
+- Your global coding preferences
+- Framework conventions to follow
+- Naming standards
+- Security practices
+
+Both are valuable but serve different purposes. Workflow memory is automatically managed by the plugin.
+
 ### Project Memory
 
 Each project maintains a memory file at `~/.claude/workflows/memory/<project>.md`:
@@ -485,9 +506,12 @@ Each project maintains a memory file at `~/.claude/workflows/memory/<project>.md
 - API responses wrapped in { data, error, meta }
 ```
 
-Memory is automatically:
+Memory lifecycle:
 - **Loaded** at workflow start (~1-2k tokens, lightweight)
-- **Updated** at workflow completion with new learnings
+- **Updated** at workflow completion by completion-guard agent
+- **Preserved** across sessions (persists in filesystem)
+
+The completion-guard agent also moves completed workflows from `active/` to `completed/` directory.
 
 ### Extract Patterns Mid-Session
 
