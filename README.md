@@ -9,7 +9,7 @@ Automated development workflow orchestration with tiered agents and execution mo
 - **📋 Org-mode & Markdown plans** - Human-readable, editable workflow state files
 - **🤖 20 tiered agents** - From quick haiku checks to deep opus reviews
 - **🐝 Swarm mode** - 4 parallel executors with 3-architect validation
-- **🧠 Memory persistence** - Learnings saved across sessions
+- **🧠 Auto-learning** - Learnings saved to project CLAUDE.md, auto-loaded by CC
 - **🔒 Mandatory quality gates** - No shortcuts, all reviews blocking
 
 ## Installation
@@ -448,8 +448,7 @@ Hooks are written in **Node.js** for full cross-platform compatibility. They gra
 - **Codebase analysis** before planning (extracts conventions)
 - **Parallel agent execution** where phases are independent
 - **Fully autonomous mode** - no permission prompts for safe operations
-- **Memory persistence** - learnings saved across sessions
-- **Continuous learning** - patterns extracted and reused
+- **Auto-learning** - workflow learnings saved to project `CLAUDE.md`
 - Org-mode based state tracking (default)
 - JSON state for light style
 - Tiered agent routing by mode
@@ -461,7 +460,7 @@ Hooks are written in **Node.js** for full cross-platform compatibility. They gra
 
 ## Memory & Learning (New in v3.3)
 
-The plugin now includes lightweight memory persistence and continuous learning:
+Workflow learnings are automatically saved to your project's `CLAUDE.md` file:
 
 ### Where Learnings Are Saved
 
@@ -519,7 +518,7 @@ Extracts reusable patterns from the current session:
 - Project-specific conventions
 
 Saves to:
-- `~/.claude/workflows/memory/<project>.md` (project-specific)
+- `<project>/CLAUDE.md` (project-specific, auto-loaded by CC)
 - `~/.claude/skills/learned/<pattern>.md` (reusable across projects)
 
 ### Generate Skills from Git History
@@ -664,12 +663,11 @@ For production development, configure the recommended settings instead:
 2. Check that `~/.claude/workflows/active/` exists and is writable
 3. The plugin uses Write tool (not bash) to create files - this should work without special permissions
 
-### Context/memory not loading
+### Context not loading
 
-1. Verify directories exist:
-   - `~/.claude/workflows/context/`
-   - `~/.claude/workflows/memory/`
+1. Verify directory exists: `~/.claude/workflows/context/`
 2. Run `/workflow:setup` if missing
+3. Learnings are now saved to project's `CLAUDE.md` (auto-loaded by CC)
 
 ### Switching between org and markdown
 
