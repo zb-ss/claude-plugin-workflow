@@ -1,7 +1,7 @@
 {
   "name": "workflow",
   "description": "Automated development workflow orchestration with tiered agents, swarm mode, memory persistence, and continuous learning",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "author": {
     "name": "zb-ss"
   },
@@ -19,7 +19,8 @@
     "parallel",
     "orchestration",
     "memory",
-    "learning"
+    "learning",
+    "agent-teams"
   ],
   "agents": [
     "./agents/codebase-analyzer.md",

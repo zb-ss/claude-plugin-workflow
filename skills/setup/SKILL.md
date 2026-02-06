@@ -135,6 +135,37 @@ If the user agrees, update the appropriate settings file(s):
 3. Merge the new permissions (preserve existing entries, no duplicates)
 4. Write the updated JSON
 
+### Step 6b: Recommend Environment Variables
+
+Check if the Agent Teams env var is set:
+
+```bash
+echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+```
+
+Show the env var status in the report:
+
+```
+### Environment Variables
+⚠ CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: [not set / set]
+  Enables: Swarm mode Agent Teams - peer-to-peer agent messaging (experimental)
+  How to set: Add to your shell profile and restart Claude Code
+```
+
+If not set, recommend the user add it to their shell profile:
+
+**bash/zsh** (`~/.bashrc` or `~/.zshrc`):
+```bash
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+```
+
+**fish** (`~/.config/fish/config.fish`):
+```fish
+set -x CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS 1
+```
+
+**Important**: Do NOT auto-modify shell profile files. Only show the command for the user to add manually. This env var is optional but enhances swarm mode when available.
+
 ### Step 7: Verify Setup
 
 After making changes, verify:

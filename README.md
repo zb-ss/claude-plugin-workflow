@@ -126,6 +126,25 @@ Swarm mode enables aggressive parallel execution with competitive 3-architect va
 - When quality > speed > cost
 - Critical production code
 
+### Agent Teams (Experimental)
+
+Swarm mode can optionally leverage Claude Code's experimental Agent Teams feature for enhanced agent coordination:
+
+**Enable it:**
+```bash
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+```
+
+Or run `/workflow:setup` which will guide you through configuration.
+
+**What it adds:**
+- Peer-to-peer messaging between executor agents
+- Shared task lists for parallel work coordination
+- Native delegate mode for the supervisor
+- Built-in plan approval flow
+
+**Without Agent Teams**, swarm mode uses the standard Task tool for parallel execution (fully functional, just less native coordination).
+
 ### Planning Styles
 
 | Style | Storage | Use Case |

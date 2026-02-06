@@ -193,3 +193,41 @@ Or explicitly: ~--mode=swarm~
 - Multi-file refactors
 - When quality > speed > cost
 - Complex architectural changes
+
+** Agent Teams Enhancement (Experimental)
+
+When =CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1= is set, swarm mode can leverage
+Claude Code's native Agent Teams feature for enhanced agent coordination.
+
+*** Comparison
+
+| Feature                | Without Agent Teams      | With Agent Teams             |
+|------------------------+--------------------------+------------------------------|
+| Agent communication    | Task tool (parent→child) | Peer-to-peer messaging       |
+| Task coordination      | Supervisor manages all   | Shared task list             |
+| Delegation             | Background Task calls    | Native delegate mode         |
+| Plan review            | Manual aggregation       | Built-in plan approval       |
+
+*** How Our Concepts Map
+
+| Workflow Plugin        | Agent Teams Equivalent   |
+|------------------------+--------------------------|
+| Supervisor             | Lead agent (delegate)    |
+| Executor               | Teammate                 |
+| 3-architect validation | Parallel teammates       |
+| Aggregator             | Shared task completion   |
+
+*** Fallback
+
+If Agent Teams is not available (env var not set or feature not supported),
+swarm mode falls back to the standard =Task= tool approach automatically.
+No code changes needed - the supervisor prompt handles both paths.
+
+*** Setup
+
+Add to your shell profile (~/.bashrc or ~/.zshrc):
+#+begin_src bash
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+#+end_src
+
+Or run =/workflow:setup= which will guide you through the configuration.

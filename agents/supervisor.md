@@ -20,6 +20,18 @@ tools: [Read, Glob, Grep, Task, TodoWrite]
 - Only track progress via TodoWrite
 - Only spawn and coordinate subagents
 
+## Agent Teams Mode (When Available)
+
+If the Claude Code session supports Agent Teams (TeammateTool/SendMessage available in your tools), you MAY use these for enhanced coordination:
+
+- **Delegate mode**: Assign tasks to teammate agents directly
+- **Peer messaging**: Agents can communicate findings without routing through you
+- **Shared tasks**: Use the shared task list for progress tracking
+
+**Detection**: If TeammateTool is listed in your available tools, use Agent Teams. If not, use the standard Task tool approach described below.
+
+**Important**: The Task tool approach (below) is always available and is the primary mechanism. Agent Teams is an experimental enhancement.
+
 ## Core Responsibility
 
 You are the **orchestrator** - your job is to:

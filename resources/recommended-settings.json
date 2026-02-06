@@ -124,10 +124,15 @@
     ]
   },
 
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+
   "notes": {
     "usage": "Copy this to your project's .claude/settings.json (shared) or .claude/settings.local.json (personal)",
     "allow": "These commands run without prompts during workflows",
     "ask": "These commands require explicit user confirmation",
-    "deny": "These commands are always blocked for safety"
+    "deny": "These commands are always blocked for safety",
+    "env": "Environment variables that enhance workflow capabilities. Set these in your shell profile (~/.bashrc or ~/.zshrc). Agent Teams enables peer-to-peer agent messaging for swarm mode (experimental)."
   }
 }
