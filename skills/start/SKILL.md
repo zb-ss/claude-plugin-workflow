@@ -6,9 +6,9 @@ Start an automated development workflow with configurable execution modes and pl
 
 This workflow runs in **fully autonomous agentic mode**. Do NOT ask for permission on non-destructive operations.
 
-> **Note:** For optimal autonomous execution, ensure the project has recommended permissions configured.
-> See `resources/recommended-settings.json` or run:
-> `cp ~/.claude/plugins/workflow/resources/recommended-settings.json .claude/settings.local.json`
+> **REQUIRED:** The project MUST have `Bash(*)` in its permissions allow list.
+> Without this, bash commands will prompt for permission and break autonomous execution.
+> Run `/workflow:setup` or copy settings: `cp ~/.claude/plugins/workflow/resources/recommended-settings.json .claude/settings.local.json`
 
 ### Preferred: Use Native Tools for File Operations
 
@@ -140,36 +140,31 @@ You are the **supervisor agent** for this workflow. You coordinate the entire pr
 
 **BEFORE doing anything else**, ensure workflow directories exist.
 
-**Step 0a: Determine home directory path**
-Get the absolute home directory path. You can:
-- Use the path from the environment (visible in system info)
-- Or use bash `echo $HOME` (this one bash command is acceptable)
+**Step 0a: Get the absolute home directory path**
 
-Common paths:
-- Linux: `/home/<username>`
-- macOS: `/Users/<username>`
-- Windows: `C:\Users\<username>`
-
-**Step 0b: Create directories using absolute paths**
-Use the Write tool with ABSOLUTE paths (not `~`). For example, if HOME is `/home/user`:
-
+Run this bash command first:
+```bash
+echo $HOME
 ```
-Write(file_path="/home/user/.claude/workflows/active/.gitkeep", content="")
-Write(file_path="/home/user/.claude/workflows/completed/.gitkeep", content="")
-Write(file_path="/home/user/.claude/workflows/context/.gitkeep", content="")
-Write(file_path="/home/user/.claude/workflows/memory/.gitkeep", content="")
-Write(file_path="/home/user/.claude/plans/.gitkeep", content="")
+This returns something like `/home/zashboy` or `/Users/alice`. Store this value - you need it for ALL Write tool calls below.
+
+**Step 0b: Create directories**
+
+⚠️ **CRITICAL: The Write tool DOES NOT expand `~`** ⚠️
+
+You MUST replace `$HOME_PATH` below with the ACTUAL path from Step 0a.
+
+- ❌ WRONG: `Write(file_path="~/.claude/workflows/active/.gitkeep")` → WILL FAIL
+- ✅ RIGHT: `Write(file_path="/home/zashboy/.claude/workflows/active/.gitkeep")` → WORKS
+
+Create these directories (substitute your actual home path):
 ```
-
-**IMPORTANT:**
-- The Write tool does NOT expand `~` - you MUST use absolute paths like `/home/username/...`
-- Get the home directory first, then construct full paths
-- Write tool creates parent directories automatically
-
-**Why this matters:**
-- Write tool does not expand `~` so absolute paths are required
-- Ensures state files can be created
-- Cross-platform compatible
+Write(file_path="$HOME_PATH/.claude/workflows/active/.gitkeep", content="")
+Write(file_path="$HOME_PATH/.claude/workflows/completed/.gitkeep", content="")
+Write(file_path="$HOME_PATH/.claude/workflows/context/.gitkeep", content="")
+Write(file_path="$HOME_PATH/.claude/workflows/memory/.gitkeep", content="")
+Write(file_path="$HOME_PATH/.claude/plans/.gitkeep", content="")
+```
 
 If directories cannot be created, **STOP** and inform the user to run `/workflow:setup`.
 
@@ -268,10 +263,7 @@ If directories cannot be created, **STOP** and inform the user to run `/workflow
    - **Use Write tool with ABSOLUTE path**: `/home/user/.claude/workflows/state.json`
    - Use TodoWrite for step tracking
 
-   **IMPORTANT:**
-   - The Write tool does NOT expand `~` - always use full absolute paths
-   - Get home directory in Step 0a and reuse it
-   - Write tool does not expand `~` so absolute paths are required
+   **IMPORTANT:** Never use `~` in Write tool paths. Always use the absolute path from Step 0a.
 
 6. **Run Codebase Analysis** (unless eco mode or context is fresh):
    - **Use Read tool** to check if context file exists: `<HOME>/.claude/workflows/context/<project-slug>.md`
