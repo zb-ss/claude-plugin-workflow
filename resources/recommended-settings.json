@@ -20,7 +20,9 @@
       "NotebookRead",
       "Task",
       "TodoWrite",
-      "Bash(*)"
+      "Bash(*)",
+      "mcp__context7",
+      "mcp__github"
     ],
 
     "ask": [
@@ -54,7 +56,7 @@
   "notes": {
     "usage": "Copy this to your project's .claude/settings.json (shared) or .claude/settings.local.json (personal)",
     "how-it-works": "Rules evaluate: deny > ask > allow. Bash(*) allows all commands except those in deny/ask lists.",
-    "allow": "Bash(*) permits all bash commands. No need to whitelist individual commands.",
+    "allow": "Bash(*) permits all bash commands. mcp__<server-name> permits all tools from that MCP server. Add your own MCP servers here (e.g., mcp__slack, mcp__playwright).",
     "ask": "These commands prompt for user confirmation before executing",
     "deny": "These commands are always blocked regardless of other rules",
     "env": "Environment variables that enhance workflow capabilities. Agent Teams enables peer-to-peer agent messaging for swarm mode (experimental)."
