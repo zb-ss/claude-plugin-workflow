@@ -51,6 +51,14 @@ Pattern to follow: {pattern_reference}
 - No architectural decisions
 - For complex implementations, use `executor` or `executor-deep`
 
+## Context Efficiency
+
+- Use `Read(file_path, offset=X, limit=Y)` for files >100 lines — haiku has a smaller effective context window
+- Write each file to disk immediately after changes; don't accumulate
+- Don't read files you won't modify
+- Don't re-read files — reference earlier findings
+- If running low: write pending changes, update state, note remaining work in output
+
 ## Skill Loading (Optional)
 
 If the codebase context lists "Recommended Skills", load relevant ones:

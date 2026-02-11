@@ -134,6 +134,41 @@ You are the **supervisor agent** for this workflow. You coordinate the entire pr
 4. **Be transparent** - Report progress clearly after each step
 5. **Route agents by mode** - Use the correct agent tier for the selected mode
 
+### Fresh Context Launch (Optional)
+
+For long-running modes (swarm, thorough) or when the user's session already has significant context, launch the entire workflow as a subagent to get a fresh context window.
+
+**When to launch as subagent:**
+- `--fresh` or `--isolated` flag is present: always
+- swarm or thorough mode: by default (these are most likely to hit limits)
+- eco or turbo mode: run inline (short workflows, unlikely to hit limits)
+
+**Launch pattern:**
+```python
+# Parent session launches workflow in fresh context
+Task(
+    subagent_type="general-purpose",
+    model="sonnet",
+    max_turns=50,
+    run_in_background=true,
+    prompt=f"""
+    You are running a workflow. Follow the instructions in:
+    <HOME>/.claude/plugins/workflow/skills/start/SKILL.md
+
+    User's task: {original_task}
+    Arguments: {workflow_args}
+    """
+)
+# Parent monitors via TaskOutput and reports progress to user
+```
+
+The subagent runs the FULL workflow (planning, implementation, review). The parent session only launches it and relays results. This means:
+- Fresh context window for the orchestrator
+- Each executor subagent spawned by the orchestrator also gets fresh context
+- User's session stays lean — just monitoring output
+
+If the user wants interactive control (pausing between steps), skip the subagent launch and run inline.
+
 ### Initialization
 
 **IMPORTANT:** Follow these steps in order. Do NOT skip the directory initialization.
@@ -331,23 +366,25 @@ Task(
 
 ### Codebase Context Injection
 
-All agents receive the codebase context to ensure consistency:
+All agents receive a **reference** to the codebase context file — never embed its contents inline.
 
 ```
-Context file: <HOME>/.claude/workflows/context/<project-slug>.md
-
 Include in every agent prompt:
 ---
 ## Codebase Context
-{contents of context file}
+Read the context file at: <HOME>/.claude/workflows/context/<project-slug>.md
+Focus on: [list relevant sections for this task, e.g., "Naming Conventions, Testing Patterns"]
 ---
 ```
+
+**Why reference, not embed:** Embedding the full context (~5K+ tokens) into every agent spawn wastes the supervisor's context budget and duplicates information. Each agent reads the file themselves using their own context window, and only loads the sections they need.
 
 This ensures:
 - Agents follow established naming conventions
 - Architectural patterns are maintained
 - Code style is consistent
 - Testing patterns match existing tests
+- Supervisor context stays lean across many agent spawns
 
 ### MANDATORY: State File Updates
 
@@ -388,12 +425,19 @@ For each step:
    Task(
      subagent_type=<agent from routing table>,
      model=<model from mode>,
+     max_turns=<from mode config MAX_TURNS_* property>,
      prompt="""
        ## Codebase Context
-       {context_file_contents}
+       Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+       Focus on: [relevant sections for this task]
 
        ## Task
        {detailed instructions}
+
+       ## Context Efficiency
+       - Use Read with offset/limit for files >200 lines
+       - Write each file to disk immediately after changes
+       - Update state file after each objective
      """
    )
 6. CAPTURE output from subagent
@@ -447,6 +491,17 @@ Write the COMPLETE plan to the state file's Plan section. Include:
 - Implementation must complete before any review
 - Test writing should follow implementation
 - Dependent file changes (imports, shared state)
+
+### Context Limit Recovery
+
+If an agent's output signals context exhaustion (contains "context limit", "conversation too long", is empty, or is severely truncated):
+
+1. **Assess** — Read the state file. Check which objectives were completed (`[x]` vs `[ ]`). Verify file artifacts on disk.
+2. **Continue** — Spawn a **NEW** agent (never `resume`) with only the remaining objectives, a 2-3 sentence summary of completed work, and the context file path reference.
+3. **Track** — Mark continuation count in the state file.
+4. **Limit** — Max continuations per step from mode config `MAX_CONTINUATIONS` (default: 3). If exhausted, break into smaller sub-steps or pause for user intervention.
+
+See `resources/context-resilience.md` for the full continuation protocol and spawn template.
 
 #### Background Agent Pattern
 

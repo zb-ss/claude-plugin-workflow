@@ -35,6 +35,22 @@ This applies to ALL file operations in `~/.claude/` directories.
 
 ---
 
+## Context Resilience
+
+**ALL agent spawns MUST include `max_turns`** to prevent unbounded context growth. Values come from the mode config's `MAX_TURNS_*` properties. See `resources/context-resilience.md` for the canonical table.
+
+**Reference, don't embed context:** Instead of inlining the codebase context file contents, provide the path and let the agent read it:
+
+```
+## Codebase Context
+Read the context file at: <HOME>/.claude/workflows/context/<project-slug>.md
+Focus on: [relevant sections for this task]
+```
+
+This keeps prompts lean and lets each agent manage their own context budget.
+
+---
+
 ## Agent Tiers
 
 | Tier | Model | Suffix | Use Case |
@@ -54,6 +70,7 @@ Runs **before planning** to extract conventions and best practices.
 ```
 subagent_type: workflow:codebase-analyzer
 model: sonnet
+max_turns: 20
 prompt: |
   ## Task
   Analyze the codebase to extract conventions and best practices.
@@ -83,11 +100,12 @@ prompt: |
   to ensure consistency with established patterns.
 ```
 
-**Context file is then injected into all other agents:**
+**Context file is referenced (not embedded) in all other agents:**
 
 ```
 ## Codebase Context
-{contents of ~/.claude/workflows/context/<project>.md}
+Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+Focus on: [relevant sections for this task]
 
 ## Task
 {actual task instructions}
@@ -102,6 +120,7 @@ prompt: |
 ```
 subagent_type: workflow:architect-lite
 model: haiku
+max_turns: 8
 prompt: |
   ## Task
   Quick analysis for: {task_description}
@@ -148,6 +167,7 @@ prompt: |
 ```
 subagent_type: workflow:architect
 model: opus
+max_turns: 15
 prompt: |
   ## Task
   Create a comprehensive implementation plan for: {task_description}
@@ -182,6 +202,7 @@ prompt: |
 ```
 subagent_type: workflow:executor-lite
 model: haiku
+max_turns: 15
 prompt: |
   ## Task
   Implement: {task_description}
@@ -218,6 +239,7 @@ prompt: |
 ```
 subagent_type: workflow:executor
 model: sonnet
+max_turns: 25
 prompt: |
   ## Task
   Implement the following plan: {plan_file_path}
@@ -271,6 +293,7 @@ prompt: |
 ```
 subagent_type: workflow:reviewer-lite
 model: haiku
+max_turns: 8
 prompt: |
   ## Task
   Quick review of changes for: {task_description}
@@ -298,6 +321,7 @@ prompt: |
 
 ```
 subagent_type: workflow:reviewer
+max_turns: 12
 prompt: |
   ## Task
   Review the implementation for: {task_description}
@@ -336,6 +360,7 @@ prompt: |
 ```
 subagent_type: workflow:reviewer-deep
 model: opus
+max_turns: 15
 prompt: |
   ## Task
   Comprehensive review of implementation for: {task_description}
@@ -385,6 +410,7 @@ prompt: |
 ```
 subagent_type: workflow:security-lite
 model: haiku
+max_turns: 8
 prompt: |
   ## Task
   Quick security scan for: {task_description}
@@ -413,6 +439,7 @@ prompt: |
 
 ```
 subagent_type: workflow:security
+max_turns: 10
 prompt: |
   ## Task
   Security audit for: {task_description}
@@ -447,6 +474,7 @@ prompt: |
 ```
 subagent_type: workflow:security-deep
 model: opus
+max_turns: 12
 prompt: |
   ## Task
   Comprehensive security audit for: {task_description}
@@ -496,6 +524,7 @@ prompt: |
 
 ```
 subagent_type: workflow:test-writer
+max_turns: 20
 prompt: |
   ## Task
   Write tests for: {task_description}
@@ -535,6 +564,7 @@ prompt: |
 ```
 subagent_type: workflow:perf-lite
 model: haiku
+max_turns: 8
 prompt: |
   ## Task
   Quick performance scan for: {task_description}
@@ -563,6 +593,7 @@ prompt: |
 ```
 subagent_type: workflow:perf-reviewer
 model: sonnet
+max_turns: 10
 prompt: |
   ## Task
   Performance review for: {task_description}
@@ -604,6 +635,7 @@ prompt: |
 ```
 subagent_type: workflow:doc-writer
 model: haiku
+max_turns: 8
 prompt: |
   ## Task
   Update documentation for: {task_description}
@@ -642,6 +674,7 @@ prompt: |
 ```
 subagent_type: workflow:explorer
 model: haiku
+max_turns: 10
 prompt: |
   ## Task
   Explore codebase to understand: {exploration_goal}

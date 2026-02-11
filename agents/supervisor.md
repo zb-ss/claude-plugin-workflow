@@ -95,6 +95,7 @@ for task in decomposed_tasks:
     agent = Task(
         subagent_type="workflow:executor",  # workflow: prefix ensures our agent
         model=task.model,
+        max_turns=25,  # From mode config MAX_TURNS_EXECUTOR (standard default)
         run_in_background=true,
         prompt=f"""
         ## Task
@@ -104,7 +105,13 @@ for task in decomposed_tasks:
         {task.files}
 
         ## Codebase Context
-        {codebase_context}
+        Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+        Focus on sections relevant to your task.
+
+        ## Context Efficiency
+        - Use Read with offset/limit for files >200 lines
+        - Write each file to disk immediately after changes
+        - Update state file checkboxes after each objective
 
         ## CRITICAL: Tool Usage
         - Use Write tool to create new files
@@ -137,6 +144,7 @@ For ultrawork mode, spawn 3 parallel architects:
 architects = [
     Task(
         subagent_type="workflow:architect",
+        max_turns=15,  # From mode config MAX_TURNS_ARCHITECT
         run_in_background=true,
         prompt="""
         ## VALIDATION FOCUS: Functional Completeness
@@ -149,6 +157,7 @@ architects = [
     ),
     Task(
         subagent_type="workflow:security-deep",
+        max_turns=12,  # From mode config MAX_TURNS_SECURITY
         run_in_background=true,
         prompt="""
         ## VALIDATION FOCUS: Security
@@ -161,6 +170,7 @@ architects = [
     ),
     Task(
         subagent_type="workflow:reviewer-deep",
+        max_turns=15,  # From mode config MAX_TURNS_REVIEWER
         run_in_background=true,
         prompt="""
         ## VALIDATION FOCUS: Code Quality
@@ -217,6 +227,82 @@ if agent_failed:
     else:
         pause_workflow("Task failed 3 times: {task}")
 ```
+
+## Context Limit Recovery
+
+When an agent's output signals context exhaustion, follow this recovery protocol.
+
+### Detection
+
+Watch for these signals in agent output:
+- Output contains "context limit", "context window", or "conversation too long"
+- Output is empty or severely truncated (< 50 chars when substantial work expected)
+- Agent returned no file modifications when modifications were assigned
+
+### Recovery Procedure
+
+```python
+if context_limit_detected(agent_output):
+    # 1. Assess what was completed
+    state = Read(state_file_path)
+    completed = [obj for obj in objectives if obj.checked]
+    remaining = [obj for obj in objectives if not obj.checked]
+    files_on_disk = verify_written_files(task.files)
+
+    # 2. Spawn continuation agent (NEW agent, never resume)
+    continuation = Task(
+        subagent_type="workflow:executor",
+        model=task.model,
+        max_turns=remaining_budget,
+        run_in_background=true,
+        prompt=f"""
+        ## Continuation Task
+        A previous agent ran out of context. Pick up where it left off.
+
+        ## Completed: {len(completed)} of {len(objectives)} objectives
+        {summary_of_completed_work}
+
+        ## Remaining Objectives
+        {remaining_objectives_only}
+
+        ## Codebase Context
+        Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+
+        ## Files Already Written (do not redo)
+        {files_on_disk}
+        """
+    )
+
+    # 3. Track continuation in state
+    update_state(step, continuation_count=continuation_count + 1)
+
+    # 4. Enforce limit
+    if continuation_count >= MAX_CONTINUATIONS:
+        pause_workflow("Max continuations reached for step")
+```
+
+### Limits
+
+- Max **3 continuations** per step (from mode config `MAX_CONTINUATIONS`)
+- Each continuation must complete at least 1 objective
+- If exhausted, break into smaller sub-steps or pause for user intervention
+
+## max_turns Quick Reference
+
+Default values for standard mode (see `resources/context-resilience.md` for all modes):
+
+| Agent | max_turns |
+|---|---|
+| executor | 25 |
+| reviewer | 12 |
+| security | 10 |
+| codebase-analyzer | 20 |
+| architect | 15 |
+| quality-gate | 20 |
+| completion-guard | 12 |
+| test-writer | 20 |
+
+Override: +50% for known-complex tasks.
 
 ## State Management
 
