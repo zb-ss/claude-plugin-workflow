@@ -48,8 +48,115 @@ switch (ext) {
     // SECURITY FIX (CRITICAL-1): Validate JSON directly in Node.js, no shell execution
     validateJsonFile(validatedPath);
     break;
+  case '.org':
+    alignOrgTables(validatedPath);
+    break;
   default:
     process.exit(0);
+}
+
+/**
+ * Auto-align org-mode tables in .org files
+ * Cosmetic only — silently exits on any error
+ */
+function alignOrgTables(file) {
+  try {
+    const content = fs.readFileSync(file, 'utf8');
+    const lines = content.split('\n');
+    const result = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      // Detect start of a table block (line whose trimmed content starts with |)
+      if (/^(\s*)\|/.test(lines[i])) {
+        const tableLines = [];
+        const indent = lines[i].match(/^(\s*)/)[1];
+
+        // Collect contiguous table lines
+        while (i < lines.length && /^(\s*)\|/.test(lines[i])) {
+          tableLines.push(lines[i]);
+          i++;
+        }
+
+        const aligned = alignTable(tableLines, indent);
+        result.push(...aligned);
+      } else {
+        result.push(lines[i]);
+        i++;
+      }
+    }
+
+    const newContent = result.join('\n');
+    if (newContent !== content) {
+      fs.writeFileSync(file, newContent, 'utf8');
+    }
+  } catch {
+    // Alignment is cosmetic — never fail the hook
+  }
+  process.exit(0);
+}
+
+/**
+ * Align a block of org table lines
+ */
+function alignTable(tableLines, indent) {
+  // Parse rows: classify as separator or data
+  const parsed = tableLines.map(line => {
+    const stripped = line.replace(/^\s*/, '');
+    // Separator: |---+---| or |----|----| (with optional + between dashes)
+    if (/^\|[-+]+\|?\s*$/.test(stripped)) {
+      return { type: 'separator', raw: stripped };
+    }
+    // Data row: split by |, trim cells
+    const cells = stripped.split('|');
+    // First and last elements are empty strings from leading/trailing |
+    const inner = cells.slice(1, cells.length - 1).map(c => c.trim());
+    return { type: 'data', cells: inner };
+  });
+
+  // Determine max column count across all data rows
+  const maxCols = parsed.reduce((max, row) => {
+    if (row.type === 'data') return Math.max(max, row.cells.length);
+    return max;
+  }, 0);
+
+  if (maxCols === 0) return tableLines;
+
+  // Normalize: pad data rows with missing trailing cells
+  for (const row of parsed) {
+    if (row.type === 'data') {
+      while (row.cells.length < maxCols) {
+        row.cells.push('');
+      }
+    }
+  }
+
+  // Compute max width per column
+  const colWidths = new Array(maxCols).fill(0);
+  for (const row of parsed) {
+    if (row.type === 'data') {
+      for (let c = 0; c < maxCols; c++) {
+        colWidths[c] = Math.max(colWidths[c], row.cells[c].length);
+      }
+    }
+  }
+
+  // Ensure minimum column width of 1
+  for (let c = 0; c < maxCols; c++) {
+    if (colWidths[c] < 1) colWidths[c] = 1;
+  }
+
+  // Rebuild rows
+  return parsed.map(row => {
+    if (row.type === 'separator') {
+      const segments = colWidths.map(w => '-'.repeat(w + 2));
+      return indent + '|' + segments.join('+') + '|';
+    }
+    const segments = row.cells.map((cell, c) => {
+      return ' ' + cell.padEnd(colWidths[c]) + ' ';
+    });
+    return indent + '|' + segments.join('|') + '|';
+  });
 }
 
 /**
