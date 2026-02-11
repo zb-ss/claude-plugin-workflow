@@ -41,7 +41,7 @@ This will check your settings and offer to add the required permissions for auto
 | verify | `/workflow:verify` | Run verification loop |
 | learn | `/workflow:learn` | Extract reusable patterns from current session |
 | skill-create | `/workflow:skill-create` | Generate skills from git history |
-| statusline | `/workflow:statusline` | Enable/disable the usage status line |
+| setup-statusline | `/workflow:setup-statusline` | Enable/disable the usage status line |
 
 ## Usage Examples
 
@@ -485,7 +485,7 @@ Colors adapt based on usage: green (< 70%), yellow (70-89%), red (90%+).
 ### Enable
 
 ```bash
-/workflow:statusline enable
+/workflow:setup-statusline enable
 ```
 
 Then **restart Claude Code** to see the status line.
@@ -502,9 +502,9 @@ Then **restart Claude Code** to see the status line.
 ### Manage
 
 ```bash
-/workflow:statusline status    # Check current configuration
-/workflow:statusline enable    # Add status line to settings
-/workflow:statusline disable   # Remove status line from settings
+/workflow:setup-statusline status    # Check current configuration
+/workflow:setup-statusline enable    # Add status line to settings
+/workflow:setup-statusline disable   # Remove status line from settings
 ```
 
 ### Requirements

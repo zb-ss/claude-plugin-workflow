@@ -1,8 +1,8 @@
 ---
-name: statusline
+name: setup-statusline
 description: Enable or disable the workflow usage status line
 user_invocable: true
-usage: /workflow:statusline [enable|disable|status]
+usage: /workflow:setup-statusline [enable|disable|status]
 arguments:
   - name: action
     required: false
@@ -105,7 +105,7 @@ When the user invokes this skill:
 
    **Restart Claude Code** to see the status line.
 
-   To disable later: /workflow:statusline disable
+   To disable later: /workflow:setup-statusline disable
    ```
 
 ### Action: `disable`
@@ -125,7 +125,7 @@ When the user invokes this skill:
 
    **Restart Claude Code** to apply.
 
-   To re-enable: /workflow:statusline enable
+   To re-enable: /workflow:setup-statusline enable
    ```
 
 ## Important Notes
