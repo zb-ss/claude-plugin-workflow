@@ -469,7 +469,7 @@ Display your API usage limits, context window, and session cost directly in the 
 ### Preview
 
 ```
-Opus │ 5h ██████████ 100% 2h30m │ 7d █████░░░░░  52% 3d │ ctx ████░░░░░░  42% │ $0.87
+Opus │ 5h ██████████ 100% 2h30m │ 7d █████░░░░░  52% 3d │ + 29% $11.61/$40.00 │ ctx ████░░░░░░  42% │ $0.87
 ```
 
 | Segment | Description | Color |
@@ -477,6 +477,7 @@ Opus │ 5h ██████████ 100% 2h30m │ 7d █████░�
 | **Model** | Current model name | White bold |
 | **5h** | 5-hour rolling session limit + time until reset | Green / Yellow / Red |
 | **7d** | 7-day weekly limit (all models) + time until reset | Green / Yellow / Red |
+| **+** | Extra usage spend vs monthly cap (OAuth only) | Cyan |
 | **ctx** | Context window usage | Green / Yellow / Red |
 | **Cost** | Session cost in USD | Cyan |
 

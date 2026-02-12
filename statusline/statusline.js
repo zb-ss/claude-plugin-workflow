@@ -251,6 +251,14 @@ async function main() {
         const reset_str = reset ? ` ${DIM}${reset}${RESET}` : '';
         parts.push(`${DIM}7d${RESET} ${progressBar(pct, BAR_WIDTH)} ${formatPct(pct)}${reset_str}`);
       }
+
+      // Extra usage (only for OAuth users with extra usage enabled)
+      if (usage.extra_usage?.is_enabled) {
+        const pct = usage.extra_usage.utilization || 0;
+        const used = (usage.extra_usage.used_credits / 100).toFixed(2);
+        const limit = (usage.extra_usage.monthly_limit / 100).toFixed(2);
+        parts.push(`${DIM}+${RESET} ${formatPct(pct)} ${CYAN}$${used}${DIM}/$${limit}${RESET}`);
+      }
     }
   }
 
