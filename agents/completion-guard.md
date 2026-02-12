@@ -55,7 +55,31 @@ grep -r "throw new Error\|NotImplementedError\|pass  #" <changed_files>
 
 Any findings = FAIL
 
-### 3. Build Verification
+### 3. Code Quality Spot-Check
+
+Read the codebase context file to understand project conventions:
+```
+Read: <HOME>/.claude/workflows/context/<project>.md
+```
+
+For each changed file, verify:
+
+1. **Naming Conventions**: Variables, functions, classes follow project conventions (from codebase context)
+2. **Anti-Pattern Detection**: No obvious anti-patterns for the detected framework
+3. **Error Handling**: Follows project error handling patterns
+4. **Code Duplication**: No significant duplication with existing codebase
+5. **Function Size**: Functions/methods are reasonably sized (<30 lines)
+
+```bash
+# Quick pattern check for oversized functions (language-dependent)
+# PHP: Check for functions >30 lines
+# JS/TS: Check for functions >30 lines
+# Use appropriate tooling based on detected language
+```
+
+Any violation = FAIL with specific file:line references.
+
+### 4. Build Verification
 
 ```bash
 # Must compile/build without errors
@@ -65,7 +89,7 @@ echo $?  # Must be 0
 
 Build failure = FAIL
 
-### 4. Test Verification
+### 5. Test Verification
 
 ```bash
 # All tests must pass
@@ -75,7 +99,7 @@ echo $?  # Must be 0
 
 Test failure = FAIL
 
-### 5. TODO List Verification
+### 6. TODO List Verification
 
 Check the workflow's TODO list:
 
@@ -88,7 +112,7 @@ REQUIRED STATE:
 
 Any pending/in_progress = FAIL
 
-### 6. Quality Gate Status
+### 7. Quality Gate Status
 
 Verify the quality-gate agent has run and passed:
 
@@ -114,6 +138,7 @@ Any quality gate failure = FAIL
 ║                                                                 ║
 ║  ✓ All requirements verified and implemented                   ║
 ║  ✓ No incomplete code markers found                            ║
+║  ✓ Code quality spot-check passed                              ║
 ║  ✓ Build successful                                            ║
 ║  ✓ All tests passing                                           ║
 ║  ✓ TODO list complete (0 pending)                              ║

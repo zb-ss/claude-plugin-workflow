@@ -522,20 +522,20 @@ result2 = TaskOutput(task_id=agent2.id)
 **CRITICAL:** Reviews are NOT optional. ALL gates must PASS before completion.
 
 #### Standard Mode
-- Code review: max 2 iterations, **BLOCKING**
-- Security: max 1 iteration, **BLOCKING**
+- Code review: max 3 iterations, **BLOCKING**
+- Security: max 2 iterations, **BLOCKING**
 - Quality Gate: **MANDATORY** before completion
 - Completion Guard: **MANDATORY** architect sign-off
 
 #### Turbo Mode
-- Code review: 1 iteration, **BLOCKING** (not advisory)
-- Security: 1 iteration, **BLOCKING** (not advisory)
+- Code review: max 2 iterations, **BLOCKING**
+- Security: max 1 iteration, **BLOCKING**
 - Quality Gate: **MANDATORY** (abbreviated)
 - Completion Guard: **MANDATORY** (quick check)
 
 #### Eco Mode
-- Code review: max 1 iteration, **BLOCKING**
-- Security: 1 iteration, **BLOCKING**
+- Code review: max 2 iterations, **BLOCKING**
+- Security: max 1 iteration, **BLOCKING**
 - Quality Gate: **MANDATORY** (build + lint only)
 - Completion Guard: **MANDATORY**
 
@@ -600,10 +600,10 @@ result2 = TaskOutput(task_id=agent2.id)
 
 ### Quality Gate Pipeline
 
-After implementation, ALWAYS run:
+After implementation and code review, ALWAYS run:
 
 ```
-Implementation Complete
+Implementation Complete → Code Review PASS
         ↓
 ┌───────────────────────────────────────┐
 │          QUALITY GATE                 │
@@ -615,11 +615,20 @@ Implementation Complete
 └───────────────────────────────────────┘
         ↓ ALL PASS
 ┌───────────────────────────────────────┐
+│      POST-QUALITY-GATE REVIEW         │
+│  (if quality gate made code changes)  │
+│                                       │
+│  Targeted reviewer-lite on changed    │
+│  files only. Max 2 iterations.        │
+└───────────────────────────────────────┘
+        ↓ PASS (or no changes made)
+┌───────────────────────────────────────┐
 │        COMPLETION GUARD               │
 │  (completion-guard agent - MANDATORY) │
 │                                       │
 │  ✓ Requirements verified              │
 │  ✓ No incomplete code                 │
+│  ✓ Code quality spot-check            │
 │  ✓ Build passes                       │
 │  ✓ Tests pass                         │
 │  ✓ TODO list complete (0 pending)     │
@@ -636,28 +645,67 @@ If REJECTED → Fix issues → Re-run guards (max 3)
 ```
 iteration = 0
 max_iterations = <from mode config>
+escalated = false
+previous_issues = []
 
 while iteration < max_iterations:
-    Run review agent
+    # Include previous issues for re-review verification
+    Run review agent with:
+      - previous_issues_list = previous_issues (if iteration > 0)
+      - iteration_number = iteration + 1
+
     if verdict == PASS:
         Mark step complete
         break
     else:
+        previous_issues = extract_issues_from_review(verdict)
         iteration++
         Update ITERATION in state
         Log in Review Log
+
         if iteration < max_iterations:
-            Report: "Review found issues. Sending back to implementation."
-            # Spawn executor to fix issues
+            Report: "Review found issues. Sending back to executor for fixes."
+            # Spawn executor with structured fix protocol
             Task(
               subagent_type="workflow:executor",
-              prompt="FIX: {review_issues}"
+              prompt="""
+              ## Review Issues to Fix (MANDATORY - fix ALL)
+
+              {numbered_issues_from_review}
+
+              ## Fix Protocol
+              1. Address EVERY issue by ID - no exceptions
+              2. For each issue:
+                 a. Read the file at the specified line
+                 b. Understand the root cause
+                 c. Apply the fix
+                 d. Self-verify: re-read the code to confirm the fix is correct
+              3. Report fixes in this format:
+                 - [ISSUE-1] FIXED: <what was changed and why>
+                 - [ISSUE-2] FIXED: <what was changed and why>
+              4. If you believe an issue is a false positive:
+                 - [ISSUE-N] DISPUTE: <detailed justification>
+                 - The reviewer will evaluate your dispute on re-review
+              5. CRITICAL: Do NOT skip any issue. Every issue ID must appear in your output.
+              """
+            )
+        elif NOT escalated:
+            # AUTO-ESCALATE: Switch to opus for both reviewer and executor
+            escalated = true
+            max_iterations += 2  # Grant 2 more iterations at opus tier
+            Report: "Escalating to opus tier for review + fixes"
+            Log: "AUTO-ESCALATION: Switching to opus model for reviewer-deep + executor"
+            # Next iteration uses workflow:reviewer-deep + opus executor
+            Task(
+              subagent_type="workflow:executor",
+              model="opus",
+              prompt="... (same structured fix protocol as above with opus-level analysis)"
             )
         else:
-            # MAX ITERATIONS REACHED - DO NOT SKIP
-            Report: "Max review iterations reached. BLOCKING."
+            # Already escalated and still failing after extra iterations
+            Report: "BLOCKING after opus escalation. Max review iterations reached."
             Report: "Issues that could not be resolved:"
-            List remaining issues
+            List remaining issues with IDs
             Ask user: "Manual intervention required. Fix these issues and run /workflow:resume"
             PAUSE workflow - DO NOT CONTINUE
 ```
@@ -688,6 +736,41 @@ Task(
   Report final verdict: PASS or FAIL with details.
   """
 )
+```
+
+### Post-Quality-Gate Review (if fixes were made)
+
+If the quality gate made code changes (CHANGES_MADE: true in its output):
+
+```python
+# Check if quality gate made changes
+if quality_gate_result.changes_made:
+    Task(
+      subagent_type="workflow:reviewer-lite",
+      model="haiku",
+      max_turns=8,
+      prompt="""
+      POST-FIX REVIEW: Quality gate made code changes.
+      Review ONLY these files for regressions: {quality_gate_changed_files}
+
+      Focus: Did the quality gate fixes introduce bugs, break patterns,
+      or deviate from project conventions?
+
+      ## Codebase Context
+      Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+      Focus on: Code style, naming conventions
+
+      VERDICT: PASS or FAIL with structured issues.
+      """
+    )
+
+    # If FAIL: Send back to executor to fix, then re-run quality gate
+    # Max 2 iterations for post-fix review loop
+    post_fix_iteration = 0
+    while post_fix_result.verdict == "FAIL" and post_fix_iteration < 2:
+        Task(subagent_type="workflow:executor-lite", prompt="Fix post-QG review issues: {issues}")
+        Task(subagent_type="workflow:quality-gate", prompt="Re-verify after post-fix corrections")
+        post_fix_iteration++
 ```
 
 ### Mandatory Completion Guard Invocation

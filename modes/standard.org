@@ -27,17 +27,17 @@ Uses sonnet model for most tasks with single-pass code review.
 #+BEGIN_SRC text
 Implementation
      ↓
-Code Review (reviewer) → FAIL → Fix → Retry (max 2)
+Code Review (reviewer) → FAIL → Fix → Retry (max 3)
      ↓ PASS
-Security Review (security) → FAIL → Fix → Retry (max 1)
+Security Review (security) → FAIL → Fix → Retry (max 2)
      ↓ PASS
 COMPLETE
 #+END_SRC
 
 * Settings
 :PROPERTIES:
-:MAX_CODE_REVIEW_ITERATIONS: 2
-:MAX_SECURITY_ITERATIONS: 1
+:MAX_CODE_REVIEW_ITERATIONS: 3
+:MAX_SECURITY_ITERATIONS: 2
 :REQUIRE_TESTS: false
 :MIN_COVERAGE: 0
 :PARALLEL_REVIEWS: true

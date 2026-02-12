@@ -113,6 +113,21 @@ else:
 OVERALL: PASS (after 2 total iterations)
 ```
 
+## Code Changes Signal
+
+**CRITICAL:** When reporting results, ALWAYS include whether code changes were made during the auto-fix loop.
+
+This signal is used by the post-quality-gate review step to determine if a targeted re-review is needed.
+
+```
+CHANGES_MADE: true/false
+CHANGED_FILES (if true):
+- file1.ts (auto-fixed: lint errors)
+- file2.ts (executor fix: type error on line 42)
+```
+
+If `CHANGES_MADE: true`, the workflow supervisor will run a targeted code review on the changed files before proceeding to completion guard.
+
 ## Failure Escalation
 
 If quality gate fails after max iterations:
@@ -142,11 +157,11 @@ If quality gate fails after max iterations:
 
 ## Integration
 
-This agent is called by the workflow supervisor between implementation and completion:
+This agent is called by the workflow supervisor between review and completion:
 
 ```
-Implementation → QUALITY GATE → Completion
-                     ↑
-                     │ FAIL
-                     └── Fix Loop (max 3)
+Implementation → Review → QUALITY GATE → Post-Fix Review (if changes) → Completion
+                               ↑
+                               │ FAIL
+                               └── Fix Loop (max 3)
 ```

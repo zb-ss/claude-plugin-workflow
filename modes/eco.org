@@ -27,15 +27,17 @@ usage or simple, well-defined tasks.
 #+BEGIN_SRC text
 Implementation
      ↓
-Code Review (reviewer-lite) → FAIL → Fix → Retry (max 1)
+Code Review (reviewer-lite) → FAIL → Fix → Retry (max 2)
+     ↓ PASS
+Security Review (security-lite) → FAIL → Fix → Retry (max 1)
      ↓ PASS
 COMPLETE
 #+END_SRC
 
 * Settings
 :PROPERTIES:
-:MAX_CODE_REVIEW_ITERATIONS: 1
-:MAX_SECURITY_ITERATIONS: 0
+:MAX_CODE_REVIEW_ITERATIONS: 2
+:MAX_SECURITY_ITERATIONS: 1
 :REQUIRE_TESTS: false
 :MIN_COVERAGE: 0
 :PARALLEL_REVIEWS: false
@@ -92,7 +94,7 @@ Eco mode minimizes parallelism to save tokens:
 - Minimal error handling additions
 
 ** Review
-- Security scan optional
+- Security scan: 1 iteration, BLOCKING
 - Performance review skipped
 - Documentation update skipped
 
