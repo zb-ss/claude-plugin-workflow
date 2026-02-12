@@ -39,6 +39,24 @@ Plan file: {plan_file_path}
 Changed files: {changed_files_list}
 Review iteration: {iteration_number}
 
+## Codebase Context
+Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+Focus on: Naming conventions, architectural patterns, error handling, code style
+
+## Language & Framework Best Practices
+Check the implementation against:
+1. Framework conventions (detected from codebase context)
+2. Language idioms and best practices
+3. Project-specific patterns and naming conventions
+4. SOLID principles compliance
+5. Security patterns appropriate for the framework
+
+## Skill Loading (Optional)
+If codebase context lists "Recommended Skills", load them:
+Skill(skill: "{skill-name}")
+This ensures review against framework-specific best practices.
+Skills are optional - if a skill isn't installed, continue without it.
+
 ## Review Depth
 1. Plan Compliance
    - Does implementation fully match the plan?
@@ -70,19 +88,35 @@ Review iteration: {iteration_number}
    - API contract adherence
    - Breaking change detection
 
+## Verdict Rules
+- PASS: ZERO issues at any severity (CRITICAL, MAJOR, MINOR)
+- FAIL: ANY issue at any severity level
+- IMPROVEMENTS: Non-blocking suggestions (do not affect verdict)
+- If ANY issue exists at any severity level, verdict MUST be FAIL
+
+## Previous Issues (if iteration > 1)
+{previous_issues_list}
+
+### Re-review Protocol (if iteration > 1)
+1. For EACH previous issue, explicitly verify:
+   - [ISSUE-N] ✓ RESOLVED - brief confirmation
+   - [ISSUE-N] ✗ NOT RESOLVED - what's still wrong
+   - [ISSUE-N] ⚠ REGRESSED - fix introduced new problem
+2. Then scan for NEW issues (get new IDs starting from max+1)
+3. VERDICT: PASS only if ALL previous issues resolved AND zero new issues
+
 ## Output Format
 VERDICT: PASS or FAIL
 
-CRITICAL ISSUES (must fix):
-- [CRITICAL] detailed description - file:line - suggested fix
+ISSUES (if FAIL):
+- [ISSUE-1] [CRITICAL] detailed description - file:line - suggested fix
+- [ISSUE-2] [MAJOR] detailed description - file:line - suggested fix
+- [ISSUE-3] [MINOR] detailed description - file:line - suggested fix
 
-MAJOR ISSUES (should fix):
-- [MAJOR] detailed description - file:line - suggested fix
+TOTAL: N issues (X CRITICAL, Y MAJOR, Z MINOR)
+ALL issues must be resolved before PASS.
 
-MINOR ISSUES (nice to fix):
-- [MINOR] detailed description - file:line - suggested fix
-
-SUGGESTIONS (improvements, not blocking):
+IMPROVEMENTS (non-blocking, does not affect verdict):
 - detailed suggestion with rationale
 
 COMMENDATIONS (good patterns observed):
@@ -94,6 +128,7 @@ Comprehensive assessment including overall quality score (1-10)
 
 ## Quality Threshold
 
-- PASS requires no CRITICAL issues
-- MAX 2 MAJOR issues for PASS (must be documented)
-- All issues must have clear remediation paths
+- PASS requires ZERO issues of any severity (CRITICAL, MAJOR, MINOR)
+- Every issue gets a unique sequential ID for tracking across iterations
+- IMPROVEMENTS are non-blocking and do not affect verdict
+- All issues must have clear remediation paths with file:line references

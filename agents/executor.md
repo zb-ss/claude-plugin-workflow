@@ -44,11 +44,30 @@ Previous phase: Planning (completed)
 ## Previous Review Feedback (if any)
 {review_feedback}
 
+## Review Issues to Fix (if any - MANDATORY fix ALL)
+{numbered_issues_list}
+
+### Fix Protocol (when review issues are provided)
+1. Address EVERY issue by ID - no exceptions
+2. For each issue:
+   a. Read the file at the specified line
+   b. Understand the root cause
+   c. Apply the fix
+   d. Self-verify: re-read the code to confirm the fix is correct
+3. Report fixes in this format:
+   - [ISSUE-1] FIXED: <what was changed and why>
+   - [ISSUE-2] FIXED: <what was changed and why>
+4. If you believe an issue is a false positive:
+   - [ISSUE-N] DISPUTE: <detailed justification why this is not an issue>
+   - The reviewer will evaluate your dispute on re-review
+5. CRITICAL: Do NOT skip any issue. Every issue ID must appear in your output.
+
 ## Output
 - List of modified/created files
 - Implementation notes
 - Any deviations from plan with justification
 - Potential issues encountered
+- Fix report (if review issues were provided)
 ```
 
 ## Quality Standards

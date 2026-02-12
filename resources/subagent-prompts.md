@@ -229,9 +229,23 @@ prompt: |
   3. Follow existing code style
   4. Keep changes minimal
 
+  ## Review Issues to Fix (if any - MANDATORY fix ALL)
+  {numbered_issues_list}
+
+  ### Fix Protocol (when review issues are provided)
+  1. Address EVERY issue by ID - no exceptions
+  2. For each issue:
+     a. Read the file at the specified line
+     b. Apply the fix
+     c. Self-verify: re-read the code to confirm the fix
+  3. Report: [ISSUE-N] FIXED: <what was changed>
+  4. False positives: [ISSUE-N] DISPUTE: <justification>
+  5. Do NOT skip any issue.
+
   ## Output
   - List of modified files
   - Brief description of changes
+  - Fix report (if review issues were provided)
 ```
 
 ### executor (sonnet)
@@ -261,9 +275,7 @@ prompt: |
 
   ## Skill Loading (Optional)
   If codebase context lists "Recommended Skills", load them first:
-  ```
-  Skill(skill: "{skill-name}")
-  ```
+  `Skill(skill: "{skill-name}")`
   Continue without skills if not installed.
 
   ## Instructions
@@ -277,11 +289,29 @@ prompt: |
   ## Previous Review Feedback (if any)
   {review_feedback}
 
+  ## Review Issues to Fix (if any - MANDATORY fix ALL)
+  {numbered_issues_list}
+
+  ### Fix Protocol (when review issues are provided)
+  1. Address EVERY issue by ID - no exceptions
+  2. For each issue:
+     a. Read the file at the specified line
+     b. Understand the root cause
+     c. Apply the fix
+     d. Self-verify: re-read the code to confirm the fix is correct
+  3. Report fixes:
+     - [ISSUE-1] FIXED: <what was changed and why>
+     - [ISSUE-2] FIXED: <what was changed and why>
+  4. If you believe an issue is a false positive:
+     - [ISSUE-N] DISPUTE: <detailed justification>
+  5. CRITICAL: Do NOT skip any issue. Every issue ID must appear in your output.
+
   ## Output
   - List of modified/created files
   - Implementation notes
   - Any deviations from plan with justification
   - Potential issues encountered
+  - Fix report (if review issues were provided)
 ```
 
 ---
@@ -301,17 +331,42 @@ prompt: |
   ## Changed Files
   {changed_files_list}
 
+  ## Codebase Context
+  Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+  Focus on: Naming conventions, code style
+
   ## Review Focus
   1. Obvious bugs or errors
   2. Basic style compliance
   3. Glaring security issues
+  4. Naming convention violations (from codebase context)
+
+  ## Verdict Rules
+  - PASS: ZERO issues at any severity (CRITICAL, MAJOR, MINOR)
+  - FAIL: ANY issue at any severity level
+  - If ANY issue exists, verdict MUST be FAIL
+
+  ## Previous Issues (if iteration > 1)
+  {previous_issues_list}
+
+  ### Re-review Protocol (if iteration > 1)
+  1. For EACH previous issue, verify:
+     - [ISSUE-N] ✓ RESOLVED / ✗ NOT RESOLVED / ⚠ REGRESSED
+  2. Scan for NEW issues (IDs start from max+1)
+  3. PASS only if ALL previous resolved AND zero new issues
 
   ## Output Format
   VERDICT: PASS or FAIL
 
   ISSUES (if FAIL):
-  - [CRITICAL] description - file:line
-  - [MAJOR] description - file:line
+  - [ISSUE-1] [CRITICAL] description - file:line - suggested fix
+  - [ISSUE-2] [MAJOR] description - file:line - suggested fix
+  - [ISSUE-3] [MINOR] description - file:line - suggested fix
+
+  TOTAL: N issues (X CRITICAL, Y MAJOR, Z MINOR)
+
+  IMPROVEMENTS (non-blocking):
+  - suggestion
 
   QUICK NOTES:
   Brief assessment (2-3 sentences max)
@@ -332,23 +387,55 @@ prompt: |
   Changed files: {changed_files_list}
   Review iteration: {iteration_number}
 
+  ## Codebase Context
+  Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+  Focus on: Naming conventions, architectural patterns, error handling, code style
+
+  ## Language & Framework Best Practices
+  Check the implementation against:
+  1. Framework conventions (detected from codebase context)
+  2. Language idioms and best practices
+  3. Project-specific patterns and naming conventions
+  4. SOLID principles compliance
+  5. Security patterns appropriate for the framework
+
+  ## Skill Loading (Optional)
+  If codebase context lists "Recommended Skills", load them:
+  Skill(skill: "{skill-name}")
+
   ## Review Criteria
   1. Does implementation match the plan?
   2. Code quality and readability
   3. Error handling
   4. Edge cases covered
   5. No unnecessary complexity
-  6. Follows project conventions
+  6. Follows project conventions (from codebase context)
+
+  ## Verdict Rules
+  - PASS: ZERO issues at any severity (CRITICAL, MAJOR, MINOR)
+  - FAIL: ANY issue at any severity level
+  - If ANY issue exists, verdict MUST be FAIL
+
+  ## Previous Issues (if iteration > 1)
+  {previous_issues_list}
+
+  ### Re-review Protocol (if iteration > 1)
+  1. For EACH previous issue, verify:
+     - [ISSUE-N] ✓ RESOLVED / ✗ NOT RESOLVED / ⚠ REGRESSED
+  2. Scan for NEW issues (IDs start from max+1)
+  3. PASS only if ALL previous resolved AND zero new issues
 
   ## Output Format
   VERDICT: PASS or FAIL
 
   ISSUES (if FAIL):
-  - [CRITICAL] issue description - file:line
-  - [MAJOR] issue description - file:line
-  - [MINOR] issue description - file:line
+  - [ISSUE-1] [CRITICAL] issue - file:line - suggested fix
+  - [ISSUE-2] [MAJOR] issue - file:line - suggested fix
+  - [ISSUE-3] [MINOR] issue - file:line - suggested fix
 
-  SUGGESTIONS (optional improvements, not blocking):
+  TOTAL: N issues (X CRITICAL, Y MAJOR, Z MINOR)
+
+  IMPROVEMENTS (non-blocking):
   - suggestion description
 
   SUMMARY:
@@ -371,6 +458,22 @@ prompt: |
   Changed files: {changed_files_list}
   Review iteration: {iteration_number}
 
+  ## Codebase Context
+  Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+  Focus on: Naming conventions, architectural patterns, error handling, code style
+
+  ## Language & Framework Best Practices
+  Check the implementation against:
+  1. Framework conventions (detected from codebase context)
+  2. Language idioms and best practices
+  3. Project-specific patterns and naming conventions
+  4. SOLID principles compliance
+  5. Security patterns appropriate for the framework
+
+  ## Skill Loading (Optional)
+  If codebase context lists "Recommended Skills", load them:
+  Skill(skill: "{skill-name}")
+
   ## Review Depth
   1. Plan Compliance - Full match verification
   2. Code Quality - Readability, maintainability, abstractions
@@ -379,19 +482,31 @@ prompt: |
   5. Performance - Inefficiencies, resources, scalability
   6. Integration - Cross-component, API contracts, breaking changes
 
+  ## Verdict Rules
+  - PASS: ZERO issues at any severity (CRITICAL, MAJOR, MINOR)
+  - FAIL: ANY issue at any severity level
+  - If ANY issue exists, verdict MUST be FAIL
+
+  ## Previous Issues (if iteration > 1)
+  {previous_issues_list}
+
+  ### Re-review Protocol (if iteration > 1)
+  1. For EACH previous issue, verify:
+     - [ISSUE-N] ✓ RESOLVED / ✗ NOT RESOLVED / ⚠ REGRESSED
+  2. Scan for NEW issues (IDs start from max+1)
+  3. PASS only if ALL previous resolved AND zero new issues
+
   ## Output Format
   VERDICT: PASS or FAIL
 
-  CRITICAL ISSUES (must fix):
-  - [CRITICAL] detailed description - file:line - suggested fix
+  ISSUES (if FAIL):
+  - [ISSUE-1] [CRITICAL] detailed description - file:line - suggested fix
+  - [ISSUE-2] [MAJOR] detailed description - file:line - suggested fix
+  - [ISSUE-3] [MINOR] detailed description - file:line - suggested fix
 
-  MAJOR ISSUES (should fix):
-  - [MAJOR] detailed description - file:line - suggested fix
+  TOTAL: N issues (X CRITICAL, Y MAJOR, Z MINOR)
 
-  MINOR ISSUES (nice to fix):
-  - [MINOR] detailed description - file:line - suggested fix
-
-  SUGGESTIONS (improvements, not blocking):
+  IMPROVEMENTS (non-blocking):
   - detailed suggestion with rationale
 
   COMMENDATIONS (good patterns observed):
