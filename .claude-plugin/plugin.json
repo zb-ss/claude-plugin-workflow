@@ -1,7 +1,7 @@
 {
   "name": "workflow",
   "description": "Automated development workflow orchestration with tiered agents, swarm mode, memory persistence, and continuous learning",
-  "version": "3.6.0",
+  "version": "4.0.0",
   "author": {
     "name": "zb-ss"
   },

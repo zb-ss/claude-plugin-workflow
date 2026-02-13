@@ -266,6 +266,16 @@ If directories cannot be created, **STOP** and inform the user to run `/workflow
    - If user specifies `--mode=X`, use their choice
    - Log the mode selection decision in workflow state
 
+#### Step 2.5: Test optionality
+
+After mode is selected, determine test preference:
+
+- **eco/turbo/standard mode**: Use `AskUserQuestion` to ask "Enable test writing?" Default: No
+- **thorough mode**: Tests are mandatory. Inform the user: "Thorough mode requires tests — test writing enabled." Do NOT ask.
+- **swarm mode**: Use `AskUserQuestion` to ask "Enable test writing?" Default: Yes
+
+Store the result as `tests_enabled` (boolean) for JSON state creation.
+
 3. **Load mode configuration**:
    - Read `modes/<mode>.org` from the workflow plugin directory
    - Extract agent routing and settings
@@ -292,9 +302,65 @@ If directories cannot be created, **STOP** and inform the user to run `/workflow
      - `{{BRANCH}}` → branch name
      - `{{BASE_BRANCH}}` → base branch (main/master)
      - `{{MODE}}` → selected mode
+     - `{{STATE_FILE}}` → path to JSON state sidecar (Step 5b)
+     - `{{TESTS_ENABLED}}` → "true" or "false"
    - **Use Write tool with ABSOLUTE path**: `/home/user/.claude/workflows/active/<id>.<format>`
    - Example: `Write(file_path="/home/zashboy/.claude/workflows/active/20260204-abc123.org", content=<template>)`
    - **VERIFY** the file was created by reading it back
+
+   **Step 5b: Create JSON state sidecar** (CRITICAL — enables hook enforcement):
+
+   After creating the org/md file, create a `.state.json` file alongside it.
+   This file is the machine-readable state that hooks use to enforce workflow phases.
+
+   ```json
+   {
+     "$schema": "1.0.0",
+     "workflow_id": "<generated-id>",
+     "org_file": "<HOME>/.claude/workflows/active/<id>.<format>",
+     "workflow": {
+       "type": "<feature|bugfix|refactor>",
+       "description": "<full description>",
+       "branch": "<branch-name>"
+     },
+     "mode": {
+       "current": "<selected-mode>",
+       "original": "<selected-mode>"
+     },
+     "config": {
+       "tests_enabled": <true|false from Step 2.5>,
+       "max_code_review_iterations": <from mode config>,
+       "max_security_iterations": <from mode config>
+     },
+     "phase": {
+       "current": "planning",
+       "completed": [],
+       "remaining": ["implementation", "code_review", "security_review", "tests", "quality_gate", "completion_guard"]
+     },
+     "gates": {
+       "planning":         { "status": "pending", "iteration": 0 },
+       "implementation":   { "status": "pending", "iteration": 0 },
+       "code_review":      { "status": "pending", "iteration": 0 },
+       "security_review":  { "status": "pending", "iteration": 0 },
+       "tests":            { "status": "pending", "iteration": 0 },
+       "quality_gate":     { "status": "pending", "iteration": 0 },
+       "completion_guard": { "status": "pending", "iteration": 0 }
+     },
+     "agent_log": [],
+     "updated_at": "<current ISO timestamp>"
+   }
+   ```
+
+   **Gate status adjustments based on config:**
+   - If `tests_enabled === false`: set `gates.tests.status = "skipped"` and `gates.tests.reason = "tests_enabled=false"`
+   - Remove `"tests"` from `phase.remaining` when skipped
+
+   **Write using absolute path:**
+   ```
+   Write(file_path="<HOME>/.claude/workflows/active/<id>.state.json", content=<json>)
+   ```
+
+   **VERIFY** the state file was created by reading it back.
 
    **If style=light**:
    - **Use Write tool with ABSOLUTE path**: `/home/user/.claude/workflows/state.json`
@@ -881,8 +947,11 @@ When all steps done:
    - Suggest commit message based on work done
 
 5. **Archive state**:
-   - Move org file to `~/.claude/workflows/completed/`
-   - Or update JSON state with completed status
+   - Update JSON state: set `phase.current = "completed"` and `updated_at`
+   - Move BOTH files to `~/.claude/workflows/completed/`:
+     - Org/md file: `active/<id>.org` → `completed/<id>.org`
+     - State JSON: `active/<id>.state.json` → `completed/<id>.state.json`
+   - For light style: update JSON state with completed status
 
 ### Error Handling
 
