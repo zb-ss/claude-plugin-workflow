@@ -1,0 +1,361 @@
+#+TITLE: E2E Testing: {{TITLE}}
+#+AUTHOR: Claude Code Workflow
+#+DATE: {{DATE}}
+#+PROPERTY: WORKFLOW_ID {{WORKFLOW_ID}}
+#+PROPERTY: WORKFLOW_TYPE e2e-testing
+#+PROPERTY: STATUS active
+#+PROPERTY: BRANCH {{BRANCH}}
+#+PROPERTY: STATE_FILE {{STATE_FILE}}
+#+PROPERTY: TESTS_ENABLED {{TESTS_ENABLED}}
+#+PROPERTY: MODE {{MODE}}
+#+PROPERTY: BASE_URL {{BASE_URL}}
+#+PROPERTY: FRAMEWORK {{FRAMEWORK}}
+#+PROPERTY: AUTH_STRATEGY {{AUTH_STRATEGY}}
+#+PROPERTY: EXPLORATION_DEPTH {{DEPTH}}
+#+PROPERTY: OUTPUT_DIR {{OUTPUT_DIR}}
+
+* Overview
+:PROPERTIES:
+:CREATED_AT: {{TIMESTAMP}}
+:UPDATED_AT: {{TIMESTAMP}}
+:END:
+
+** Description
+{{DESCRIPTION}}
+
+** Branch
+- Branch: {{BRANCH}}
+- Base: {{BASE_BRANCH}}
+
+** Test Configuration
+- Base URL: {{BASE_URL}}
+- Framework: {{FRAMEWORK}}
+- Auth Strategy: {{AUTH_STRATEGY}}
+- Exploration Depth: {{DEPTH}}
+- Output Directory: {{OUTPUT_DIR}}
+
+* Workflow Steps
+
+** TODO Step 0: Setup
+:PROPERTIES:
+:AGENT: Supervisor
+:STATUS: pending
+:STARTED_AT:
+:COMPLETED_AT:
+:END:
+
+*** Objectives
+- [ ] Detect package manager (npm/yarn/pnpm)
+- [ ] Check for @playwright/test installation
+- [ ] Install @playwright/test if missing
+- [ ] Check for playwright.config.ts
+- [ ] Generate playwright.config.ts if missing
+- [ ] Install Playwright browsers (chromium by default)
+- [ ] Verify Playwright MCP tools are accessible
+- [ ] Create output directory structure
+
+*** Setup Summary
+| Component            | Status | Version | Notes |
+|----------------------+--------+---------+-------|
+| Package Manager      |        |         |       |
+| @playwright/test     |        |         |       |
+| playwright.config.ts |        |         |       |
+| Browsers Installed   |        |         |       |
+| MCP Tools            |        |         |       |
+
+*** Setup Notes
+#+BEGIN_SRC markdown
+(Setup findings and configuration details will be recorded here)
+#+END_SRC
+
+** TODO Step 1: Exploration
+:PROPERTIES:
+:AGENT: workflow:e2e-explorer
+:STATUS: pending
+:STARTED_AT:
+:COMPLETED_AT:
+:DEPENDS_ON: Step 0
+:END:
+
+*** Objectives
+- [ ] Navigate to base URL
+- [ ] Map navigation structure (menus, links)
+- [ ] Discover pages up to depth limit
+- [ ] Identify forms and interactive elements
+- [ ] Detect authentication requirements
+- [ ] Identify dynamic content areas
+- [ ] Build comprehensive app map JSON
+- [ ] Generate exploration report
+
+*** App Map Summary
+| Metric            | Count | Notes |
+|-------------------+-------+-------|
+| Pages Discovered  |       |       |
+| Forms Found       |       |       |
+| Buttons/Actions   |       |       |
+| Auth Required     |       |       |
+| Dynamic Elements  |       |       |
+| External Links    |       |       |
+
+*** Exploration Notes
+#+BEGIN_SRC markdown
+(Exploration findings and observations will be recorded here)
+
+## Pages Discovered
+- URL 1: Description
+- URL 2: Description
+
+## Forms Identified
+- Form 1: Fields, action, method
+- Form 2: Fields, action, method
+
+## Interactive Elements
+- Element type: Location, purpose
+
+## Authentication
+- Auth mechanism detected: (none/form/token/cookie)
+- Login URL:
+- Auth endpoints:
+#+END_SRC
+
+*** App Map JSON
+#+BEGIN_SRC json
+{
+  "baseUrl": "",
+  "pages": [],
+  "forms": [],
+  "navigation": [],
+  "authRequired": false,
+  "exploredAt": ""
+}
+#+END_SRC
+
+** TODO Step 2: Test Generation
+:PROPERTIES:
+:AGENT: workflow:e2e-generator
+:STATUS: pending
+:STARTED_AT:
+:COMPLETED_AT:
+:DEPENDS_ON: Step 1
+:END:
+
+*** Objectives
+- [ ] Read and parse app map JSON
+- [ ] Group features into logical test suites
+- [ ] Generate test specs per feature/page
+- [ ] Create authentication setup if needed
+- [ ] Create page objects (if thorough mode)
+- [ ] Generate fixtures for common data
+- [ ] Validate TypeScript syntax for all tests
+- [ ] Create README for test suite
+
+*** Generated Files
+| File | Type        | Lines | Features Covered |
+|------+-------------+-------+------------------|
+|      | test spec   |       |                  |
+|      | page object |       |                  |
+|      | fixture     |       |                  |
+|      | auth setup  |       |                  |
+|      | README      |       |                  |
+
+*** Test Coverage Map
+| Feature/Page | Test File | Auth Required | Assertions |
+|--------------+-----------+---------------+------------|
+|              |           |               |            |
+
+*** Generation Notes
+#+BEGIN_SRC markdown
+(Test generation decisions and patterns will be recorded here)
+
+## Test Suites Created
+- Suite 1: Pages covered, test count
+- Suite 2: Pages covered, test count
+
+## Page Objects (if thorough mode)
+- PageObject1: Selectors, methods
+- PageObject2: Selectors, methods
+
+## Authentication Setup
+- Strategy: (none/form/token/cookie)
+- Files: auth.setup.ts, etc.
+
+## Fixtures
+- Fixture 1: Purpose, data structure
+#+END_SRC
+
+** TODO Step 3: Test Validation
+:PROPERTIES:
+:AGENT: workflow:e2e-reviewer
+:STATUS: pending
+:STARTED_AT:
+:COMPLETED_AT:
+:DEPENDS_ON: Step 2
+:ITERATION: 0
+:MAX_ITERATIONS: 3
+:END:
+
+*** Validation Criteria
+- [ ] All tests compile (TypeScript check)
+- [ ] All tests run without errors
+- [ ] No flaky selectors (accessibility selectors preferred: getByRole > getByLabel > getByText)
+- [ ] No hard-coded waits (use waitFor*)
+- [ ] Proper test isolation (no shared state)
+- [ ] Accessibility selectors used where possible
+- [ ] Meaningful assertions (not just element exists)
+- [ ] Screenshots on failure configured
+- [ ] Parallel execution safe
+
+*** Test Run Results
+| Run | Total Tests | Passed | Failed | Flaky | Duration |
+|-----+-------------+--------+--------+-------+----------|
+|   1 |             |        |        |       |          |
+|   2 |             |        |        |       |          |
+|   3 |             |        |        |       |          |
+
+*** Review Log
+| Iteration | Verdict | Issues Found | Fixed |
+|-----------+---------+--------------+-------|
+|         1 |         |              |       |
+|         2 |         |              |       |
+|         3 |         |              |       |
+
+*** Current Review Feedback
+#+BEGIN_SRC markdown
+(Review feedback will be written here - this gets passed back to generator if failed)
+
+## Issues Found
+
+### Issue 1: Title
+- File: path/to/test.spec.ts
+- Line: 42
+- Severity: high/medium/low
+- Description: What's wrong
+- Fix: How to fix it
+
+### Issue 2: Title
+...
+#+END_SRC
+
+*** Test Execution Log
+#+BEGIN_SRC text
+(Playwright test output will be captured here)
+#+END_SRC
+
+** TODO Step 4: Quality Gate
+:PROPERTIES:
+:AGENT: workflow:quality-gate
+:STATUS: pending
+:STARTED_AT:
+:COMPLETED_AT:
+:DEPENDS_ON: Step 3
+:END:
+
+*** Checks
+- [ ] TypeScript compilation passes
+- [ ] Lint passes (eslint)
+- [ ] All E2E tests pass
+- [ ] No security issues in test code
+- [ ] Test coverage meets threshold
+- [ ] CI integration ready
+
+*** Quality Metrics
+| Check      | Status | Details |
+|------------+--------+---------|
+| TypeScript |        |         |
+| Lint       |        |         |
+| E2E Tests  |        |         |
+| Security   |        |         |
+| Coverage   |        |         |
+
+*** Quality Gate Output
+#+BEGIN_SRC text
+(Quality check results will be recorded here)
+#+END_SRC
+
+** TODO Step 5: Completion Guard
+:PROPERTIES:
+:AGENT: workflow:completion-guard
+:STATUS: pending
+:STARTED_AT:
+:COMPLETED_AT:
+:DEPENDS_ON: Step 4
+:END:
+
+*** Final Verification
+- [ ] All discovered features have tests
+- [ ] App map coverage is complete
+- [ ] No TODO/FIXME markers in tests
+- [ ] Tests are deterministic (no random failures)
+- [ ] Authentication flows tested
+- [ ] Error states tested
+- [ ] Ready for CI integration
+- [ ] Documentation complete
+
+*** Coverage Report
+| Coverage Type  | Percentage | Notes |
+|----------------+------------+-------|
+| Pages          |            |       |
+| Forms          |            |       |
+| User Flows     |            |       |
+| Auth Scenarios |            |       |
+
+*** Completion Notes
+#+BEGIN_SRC markdown
+(Final notes and recommendations will be recorded here)
+#+END_SRC
+
+* Completion Summary
+:PROPERTIES:
+:COMPLETED_AT:
+:TOTAL_DURATION:
+:END:
+
+** Files Changed
+| File | Lines Added | Lines Removed |
+|------+-------------+---------------|
+|      |             |               |
+
+** Test Suite Statistics
+- Total Test Files:
+- Total Test Cases:
+- Total Assertions:
+- Average Test Duration:
+
+** CI Integration
+#+BEGIN_SRC bash
+# Add this to your CI pipeline
+npx playwright test
+
+# Or for specific browsers
+npx playwright test --project=chromium
+
+# Run in headed mode for debugging
+npx playwright test --headed
+
+# Generate HTML report
+npx playwright show-report
+#+END_SRC
+
+** Commit Message
+#+BEGIN_SRC text
+(Suggested commit message)
+
+test: add E2E test suite for [feature/app name]
+
+- Explored [N] pages across [depth] levels
+- Generated [N] test specs covering [features]
+- Implemented [auth strategy] authentication flow
+- [N] page objects created for reusable patterns
+- All tests passing with [N]% coverage
+
+Test framework: Playwright
+Browsers: Chromium, Firefox, WebKit
+#+END_SRC
+
+** Notes
+(Final notes and observations)
+
+* Intervention Log
+| Timestamp | Phase | User Instruction | Action Taken |
+|-----------+-------+------------------+--------------|
+|           |       |                  |              |

@@ -1,0 +1,28 @@
+{
+  "laravel": {
+    "command": "php artisan serve --port={{PORT}}",
+    "url": "http://localhost:{{PORT}}",
+    "reuseExistingServer": true
+  },
+  "symfony": {
+    "command": "symfony server:start --port={{PORT}} --no-tls",
+    "url": "http://localhost:{{PORT}}",
+    "reuseExistingServer": true
+  },
+  "vue": {
+    "command": "npm run dev -- --port {{PORT}}",
+    "url": "http://localhost:{{PORT}}",
+    "reuseExistingServer": true
+  },
+  "react": {
+    "command": "npm run start",
+    "url": "http://localhost:3000",
+    "reuseExistingServer": true
+  },
+  "next": {
+    "command": "npm run dev -- --port {{PORT}}",
+    "url": "http://localhost:{{PORT}}",
+    "reuseExistingServer": true
+  },
+  "generic": null
+}
