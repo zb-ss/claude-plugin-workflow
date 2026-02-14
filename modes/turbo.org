@@ -27,22 +27,22 @@ who will review the output themselves.
 #+BEGIN_SRC text
 Implementation
      ↓
-Quick Review (reviewer-lite) → Advisory only
-     ↓
-Quick Security (security-lite) → Advisory only
-     ↓
-COMPLETE (with warnings if any)
+Quick Review (reviewer-lite) → FAIL → Fix → Retry (max 2)
+     ↓ PASS
+Quick Security (security-lite) → FAIL → Fix → Retry (max 1)
+     ↓ PASS
+COMPLETE
 #+END_SRC
 
 * Settings
 :PROPERTIES:
-:MAX_CODE_REVIEW_ITERATIONS: 1
-:MAX_SECURITY_ITERATIONS: 0
+:MAX_CODE_REVIEW_ITERATIONS: 2
+:MAX_SECURITY_ITERATIONS: 1
 :REQUIRE_TESTS: false
 :MIN_COVERAGE: 0
 :PARALLEL_REVIEWS: true
 :PARALLEL_IMPLEMENTATION: true
-:REVIEW_BLOCKING: false
+:REVIEW_BLOCKING: true
 :AUTONOMOUS_MODE: true
 :MAX_TURNS_EXECUTOR: 15
 :MAX_TURNS_REVIEWER: 8
@@ -59,7 +59,7 @@ COMPLETE (with warnings if any)
 Turbo mode maximizes parallelism:
 - Code review + Security review ALWAYS parallel
 - Multiple file implementations can run in parallel
-- All reviews are advisory (non-blocking)
+- Code and security reviews are BLOCKING
 
 * Phase Defaults
 
@@ -74,9 +74,9 @@ Turbo mode maximizes parallelism:
 - Trust the plan
 
 ** Review
-- Advisory only (non-blocking)
+- BLOCKING (must pass)
 - Quick pattern matching
-- User responsible for final review
+- Issues must be resolved before completion
 
 * Parallel Execution
 
@@ -94,7 +94,7 @@ Turbo mode runs these phases in parallel where possible:
 
 * Warnings
 
-- Reviews are advisory, not blocking
+- Reviews are blocking but use lite agents for speed
 - May miss subtle issues
 - Recommended for experienced developers
 - Always do manual review before merge

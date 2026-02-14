@@ -39,9 +39,25 @@ Pattern to follow: {pattern_reference}
 3. Keep changes minimal and focused
 4. Report what was changed
 
+## Review Issues to Fix (if any - MANDATORY fix ALL)
+{numbered_issues_list}
+
+### Fix Protocol (when review issues are provided)
+1. Address EVERY issue by ID - no exceptions
+2. For each issue:
+   a. Read the file at the specified line
+   b. Apply the fix
+   c. Self-verify: re-read the code to confirm the fix
+3. Report fixes:
+   - [ISSUE-N] FIXED: <what was changed>
+4. If an issue is a false positive:
+   - [ISSUE-N] DISPUTE: <justification>
+5. Do NOT skip any issue. Every issue ID must appear in your output.
+
 ## Output
 - List of modified files
 - Brief description of changes
+- Fix report (if review issues were provided)
 ```
 
 ## Constraints
