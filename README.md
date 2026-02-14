@@ -7,13 +7,16 @@ Automated development workflow orchestration with tiered agents and execution mo
 ## Highlights
 
 - **📋 Org-mode & Markdown plans** - Human-readable, editable workflow state files
-- **🤖 20 tiered agents** - From quick haiku checks to deep opus reviews
+- **🤖 23 tiered agents** - From quick haiku checks to deep opus reviews
 - **🐝 Swarm mode** - 4 parallel executors with 3-architect validation
 - **🧠 Auto-learning** - Learnings saved to project CLAUDE.md, auto-loaded by CC
 - **🔒 Hardened review system** - Zero-issue PASS, structured issue tracking, auto-escalation
 - **📊 Status line** - Live API usage limits, context window, and session cost in your status bar
+- **🎭 E2E testing** - Automated Playwright test generation via browser exploration
 
 ## What's New
+
+**E2E Playwright Testing** - Generate end-to-end test suites automatically. The new `/workflow:test-e2e` command explores your web app via Playwright MCP browser automation, builds an app map, generates test specs with accessibility-first selectors, and validates through review gates. Supports Symfony, Laravel, Vue, React, and Next.js with form/token/cookie auth strategies.
 
 **Review Hardening** - Zero-tolerance review verdicts, structured `[ISSUE-N]` tracking across iterations, mandatory executor fix-by-ID protocol, auto-escalation to opus on exhausted iterations, post-quality-gate regression review, and codebase-aware reviews with framework skill loading. [Details](docs/review-system.md)
 
@@ -94,7 +97,7 @@ Re-review:
 
 ## Agents
 
-20 tiered agents organized by function:
+23 tiered agents organized by function:
 
 | Category | Agents | Models |
 |----------|--------|--------|
@@ -105,6 +108,7 @@ Re-review:
 | Code Review | reviewer-lite, reviewer, reviewer-deep | haiku, sonnet, opus |
 | Security | security-lite, security, security-deep | haiku, sonnet, opus |
 | Quality Gates | quality-gate, completion-guard | sonnet, opus |
+| E2E Testing | e2e-explorer, e2e-generator, e2e-reviewer | haiku, sonnet, opus |
 | Other | explorer, test-writer, perf-lite, perf-reviewer, doc-writer | haiku, sonnet |
 
 ## Skills
@@ -115,6 +119,7 @@ Re-review:
 | `/workflow:status` | Check workflow status |
 | `/workflow:resume` | Resume an existing workflow |
 | `/workflow:mode` | Switch execution mode mid-workflow |
+| `/workflow:test-e2e` | Generate E2E Playwright tests for a web app |
 | `/workflow:verify` | Run verification loop |
 | `/workflow:learn` | Extract reusable patterns from session |
 | `/workflow:skill-create` | Generate skills from git history |
@@ -128,6 +133,32 @@ Opus | 5h ██████████ 100% 2h30m | 7d █████░░�
 ```
 
 Live display of 5h session limit, 7d weekly limit, extra usage spend, context window, and session cost. Colors adapt based on usage level. [Setup & details](docs/status-line.md)
+
+## E2E Testing
+
+Generate Playwright E2E test suites from a running web application:
+
+```bash
+# Test a local app (auto-detects framework)
+/workflow:test-e2e http://localhost:8080
+
+# With framework and auth
+/workflow:test-e2e http://localhost:8080 --framework=symfony --auth=form
+
+# Deep exploration in thorough mode
+/workflow:test-e2e http://localhost:3000 --mode=thorough --depth=5
+
+# Just generate config files
+/workflow:test-e2e http://localhost:8080 --config-only
+```
+
+**Pipeline:** Setup (install Playwright, detect framework, generate config) → Exploration (BFS crawl via Playwright MCP `browser_snapshot`) → Generation (app map → test specs) → Validation (run tests, review quality) → Quality Gate → Completion Guard
+
+**Frameworks:** Symfony, Laravel, Vue, React, Next.js, generic
+
+**Auth strategies:** `form` (login flow discovery), `token` (header injection), `cookie` (session cookie)
+
+**Selectors:** Enforces accessibility-first priority — `getByRole` > `getByLabel` > `getByPlaceholder` > `getByText` > `getByTestId`. CSS selectors and XPath are blocked.
 
 ## Documentation
 
