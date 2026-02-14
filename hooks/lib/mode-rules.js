@@ -60,6 +60,9 @@ const AGENT_GATE_MAP = {
   'workflow:codebase-analyzer': 'codebase_analysis',
   'workflow:task-analyzer': 'task_analysis',
   'workflow:supervisor': 'orchestration',
+  'workflow:e2e-explorer': 'e2e_exploration',
+  'workflow:e2e-generator': 'e2e_generation',
+  'workflow:e2e-reviewer': 'e2e_validation',
 };
 
 /**
@@ -72,6 +75,19 @@ const PHASE_ORDER = [
   'code_review',
   'security_review',
   'tests',
+  'quality_gate',
+  'completion_guard',
+];
+
+/**
+ * E2E testing workflow phase ordering.
+ * Alternative track for E2E testing workflows.
+ */
+const E2E_PHASE_ORDER = [
+  'setup',
+  'e2e_exploration',
+  'e2e_generation',
+  'e2e_validation',
   'quality_gate',
   'completion_guard',
 ];
@@ -104,6 +120,7 @@ module.exports = {
   MODEL_CONSTRAINTS,
   AGENT_GATE_MAP,
   PHASE_ORDER,
+  E2E_PHASE_ORDER,
   isModelForbidden,
   getGateForAgent,
   getPreferredModel,

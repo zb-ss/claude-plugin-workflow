@@ -42,7 +42,10 @@
     "./agents/quality-gate.md",
     "./agents/completion-guard.md",
     "./agents/task-analyzer.md",
-    "./agents/supervisor.md"
+    "./agents/supervisor.md",
+    "./agents/e2e-explorer.md",
+    "./agents/e2e-generator.md",
+    "./agents/e2e-reviewer.md"
   ],
   "skills": [
     "./skills/"
