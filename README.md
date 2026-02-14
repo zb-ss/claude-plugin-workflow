@@ -16,7 +16,7 @@ Automated development workflow orchestration with tiered agents and execution mo
 
 ## What's New
 
-**E2E Playwright Testing** - Generate end-to-end test suites automatically. The new `/workflow:test-e2e` command explores your web app via Playwright MCP browser automation, builds an app map, generates test specs with accessibility-first selectors, and validates through review gates. Supports Symfony, Laravel, Vue, React, and Next.js with form/token/cookie auth strategies.
+**E2E Playwright Testing** - Generate end-to-end test suites automatically. The new `/workflow:test-e2e` command explores your web app via Playwright MCP browser automation, builds an app map, generates test specs with accessibility-first selectors, and validates through review gates. Supports Symfony, Laravel, Vue, React, and Next.js with form/token/cookie auth strategies. [Details](docs/e2e-testing.md)
 
 **Review Hardening** - Zero-tolerance review verdicts, structured `[ISSUE-N]` tracking across iterations, mandatory executor fix-by-ID protocol, auto-escalation to opus on exhausted iterations, post-quality-gate regression review, and codebase-aware reviews with framework skill loading. [Details](docs/review-system.md)
 
@@ -139,31 +139,16 @@ Live display of 5h session limit, 7d weekly limit, extra usage spend, context wi
 Generate Playwright E2E test suites from a running web application:
 
 ```bash
-# Test a local app (auto-detects framework)
-/workflow:test-e2e http://localhost:8080
-
-# With framework and auth
 /workflow:test-e2e http://localhost:8080 --framework=symfony --auth=form
-
-# Deep exploration in thorough mode
-/workflow:test-e2e http://localhost:3000 --mode=thorough --depth=5
-
-# Just generate config files
-/workflow:test-e2e http://localhost:8080 --config-only
 ```
 
-**Pipeline:** Setup (install Playwright, detect framework, generate config) → Exploration (BFS crawl via Playwright MCP `browser_snapshot`) → Generation (app map → test specs) → Validation (run tests, review quality) → Quality Gate → Completion Guard
-
-**Frameworks:** Symfony, Laravel, Vue, React, Next.js, generic
-
-**Auth strategies:** `form` (login flow discovery), `token` (header injection), `cookie` (session cookie)
-
-**Selectors:** Enforces accessibility-first priority — `getByRole` > `getByLabel` > `getByPlaceholder` > `getByText` > `getByTestId`. CSS selectors and XPath are blocked.
+6-phase pipeline: Setup → Exploration (BFS via Playwright MCP) → Generation (app map → test specs) → Validation → Quality Gate → Completion Guard. Supports Symfony, Laravel, Vue, React, Next.js with form/token/cookie auth. [Full guide](docs/e2e-testing.md)
 
 ## Documentation
 
 | Guide | Description |
 |-------|-------------|
+| [E2E Testing](docs/e2e-testing.md) | Playwright test generation, selectors, auth strategies, pipeline |
 | [Execution Modes](docs/modes.md) | Detailed mode configs, pipelines, agent routing |
 | [Review System](docs/review-system.md) | Structured issue tracking, auto-escalation, verdicts |
 | [Swarm Mode](docs/swarm-mode.md) | 3-architect validation, parallel batching, Agent Teams |
