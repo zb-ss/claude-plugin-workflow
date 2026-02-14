@@ -12,7 +12,7 @@
 const fs = require('fs');
 
 try {
-  const { findActiveStates, findOrphanedOrgFiles } = require('./lib/state');
+  const { findActiveStates, findOrphanedOrgFiles, writeSessionMarker } = require('./lib/state');
   const { log } = require('./lib/logger');
 
   // Read stdin (hook input JSON)
@@ -21,6 +21,12 @@ try {
     const stdin = fs.readFileSync(0, 'utf8').trim();
     if (stdin) input = JSON.parse(stdin);
   } catch {}
+
+  // Write session marker so skills can discover the session_id
+  const sessionId = input.session_id;
+  if (sessionId) {
+    writeSessionMarker(sessionId);
+  }
 
   const activeStates = findActiveStates();
   const orphanedOrgs = findOrphanedOrgFiles();
@@ -33,44 +39,33 @@ try {
   const contextParts = [];
 
   if (activeStates.length > 0) {
-    const primary = activeStates[0];
-    const { state } = primary;
-
-    // Build pending gates list
-    const pendingGates = Object.entries(state.gates || {})
-      .filter(([, g]) => g.status !== 'passed' && g.status !== 'skipped')
-      .map(([name]) => name);
-
     contextParts.push(
-      '## Active Workflow Detected',
+      '## Active Workflows',
       '',
-      `You are resuming an active workflow. Read the org file and continue from the current phase.`,
+      `There are ${activeStates.length} active workflow(s). Use \`/workflow:resume [id]\` to continue one, or \`/workflow:start\` to create a new workflow.`,
       '',
-      `- **Workflow ID:** ${state.workflow_id}`,
-      `- **Type:** ${state.workflow?.type || 'unknown'}`,
-      `- **Mode:** ${state.mode?.current || 'unknown'}`,
-      `- **Current Phase:** ${state.phase?.current || 'unknown'}`,
-      `- **Pending Gates:** ${pendingGates.length > 0 ? pendingGates.join(', ') : 'none'}`,
-      `- **Org File:** ${state.org_file}`,
-      `- **State File:** ${primary.path}`,
     );
 
-    if (state.workflow?.description) {
-      contextParts.push(`- **Description:** ${state.workflow.description}`);
-    }
+    for (const entry of activeStates) {
+      const { state } = entry;
+      const pendingGates = Object.entries(state.gates || {})
+        .filter(([, g]) => g.status !== 'passed' && g.status !== 'skipped')
+        .map(([name]) => name);
 
-    // Report additional active workflows
-    if (activeStates.length > 1) {
-      contextParts.push('', '### Other Active Workflows');
-      for (let i = 1; i < activeStates.length; i++) {
-        const other = activeStates[i].state;
-        contextParts.push(
-          `- ${other.workflow_id} (${other.workflow?.type || '?'}, phase: ${other.phase?.current || '?'})`
-        );
+      contextParts.push(
+        `- **${state.workflow_id}** — ${state.workflow?.type || 'unknown'} (${state.mode?.current || '?'})`,
+        `  - Phase: ${state.phase?.current || 'unknown'}`,
+        `  - Pending Gates: ${pendingGates.length > 0 ? pendingGates.join(', ') : 'none'}`,
+        `  - Org File: ${state.org_file}`,
+        `  - State File: ${entry.path}`,
+      );
+
+      if (state.workflow?.description) {
+        contextParts.push(`  - Description: ${state.workflow.description}`);
       }
     }
 
-    log('session-start', `Resuming workflow ${state.workflow_id} (phase: ${state.phase?.current})`);
+    log('session-start', `Found ${activeStates.length} active workflow(s)`);
   }
 
   // Report orphaned org files

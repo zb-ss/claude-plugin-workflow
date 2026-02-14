@@ -40,6 +40,24 @@ Read the workflow org file and determine:
 - Any pending review iterations
 - The original task description
 
+### 2.5. Bind Session to Workflow
+
+After finding the workflow, bind this session to it so hooks only affect this workflow:
+
+1. Glob for `/tmp/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
+2. Write `/tmp/workflow-binding-{session_id}.json` with:
+   ```json
+   {
+     "session_id": "<session_id>",
+     "workflow_path": "<path to .state.json>",
+     "workflow_id": "<workflow_id>",
+     "bound_at": "<ISO timestamp>"
+   }
+   ```
+3. Verify by reading the binding file back
+
+If no session marker is found, skip this step (backward compatible).
+
 ### 3. Report Status to User
 
 Before resuming, output:
