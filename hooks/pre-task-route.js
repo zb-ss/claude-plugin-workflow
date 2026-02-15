@@ -18,7 +18,7 @@ const path = require('path');
 const os = require('os');
 
 try {
-  const { getActiveWorkflow } = require('./lib/state');
+  const { getWorkflowForSession } = require('./lib/state');
   const { isModelForbidden, getPreferredModel } = require('./lib/mode-rules');
   const { log } = require('./lib/logger');
 
@@ -30,7 +30,8 @@ try {
   } catch {}
 
   // No active workflow — invisible
-  const active = getActiveWorkflow();
+  const sessionId = input.session_id || 'unknown';
+  const active = getWorkflowForSession(sessionId);
   if (!active) {
     process.exit(0);
   }
@@ -56,7 +57,6 @@ try {
   }
 
   // Model is forbidden — check deny counter before blocking
-  const sessionId = input.session_id || 'unknown';
   const counterKey = `${mode}-${requestedModel}`;
   const counterFile = path.join(os.tmpdir(), `workflow-deny-${sessionId}.json`);
 

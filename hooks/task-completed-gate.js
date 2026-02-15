@@ -15,7 +15,7 @@ const path = require('path');
 const os = require('os');
 
 try {
-  const { getActiveWorkflow, allMandatoryGatesPassed, getPendingGates } = require('./lib/state');
+  const { getWorkflowForSession, allMandatoryGatesPassed, getPendingGates } = require('./lib/state');
   const { log } = require('./lib/logger');
 
   // Read stdin (TaskCompleted hook input)
@@ -26,7 +26,8 @@ try {
   } catch {}
 
   // No active workflow — invisible
-  const active = getActiveWorkflow();
+  const sessionId = input.session_id || 'unknown';
+  const active = getWorkflowForSession(sessionId);
   if (!active) {
     process.exit(0);
   }
@@ -54,7 +55,6 @@ try {
   }
 
   // Gates incomplete — check safety counter before blocking
-  const sessionId = input.session_id || 'unknown';
   const taskId = input.task_id || 'unknown';
   const counterFile = path.join(os.tmpdir(), `workflow-complete-${sessionId}-${taskId}.count`);
 

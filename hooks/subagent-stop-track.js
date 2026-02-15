@@ -14,7 +14,7 @@ const path = require('path');
 const os = require('os');
 
 try {
-  const { getActiveWorkflow, updateState } = require('./lib/state');
+  const { getWorkflowForSession, updateState } = require('./lib/state');
   const { getGateForAgent, PHASE_ORDER } = require('./lib/mode-rules');
   const { log } = require('./lib/logger');
 
@@ -37,8 +37,9 @@ try {
     process.exit(0);
   }
 
-  // Get active workflow
-  const active = getActiveWorkflow();
+  // Get workflow bound to this session
+  const sessionId = input.session_id || 'unknown';
+  const active = getWorkflowForSession(sessionId);
   if (!active) {
     process.exit(0);
   }
@@ -131,7 +132,6 @@ try {
 
   if (updated && verdict === 'passed') {
     // Reset stop-guard counter on phase progress
-    const sessionId = input.session_id || 'unknown';
     const counterFile = path.join(os.tmpdir(), `workflow-stop-${sessionId}.count`);
     try { fs.unlinkSync(counterFile); } catch {}
 
