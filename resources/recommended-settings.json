@@ -22,7 +22,8 @@
       "TodoWrite",
       "Bash(*)",
       "mcp__context7",
-      "mcp__github"
+      "mcp__github",
+      "mcp__playwright"
     ],
 
     "ask": [

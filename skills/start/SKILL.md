@@ -362,6 +362,24 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
 
    **VERIFY** the state file was created by reading it back.
 
+   **Step 5c: Bind session to workflow** (enables multi-workflow sessions):
+
+   After creating the state file, bind this session to the workflow so hooks only affect this workflow:
+
+   1. Glob for `/tmp/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
+   2. Write `/tmp/workflow-binding-{session_id}.json` with:
+      ```json
+      {
+        "session_id": "<session_id>",
+        "workflow_path": "<HOME>/.claude/workflows/active/<id>.state.json",
+        "workflow_id": "<generated-id>",
+        "bound_at": "<ISO timestamp>"
+      }
+      ```
+   3. Verify by reading the binding file back
+
+   If no session marker is found, skip this step (backward compatible — hooks will fall back to most recent workflow).
+
    **If style=light**:
    - **Use Write tool with ABSOLUTE path**: `/home/user/.claude/workflows/state.json`
    - Use TodoWrite for step tracking

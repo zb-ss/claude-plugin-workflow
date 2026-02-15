@@ -147,6 +147,84 @@ function getActiveWorkflow() {
 }
 
 /**
+ * Write a session marker file so skills can discover the session_id.
+ * Writes /tmp/workflow-session-marker-{sessionId}.json.
+ */
+function writeSessionMarker(sessionId) {
+  if (!sessionId || typeof sessionId !== 'string') return false;
+  const markerPath = path.join(os.tmpdir(), `workflow-session-marker-${sessionId}.json`);
+  try {
+    const content = JSON.stringify({ session_id: sessionId, timestamp: new Date().toISOString() }) + '\n';
+    fs.writeFileSync(markerPath, content, 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Bind a session to a specific workflow.
+ * Writes /tmp/workflow-binding-{sessionId}.json.
+ */
+function bindSessionToWorkflow(sessionId, workflowPath, workflowId) {
+  if (!sessionId || !workflowPath) return false;
+  const bindingPath = path.join(os.tmpdir(), `workflow-binding-${sessionId}.json`);
+  try {
+    const content = JSON.stringify({
+      session_id: sessionId,
+      workflow_path: workflowPath,
+      workflow_id: workflowId || null,
+      bound_at: new Date().toISOString(),
+    }) + '\n';
+    fs.writeFileSync(bindingPath, content, 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get the workflow bound to a session.
+ * Reads the binding file, loads the state, and returns { path, state }.
+ * Falls back to getActiveWorkflow() if no binding exists.
+ */
+function getWorkflowForSession(sessionId) {
+  if (sessionId && typeof sessionId === 'string') {
+    const bindingPath = path.join(os.tmpdir(), `workflow-binding-${sessionId}.json`);
+    try {
+      if (fs.existsSync(bindingPath)) {
+        const binding = JSON.parse(fs.readFileSync(bindingPath, 'utf8'));
+        if (binding.workflow_path) {
+          const state = readState(binding.workflow_path);
+          if (state) {
+            return { path: binding.workflow_path, state };
+          }
+        }
+      }
+    } catch {
+      // Fall through to getActiveWorkflow()
+    }
+  }
+  return getActiveWorkflow();
+}
+
+/**
+ * Remove a session binding file.
+ */
+function clearSessionBinding(sessionId) {
+  if (!sessionId || typeof sessionId !== 'string') return false;
+  const bindingPath = path.join(os.tmpdir(), `workflow-binding-${sessionId}.json`);
+  try {
+    if (fs.existsSync(bindingPath)) {
+      fs.unlinkSync(bindingPath);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if all mandatory gates have passed.
  * Skipped gates are not mandatory.
  */
@@ -222,6 +300,10 @@ module.exports = {
   updateState,
   findActiveStates,
   getActiveWorkflow,
+  writeSessionMarker,
+  bindSessionToWorkflow,
+  getWorkflowForSession,
+  clearSessionBinding,
   allMandatoryGatesPassed,
   getPendingGates,
   getNextPhase,

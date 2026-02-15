@@ -17,7 +17,7 @@ const path = require('path');
 const os = require('os');
 
 try {
-  const { getActiveWorkflow, allMandatoryGatesPassed, getPendingGates, getNextPhase } = require('./lib/state');
+  const { getWorkflowForSession, allMandatoryGatesPassed, getPendingGates, getNextPhase } = require('./lib/state');
   const { log } = require('./lib/logger');
 
   // Read stdin (hook input JSON)
@@ -35,15 +35,15 @@ try {
     process.exit(0);
   }
 
-  // Check for active workflow
-  const active = getActiveWorkflow();
+  // Check for active workflow bound to this session
+  const sessionId = input.session_id || 'unknown';
+  const active = getWorkflowForSession(sessionId);
   if (!active) {
     // No active workflow — invisible, allow stop
     process.exit(0);
   }
 
   const { state } = active;
-  const sessionId = input.session_id || 'unknown';
 
   // Check if all mandatory gates passed
   if (allMandatoryGatesPassed(state)) {
