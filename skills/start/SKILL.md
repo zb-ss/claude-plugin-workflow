@@ -205,6 +205,14 @@ Write(file_path="$HOME_PATH/.claude/plans/.gitkeep", content="")
 
 If directories cannot be created, **STOP** and inform the user to run `/workflow:setup`.
 
+**Step 0c: Get the OS temp directory path**
+
+Run this bash command to get the platform-specific temp directory:
+```bash
+node -e "console.log(require('os').tmpdir())"
+```
+This returns `/tmp` on Linux, `/var/folders/.../T` on macOS, or `C:\Users\...\AppData\Local\Temp` on Windows. Store this as `$TMPDIR_PATH` — you need it for session binding below.
+
 #### Step 1: Parse input
 
 1. **Parse input**:
@@ -366,8 +374,8 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
 
    After creating the state file, bind this session to the workflow so hooks only affect this workflow:
 
-   1. Glob for `/tmp/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
-   2. Write `/tmp/workflow-binding-{session_id}.json` with:
+   1. Glob for `$TMPDIR_PATH/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
+   2. Write `$TMPDIR_PATH/workflow-binding-{session_id}.json` with:
       ```json
       {
         "session_id": "<session_id>",
@@ -964,7 +972,20 @@ When all steps done:
    - "Workflow complete! Should I commit these changes?"
    - Suggest commit message based on work done
 
-5. **Archive state**:
+5. **Clean up temp files**:
+   - Remove workflow session temp files using the `$TMPDIR_PATH` from Step 0c:
+   ```bash
+   TMPDIR_PATH=$(node -e "console.log(require('os').tmpdir())")
+   rm -f "$TMPDIR_PATH/workflow-session-marker-${SESSION_ID}.json"
+   rm -f "$TMPDIR_PATH/workflow-binding-${SESSION_ID}.json"
+   rm -f "$TMPDIR_PATH/workflow-stop-${SESSION_ID}."*
+   rm -f "$TMPDIR_PATH/workflow-deny-${SESSION_ID}.json"
+   rm -f "$TMPDIR_PATH/workflow-complete-${SESSION_ID}-"*
+   ```
+   - Where `${SESSION_ID}` is the session_id discovered during Step 5c (session binding)
+   - If session_id was not discovered (no marker found), skip this step
+
+6. **Archive state**:
    - Update JSON state: set `phase.current = "completed"` and `updated_at`
    - Move BOTH files to `~/.claude/workflows/completed/`:
      - Org/md file: `active/<id>.org` → `completed/<id>.org`
