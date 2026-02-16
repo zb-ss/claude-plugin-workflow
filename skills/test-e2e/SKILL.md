@@ -303,10 +303,16 @@ Verify both files by reading them back.
 
 #### Step 5.5: Bind session to workflow
 
-After creating the state files, bind this session to the workflow so hooks only affect this workflow:
+After creating the state files, bind this session to the workflow so hooks only affect this workflow.
 
-1. Glob for `/tmp/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
-2. Write `/tmp/workflow-binding-{session_id}.json` with:
+First, get the OS temp directory:
+```bash
+node -e "console.log(require('os').tmpdir())"
+```
+Store this as `$TMPDIR_PATH`.
+
+1. Glob for `$TMPDIR_PATH/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
+2. Write `$TMPDIR_PATH/workflow-binding-{session_id}.json` with:
    ```json
    {
      "session_id": "<session_id>",
@@ -830,7 +836,20 @@ When all phases pass:
 3. **Ask about commit**:
    "Should I commit these test files?"
 
-4. **Archive state**:
+4. **Clean up temp files**:
+   - Remove workflow session temp files:
+   ```bash
+   TMPDIR_PATH=$(node -e "console.log(require('os').tmpdir())")
+   rm -f "$TMPDIR_PATH/workflow-session-marker-${SESSION_ID}.json"
+   rm -f "$TMPDIR_PATH/workflow-binding-${SESSION_ID}.json"
+   rm -f "$TMPDIR_PATH/workflow-stop-${SESSION_ID}."*
+   rm -f "$TMPDIR_PATH/workflow-deny-${SESSION_ID}.json"
+   rm -f "$TMPDIR_PATH/workflow-complete-${SESSION_ID}-"*
+   ```
+   - Where `${SESSION_ID}` is the session_id from Step 5.5
+   - If no session_id was discovered, skip this step
+
+5. **Archive state**:
    - Move state files from `active/` to `completed/`
 
 ---

@@ -132,7 +132,7 @@ When the user invokes this skill:
 
 - The status line uses an **undocumented API** (`/api/oauth/usage`) - it may change
 - API responses are **cached for 60 seconds** to avoid excessive calls
-- The cache file is at `$TMPDIR/claude-statusline-usage.json`
+- The cache file is at `$(node -e "console.log(require('os').tmpdir())")/claude-statusline-usage.json`
 - The status line updates after each assistant message (not real-time)
 - Usage data requires an active Claude subscription with OAuth credentials
 - If credentials are not found, only context/cost are shown (no usage bars)
@@ -147,8 +147,8 @@ When the user invokes this skill:
 **Usage bars not showing (only context/cost):**
 - Verify `~/.claude/.credentials.json` exists and contains `claudeAiOauth.accessToken`
 - On macOS, ensure Keychain access is not blocked
-- Check the cache file: `cat /tmp/claude-statusline-usage.json`
+- Check the cache file: `cat "$(node -e "console.log(require('os').tmpdir())")/claude-statusline-usage.json"`
 
 **Stale usage data:**
-- Delete cache: `rm /tmp/claude-statusline-usage.json`
+- Delete cache: `rm "$(node -e "console.log(require('os').tmpdir())")/claude-statusline-usage.json"`
 - Data refreshes every 60 seconds automatically

@@ -268,6 +268,58 @@ function computeChecksum(state) {
 }
 
 /**
+ * Clean up all workflow-related temp files for a session.
+ * Removes: markers, bindings, stop counters, stale files, deny files, completion counters.
+ * Returns the number of files removed.
+ */
+function cleanupSessionTempFiles(sessionId) {
+  if (!sessionId || typeof sessionId !== 'string') return 0;
+
+  const tmpDir = os.tmpdir();
+  const exactFiles = [
+    `workflow-session-marker-${sessionId}.json`,
+    `workflow-binding-${sessionId}.json`,
+    `workflow-stop-${sessionId}.count`,
+    `workflow-stop-${sessionId}.stale`,
+    `workflow-deny-${sessionId}.json`,
+  ];
+
+  let cleaned = 0;
+
+  for (const name of exactFiles) {
+    const filePath = path.join(tmpDir, name);
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        cleaned++;
+      }
+    } catch {
+      // Best-effort cleanup
+    }
+  }
+
+  // Remove completion counter files (workflow-complete-{sessionId}-*.count)
+  try {
+    const prefix = `workflow-complete-${sessionId}-`;
+    const files = fs.readdirSync(tmpDir);
+    for (const file of files) {
+      if (file.startsWith(prefix) && file.endsWith('.count')) {
+        try {
+          fs.unlinkSync(path.join(tmpDir, file));
+          cleaned++;
+        } catch {
+          // Best-effort
+        }
+      }
+    }
+  } catch {
+    // tmpdir listing failed, skip
+  }
+
+  return cleaned;
+}
+
+/**
  * Find orphaned org files (org/md files without a corresponding .state.json).
  */
 function findOrphanedOrgFiles() {
@@ -304,6 +356,7 @@ module.exports = {
   bindSessionToWorkflow,
   getWorkflowForSession,
   clearSessionBinding,
+  cleanupSessionTempFiles,
   allMandatoryGatesPassed,
   getPendingGates,
   getNextPhase,

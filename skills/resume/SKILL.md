@@ -44,8 +44,14 @@ Read the workflow org file and determine:
 
 After finding the workflow, bind this session to it so hooks only affect this workflow:
 
-1. Glob for `/tmp/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
-2. Write `/tmp/workflow-binding-{session_id}.json` with:
+First, get the OS temp directory:
+```bash
+node -e "console.log(require('os').tmpdir())"
+```
+Store this as `$TMPDIR_PATH`.
+
+1. Glob for `$TMPDIR_PATH/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
+2. Write `$TMPDIR_PATH/workflow-binding-{session_id}.json` with:
    ```json
    {
      "session_id": "<session_id>",
