@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const { log } = require('./logger');
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows');
 const ACTIVE_DIR = path.join(WORKFLOWS_DIR, 'active');
@@ -186,10 +187,10 @@ function bindSessionToWorkflow(sessionId, workflowPath, workflowId) {
 /**
  * Get the workflow bound to a session.
  * Reads the binding file, loads the state, and returns { path, state }.
- * Falls back to getActiveWorkflow() if no binding exists.
+ * Returns null if no binding exists — unbound sessions are not affected by hooks.
  */
 function getWorkflowForSession(sessionId) {
-  if (sessionId && typeof sessionId === 'string') {
+  if (sessionId && typeof sessionId === 'string' && sessionId !== 'unknown') {
     const bindingPath = path.join(os.tmpdir(), `workflow-binding-${sessionId}.json`);
     try {
       if (fs.existsSync(bindingPath)) {
@@ -202,10 +203,10 @@ function getWorkflowForSession(sessionId) {
         }
       }
     } catch {
-      // Fall through to getActiveWorkflow()
+      // No valid binding — return null (no fallback to global state)
     }
   }
-  return getActiveWorkflow();
+  return null;  // Unbound sessions are not affected by hooks
 }
 
 /**
@@ -320,6 +321,41 @@ function cleanupSessionTempFiles(sessionId) {
 }
 
 /**
+ * Clean up stale session marker and binding files older than maxAgeMs milliseconds.
+ * Uses mtime (no JSON parsing) for efficiency. Also removes orphaned binding files.
+ * Returns the number of files removed.
+ */
+function cleanupStaleMarkers(maxAgeMs = 24 * 60 * 60 * 1000) {
+  try {
+    const tmpDir = os.tmpdir();
+    const files = fs.readdirSync(tmpDir).filter(f =>
+      (f.startsWith('workflow-session-marker-') || f.startsWith('workflow-binding-')) && f.endsWith('.json')
+    );
+    const cutoff = Date.now() - maxAgeMs;
+    let cleaned = 0;
+    for (const file of files) {
+      try {
+        const filePath = path.join(tmpDir, file);
+        // Use mtime for efficiency — no need to open/parse each file
+        const stat = fs.statSync(filePath);
+        if (stat.mtimeMs < cutoff) {
+          fs.unlinkSync(filePath);
+          cleaned++;
+        }
+      } catch {
+        // Skip files we can't stat/delete
+      }
+    }
+    if (cleaned > 0) {
+      log('state', `Cleaned up ${cleaned} stale session temp file(s)`);
+    }
+    return cleaned;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Find orphaned org files (org/md files without a corresponding .state.json).
  */
 function findOrphanedOrgFiles() {
@@ -357,6 +393,7 @@ module.exports = {
   getWorkflowForSession,
   clearSessionBinding,
   cleanupSessionTempFiles,
+  cleanupStaleMarkers,
   allMandatoryGatesPassed,
   getPendingGates,
   getNextPhase,
