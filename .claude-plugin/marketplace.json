@@ -8,8 +8,7 @@
     {
       "name": "workflow",
       "source": "./",
-      "description": "Automated development workflow orchestration with org-mode tracking",
-      "version": "1.0.0"
+      "description": "Automated development workflow orchestration with org-mode tracking"
     }
   ]
 }
