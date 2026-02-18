@@ -12,7 +12,7 @@
 const fs = require('fs');
 
 try {
-  const { findActiveStates, findOrphanedOrgFiles, writeSessionMarker } = require('./lib/state');
+  const { findActiveStates, findOrphanedOrgFiles, writeSessionMarker, cleanupStaleMarkers } = require('./lib/state');
   const { log } = require('./lib/logger');
 
   // Read stdin (hook input JSON)
@@ -26,6 +26,8 @@ try {
   const sessionId = input.session_id;
   if (sessionId) {
     writeSessionMarker(sessionId);
+    // Clean up markers older than 24 hours to prevent accumulation
+    cleanupStaleMarkers(24 * 60 * 60 * 1000);
   }
 
   const activeStates = findActiveStates();
