@@ -17,7 +17,7 @@ const path = require('path');
 const os = require('os');
 
 try {
-  const { getWorkflowForSession, allMandatoryGatesPassed, getPendingGates, getNextPhase } = require('./lib/state');
+  const { getWorkflowForSession, allMandatoryGatesPassed, getPendingGates, getNextPhase, cleanupSessionTempFiles } = require('./lib/state');
   const { log } = require('./lib/logger');
 
   // Read stdin (hook input JSON)
@@ -40,6 +40,8 @@ try {
   const active = getWorkflowForSession(sessionId);
   if (!active) {
     // No active workflow — invisible, allow stop
+    // Clean up this session's temp files since we're allowing the stop
+    cleanupSessionTempFiles(sessionId);
     process.exit(0);
   }
 
@@ -48,6 +50,8 @@ try {
   // Check if all mandatory gates passed
   if (allMandatoryGatesPassed(state)) {
     log('stop-guard', `All gates passed for ${state.workflow_id}, allowing stop`);
+    // Clean up this session's temp files since we're allowing the stop
+    cleanupSessionTempFiles(sessionId);
     process.exit(0);
   }
 
@@ -66,6 +70,8 @@ try {
   if (counter >= 5) {
     log('stop-guard', `Safety valve: ${counter} consecutive blocks, allowing stop`);
     try { fs.unlinkSync(counterFile); } catch {}
+    // Clean up this session's temp files since we're allowing the stop
+    cleanupSessionTempFiles(sessionId);
     process.exit(0);
   }
 
@@ -86,6 +92,8 @@ try {
     log('stop-guard', `Staleness detected: updated_at unchanged for ${staleCount} invocations, allowing stop`);
     try { fs.unlinkSync(staleFile); } catch {}
     try { fs.unlinkSync(counterFile); } catch {}
+    // Clean up this session's temp files since we're allowing the stop
+    cleanupSessionTempFiles(sessionId);
     process.exit(0);
   }
 
