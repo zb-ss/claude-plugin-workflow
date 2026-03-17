@@ -224,6 +224,67 @@ function formatCost(cost_usd) {
   return `$${cost_usd.toFixed(2)}`;
 }
 
+// --- Translate workflow progress ---
+function getTranslateProgress(sessionId) {
+  const TRANSLATE_DIR = path.join(os.homedir(), '.claude', 'workflows', 'translate');
+  try {
+    if (!fs.existsSync(TRANSLATE_DIR)) return null;
+
+    // Try session-scoped binding first
+    let targetWorkflowId = null;
+    if (sessionId) {
+      const bindingPath = path.join(os.tmpdir(), `translate-binding-${sessionId}.json`);
+      try {
+        if (fs.existsSync(bindingPath)) {
+          const binding = JSON.parse(fs.readFileSync(bindingPath, 'utf-8'));
+          if (binding.workflow_id) targetWorkflowId = binding.workflow_id;
+        }
+      } catch {}
+    }
+
+    // If no binding, find most recently updated non-complete workflow
+    if (!targetWorkflowId) {
+      let latest = null;
+      let latestTime = 0;
+      const dirs = fs.readdirSync(TRANSLATE_DIR).filter(d => d.includes('-translate-'));
+      for (const dir of dirs) {
+        const sp = path.join(TRANSLATE_DIR, dir, 'workflow-state.json');
+        try {
+          if (!fs.existsSync(sp)) continue;
+          const s = JSON.parse(fs.readFileSync(sp, 'utf-8'));
+          if (s.status === 'complete') continue;
+          const t = new Date(s.updated || 0).getTime();
+          if (t > latestTime) { latestTime = t; latest = dir; }
+        } catch {}
+      }
+      targetWorkflowId = latest;
+    }
+
+    if (!targetWorkflowId) return null;
+
+    const statePath = path.join(TRANSLATE_DIR, targetWorkflowId, 'workflow-state.json');
+    if (!fs.existsSync(statePath)) return null;
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+    if (state.status === 'complete') return null;
+
+    const views = state.views || [];
+    const done = views.filter(v => v.status === 'done').length;
+    const total = views.length;
+    const processing = views.filter(v => v.status === 'processing' || v.status === 'review').length;
+    const component = state.componentName || '?';
+    const lang = state.targetLanguage || '?';
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    // Check staleness
+    const age = Date.now() - new Date(state.updated || 0).getTime();
+    const stale = age > 5 * 60 * 1000; // 5 min
+
+    return { component, lang, done, total, processing, pct, stale };
+  } catch {
+    return null;
+  }
+}
+
 // --- Main ---
 async function main() {
   const session = readStdin();
@@ -276,6 +337,15 @@ async function main() {
     if (cost_str) {
       parts.push(`${CYAN}${cost_str}${RESET}`);
     }
+  }
+
+  // Translate workflow progress
+  const tx = getTranslateProgress(session.session_id);
+  if (tx) {
+    const bar = progressBar(tx.pct, 8);
+    const staleTag = tx.stale ? ` ${RED}STALE${RESET}` : '';
+    const procTag = tx.processing > 0 ? ` ${DIM}${tx.processing}active${RESET}` : '';
+    parts.push(`${DIM}i18n${RESET} ${CYAN}${tx.component}${RESET} ${bar} ${tx.done}/${tx.total}${procTag}${staleTag}`);
   }
 
   // Model name (from stdin JSON)
