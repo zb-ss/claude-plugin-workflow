@@ -269,17 +269,21 @@ function getTranslateProgress(sessionId) {
 
     const views = state.views || [];
     const done = views.filter(v => v.status === 'done').length;
-    const total = views.length;
     const processing = views.filter(v => v.status === 'processing' || v.status === 'review').length;
+    const error = views.filter(v => v.status === 'error').length;
+    const total = views.length;
     const component = state.componentName || '?';
-    const lang = state.targetLanguage || '?';
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    const phase = state.status || 'processing';
+
+    // Progress includes done + half-credit for in-progress views (so bar moves during execution)
+    const effectiveProgress = done + (processing * 0.5);
+    const pct = total > 0 ? Math.round((effectiveProgress / total) * 100) : 0;
 
     // Check staleness
     const age = Date.now() - new Date(state.updated || 0).getTime();
     const stale = age > 5 * 60 * 1000; // 5 min
 
-    return { component, lang, done, total, processing, pct, stale };
+    return { component, phase, done, processing, error, total, pct, stale };
   } catch {
     return null;
   }
@@ -344,8 +348,20 @@ async function main() {
   if (tx) {
     const bar = progressBar(tx.pct, 8);
     const staleTag = tx.stale ? ` ${RED}STALE${RESET}` : '';
-    const procTag = tx.processing > 0 ? ` ${DIM}${tx.processing}active${RESET}` : '';
-    parts.push(`${DIM}i18n${RESET} ${CYAN}${tx.component}${RESET} ${bar} ${tx.done}/${tx.total}${procTag}${staleTag}`);
+
+    // Show phase-appropriate status
+    let detail = '';
+    if (tx.phase === 'browser_verification') {
+      detail = `${YELLOW}browser${RESET}`;
+    } else if (tx.phase === 'verification') {
+      detail = `${YELLOW}verify${RESET}`;
+    } else if (tx.processing > 0) {
+      detail = `${GREEN}${tx.done}done ${tx.processing}run${RESET}`;
+    } else {
+      detail = `${tx.done}/${tx.total}`;
+    }
+
+    parts.push(`${DIM}i18n${RESET} ${CYAN}${tx.component}${RESET} ${bar} ${detail}${staleTag}`);
   }
 
   // Model name (from stdin JSON)
