@@ -225,7 +225,7 @@ function formatCost(cost_usd) {
 }
 
 // --- Translate workflow progress ---
-function getTranslateProgress(sessionId) {
+function getTranslateProgress(sessionId, cwd) {
   const TRANSLATE_DIR = path.join(os.homedir(), '.claude', 'workflows', 'translate');
   try {
     if (!fs.existsSync(TRANSLATE_DIR)) return null;
@@ -242,7 +242,7 @@ function getTranslateProgress(sessionId) {
       } catch {}
     }
 
-    // If no binding, find most recently updated non-complete workflow
+    // If no binding, find most recently updated non-complete workflow matching this cwd
     if (!targetWorkflowId) {
       let latest = null;
       let latestTime = 0;
@@ -253,6 +253,8 @@ function getTranslateProgress(sessionId) {
           if (!fs.existsSync(sp)) continue;
           const s = JSON.parse(fs.readFileSync(sp, 'utf-8'));
           if (s.status === 'complete') continue;
+          // Only show workflows whose component is under the current working directory
+          if (cwd && s.componentPath && !s.componentPath.startsWith(cwd)) continue;
           const t = new Date(s.updated || 0).getTime();
           if (t > latestTime) { latestTime = t; latest = dir; }
         } catch {}
@@ -265,6 +267,9 @@ function getTranslateProgress(sessionId) {
     const statePath = path.join(TRANSLATE_DIR, targetWorkflowId, 'workflow-state.json');
     if (!fs.existsSync(statePath)) return null;
     const state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+
+    // Final cwd check for session-bound workflows too
+    if (cwd && state.componentPath && !state.componentPath.startsWith(cwd)) return null;
     if (state.status === 'complete') return null;
 
     const views = state.views || [];
@@ -344,7 +349,7 @@ async function main() {
   }
 
   // Translate workflow progress
-  const tx = getTranslateProgress(session.session_id);
+  const tx = getTranslateProgress(session.session_id, session.cwd);
   if (tx) {
     const bar = progressBar(tx.pct, 8);
     const staleTag = tx.stale ? ` ${RED}STALE${RESET}` : '';
