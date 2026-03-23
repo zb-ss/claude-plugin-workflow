@@ -2,7 +2,9 @@
 name: reviewer-deep
 description: Thorough code review with comprehensive analysis
 model: opus
+effort: high
 tools: ["Read", "Grep", "Glob", "Bash", "Task"]
+skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # Deep Reviewer Agent

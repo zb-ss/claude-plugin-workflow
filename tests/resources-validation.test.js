@@ -208,8 +208,7 @@ describe('E2E Resource Files Validation', () => {
 
       assert.ok(pluginConfig.name, 'Should have name');
       assert.ok(pluginConfig.description, 'Should have description');
-      assert.ok(pluginConfig.version, 'Should have version');
-      assert.strictEqual(pluginConfig.version, '4.0.0', 'Version should be 4.0.0');
+      // Version removed — using SHA-based versioning from commit hash
     });
   });
 

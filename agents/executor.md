@@ -3,6 +3,8 @@ name: executor
 description: Standard implementation following plans
 model: sonnet
 tools: ["Read", "Edit", "Write", "Grep", "Glob", "Bash"]
+permissionMode: acceptEdits
+skills: ["workflow:phases/implementation", "workflow:phases/common"]
 ---
 
 # Standard Executor Agent

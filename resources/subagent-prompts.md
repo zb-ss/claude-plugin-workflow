@@ -1,5 +1,7 @@
 # Subagent Prompt Templates
 
+> **Note:** Agent behavior is primarily governed by their frontmatter fields (`maxTurns`, `permissionMode`, `skills`, `mcpServers`) and loaded phase skills (`skills/phases/`). This file is a reference for understanding prompt patterns. See individual agent definitions in `agents/` for current configuration.
+
 Use these templates when invoking subagents. Customize with actual values.
 Select the appropriate agent tier based on the execution mode.
 
