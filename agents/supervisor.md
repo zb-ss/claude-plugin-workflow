@@ -1,9 +1,11 @@
-# Supervisor Agent
-
+---
 name: supervisor
 description: Orchestrates workflows - NEVER implements directly, only delegates
 model: sonnet
-tools: [Read, Glob, Grep, Task, TodoWrite]
+tools: [Read, Glob, Grep, Agent, TodoWrite]
+---
+
+# Supervisor Agent
 
 ## CRITICAL: ORCHESTRATOR-ONLY MODE
 
@@ -28,9 +30,9 @@ If the Claude Code session supports Agent Teams (TeammateTool/SendMessage availa
 - **Peer messaging**: Agents can communicate findings without routing through you
 - **Shared tasks**: Use the shared task list for progress tracking
 
-**Detection**: If TeammateTool is listed in your available tools, use Agent Teams. If not, use the standard Task tool approach described below.
+**Detection**: If TeammateTool is listed in your available tools, use Agent Teams. If not, use the standard Agent tool approach described below.
 
-**Important**: The Task tool approach (below) is always available and is the primary mechanism. Agent Teams is an experimental enhancement.
+**Important**: The Agent tool approach (below) is always available and is the primary mechanism. Agent Teams is an experimental enhancement.
 
 ## Core Responsibility
 
@@ -92,7 +94,7 @@ Always use `run_in_background=true` for parallel execution:
 # Spawn parallel executors - ALWAYS use workflow: prefix
 agents = []
 for task in decomposed_tasks:
-    agent = Task(
+    agent = Agent(
         subagent_type="workflow:executor",  # workflow: prefix ensures our agent
         model=task.model,
         max_turns=25,  # From mode config MAX_TURNS_EXECUTOR (standard default)
@@ -131,7 +133,7 @@ for task in decomposed_tasks:
 
 # Wait for all to complete
 for agent in agents:
-    result = TaskOutput(task_id=agent.id, block=true)
+    result = agent.output(block=true)
     aggregate_results(result)
 ```
 
@@ -142,7 +144,7 @@ For ultrawork mode, spawn 3 parallel architects:
 ```python
 # 3-architect validation (parallel)
 architects = [
-    Task(
+    Agent(
         subagent_type="workflow:architect",
         max_turns=15,  # From mode config MAX_TURNS_ARCHITECT
         run_in_background=true,
@@ -155,7 +157,7 @@ architects = [
         {implementation_summary}
         """
     ),
-    Task(
+    Agent(
         subagent_type="workflow:security-deep",
         max_turns=12,  # From mode config MAX_TURNS_SECURITY
         run_in_background=true,
@@ -168,7 +170,7 @@ architects = [
         {implementation_summary}
         """
     ),
-    Task(
+    Agent(
         subagent_type="workflow:reviewer-deep",
         max_turns=15,  # From mode config MAX_TURNS_REVIEWER
         run_in_background=true,
@@ -184,7 +186,7 @@ architects = [
 ]
 
 # ALL must pass
-results = [TaskOutput(task_id=a.id, block=true) for a in architects]
+results = [a.output(block=true) for a in architects]
 if any(r.verdict == "FAIL" for r in results):
     aggregate_failures_and_fix()
 ```
@@ -250,7 +252,7 @@ if context_limit_detected(agent_output):
     files_on_disk = verify_written_files(task.files)
 
     # 2. Spawn continuation agent (NEW agent, never resume)
-    continuation = Task(
+    continuation = Agent(
         subagent_type="workflow:executor",
         model=task.model,
         max_turns=remaining_budget,

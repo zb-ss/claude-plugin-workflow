@@ -3,6 +3,7 @@ name: codebase-analyzer
 description: Analyzes codebase to extract conventions, patterns, and best practices
 model: sonnet
 tools: ["Read", "Grep", "Glob", "LS", "Bash"]
+skills: ["workflow:phases/common"]
 ---
 
 # Codebase Analyzer Agent
