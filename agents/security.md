@@ -3,6 +3,7 @@ name: security
 description: Standard security audit with OWASP coverage
 model: sonnet
 tools: ["Read", "Grep", "Glob", "Bash"]
+skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # Standard Security Agent

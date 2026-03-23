@@ -16,6 +16,8 @@ Automated development workflow orchestration with tiered agents and execution mo
 
 ## What's New
 
+**Agent Orchestration Refactoring** - Phase skills for resilient agent orchestration (`skills/phases/`). Native CC agent features (`maxTurns`, `permissionMode`, `skills`, `mcpServers`) now govern agent behavior via frontmatter. New `/workflow:test-live` command for interactive browser testing via Playwright MCP. The Task tool has been renamed to Agent in CC v2.1.63+ (both work, Agent preferred).
+
 **E2E Playwright Testing** - Generate end-to-end test suites automatically. The new `/workflow:test-e2e` command explores your web app via Playwright MCP browser automation, builds an app map, generates test specs with accessibility-first selectors, and validates through review gates. Supports Symfony, Laravel, Vue, React, and Next.js with form/token/cookie auth strategies. [Details](docs/e2e-testing.md)
 
 **Review Hardening** - Zero-tolerance review verdicts, structured `[ISSUE-N]` tracking across iterations, mandatory executor fix-by-ID protocol, auto-escalation to opus on exhausted iterations, post-quality-gate regression review, and codebase-aware reviews with framework skill loading. [Details](docs/review-system.md)
@@ -109,6 +111,7 @@ Re-review:
 | Security | security-lite, security, security-deep | haiku, sonnet, opus |
 | Quality Gates | quality-gate, completion-guard | sonnet, opus |
 | E2E Testing | e2e-explorer, e2e-generator, e2e-reviewer | haiku, sonnet, opus |
+| Browser Testing | web-tester | sonnet |
 | Other | explorer, test-writer, perf-lite, perf-reviewer, doc-writer | haiku, sonnet |
 
 ## Skills
@@ -125,6 +128,7 @@ Re-review:
 | `/workflow:skill-create` | Generate skills from git history |
 | `/workflow:setup` | Configure permissions |
 | `/workflow:setup-statusline` | Enable/disable usage status line |
+| `/workflow:test-live` | Interactive live E2E testing via Playwright MCP |
 
 ## Status Line
 
@@ -161,7 +165,7 @@ Generate Playwright E2E test suites from a running web application:
 
 ## Requirements
 
-- Claude Code with Task tool access
+- Claude Code with Agent tool access (formerly Task tool - both work, Agent preferred in CC v2.1.63+)
 - Git repository
 - Node.js (for hooks - included with Claude Code)
 - Works on Linux, macOS, Windows, and WSL

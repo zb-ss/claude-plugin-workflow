@@ -63,6 +63,7 @@ const AGENT_GATE_MAP = {
   'workflow:e2e-explorer': 'e2e_exploration',
   'workflow:e2e-generator': 'e2e_generation',
   'workflow:e2e-reviewer': 'e2e_validation',
+  'workflow:web-tester': 'live_testing',
 };
 
 /**

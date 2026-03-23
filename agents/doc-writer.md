@@ -3,6 +3,8 @@ name: doc-writer
 description: Documentation updates for code changes
 model: haiku
 tools: ["Read", "Edit", "Write", "Grep", "Glob"]
+permissionMode: acceptEdits
+skills: ["workflow:phases/common"]
 ---
 
 # Documentation Writer Agent

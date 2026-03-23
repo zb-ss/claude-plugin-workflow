@@ -3,6 +3,7 @@ name: reviewer
 description: Standard code review with balanced depth
 model: sonnet
 tools: ["Read", "Grep", "Glob", "Bash"]
+skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # Standard Reviewer Agent

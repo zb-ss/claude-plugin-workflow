@@ -47,22 +47,14 @@ COMPLETE
 
 * Settings
 :PROPERTIES:
-:MAX_CODE_REVIEW_ITERATIONS: 3
-:MAX_SECURITY_ITERATIONS: 2
+:MAX_CODE_REVIEW_ITERATIONS: 10
+:MAX_SECURITY_ITERATIONS: 8
 :REQUIRE_TESTS: true
 :MIN_COVERAGE: 80
 :PARALLEL_ADVISORY: true
 :REQUIRE_ALL_GATES: true
 :AUTONOMOUS_MODE: true
-:MAX_TURNS_EXECUTOR: 30
-:MAX_TURNS_REVIEWER: 15
-:MAX_TURNS_SECURITY: 12
-:MAX_TURNS_ANALYZER: 25
-:MAX_TURNS_ARCHITECT: 20
-:MAX_TURNS_QUALITY_GATE: 25
-:MAX_TURNS_COMPLETION: 15
-:MAX_TURNS_TEST_WRITER: 25
-:MAX_CONTINUATIONS: 3
+:MAX_CONTINUATIONS: 10
 :END:
 
 * Parallel Execution
@@ -75,14 +67,14 @@ Thorough mode uses selective parallelism:
 * Gate Requirements
 
 ** Code Review Gate (REQUIRED)
-- No CRITICAL issues
-- Maximum 2 MAJOR issues (must be documented)
+- Zero issues at ANY severity (CRITICAL, MAJOR, MINOR)
+- Zero-tolerance policy - iterate until all issues resolved
 - All logic paths verified
 - Error handling complete
 
 ** Security Review Gate (REQUIRED)
-- No CRITICAL findings
-- No HIGH findings (or documented exception)
+- Zero findings at ANY severity
+- Zero-tolerance policy - iterate until all findings resolved
 - OWASP Top 10 verified
 - Input validation complete
 

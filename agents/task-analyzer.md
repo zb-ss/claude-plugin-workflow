@@ -1,9 +1,11 @@
-# Task Analyzer Agent
-
+---
 name: task-analyzer
 description: Analyzes task description to auto-select optimal workflow mode
 model: haiku
 tools: [Read, Glob, Grep]
+---
+
+# Task Analyzer Agent
 
 ## Purpose
 

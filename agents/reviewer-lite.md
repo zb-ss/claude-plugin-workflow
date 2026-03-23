@@ -3,6 +3,7 @@ name: reviewer-lite
 description: Quick code review for simple changes
 model: haiku
 tools: ["Read", "Grep", "Glob"]
+skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # Quick Reviewer Agent

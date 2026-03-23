@@ -3,6 +3,8 @@ name: test-writer
 description: Test generation following project conventions
 model: sonnet
 tools: ["Read", "Edit", "Write", "Grep", "Glob", "Bash"]
+permissionMode: acceptEdits
+skills: ["workflow:phases/implementation", "workflow:phases/common"]
 ---
 
 # Test Writer Agent

@@ -2,7 +2,9 @@
 name: security-deep
 description: Comprehensive security audit with deep analysis
 model: opus
+effort: high
 tools: ["Read", "Grep", "Glob", "Bash", "Task", "WebSearch"]
+skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # Deep Security Agent
