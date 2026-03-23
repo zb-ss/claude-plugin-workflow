@@ -1,0 +1,72 @@
+#+TITLE: Epic Mode Configuration
+#+MODE_NAME: epic
+#+DESCRIPTION: Multi-component project orchestration with worktree isolation
+
+* Overview
+
+Epic mode decomposes large projects into components, each executed in an
+isolated git worktree with its own PR. Components with no dependencies
+run in parallel. After all components complete, an integration phase
+merges everything, resolves conflicts, and runs full test suites.
+
+Epic mode always uses thorough-level quality gates per component.
+
+* Agent Routing
+
+*CRITICAL: Always use =workflow:= prefixed agents to ensure native tool usage*
+
+| Phase              | Subagent Type              | Model  | Purpose                     |
+|--------------------+----------------------------+--------+-----------------------------|
+| Architecture       | workflow:architect         | opus   | Decompose into components   |
+| Component Planning | workflow:architect         | opus   | Per-component architecture  |
+| Component Impl     | workflow:executor          | sonnet | Implementation              |
+| Component Review   | workflow:reviewer-deep     | opus   | Deep code review            |
+| Component Security | workflow:security-deep     | opus   | Security audit              |
+| Component QG       | workflow:quality-gate      | sonnet | Build/lint/test pipeline    |
+| Integration Merge  | workflow:epic-integrator   | sonnet | Merge branches + conflicts  |
+| Integration Review | workflow:reviewer-deep     | opus   | Cross-component review      |
+| Completion Guard   | workflow:completion-guard  | opus   | Final verification          |
+
+* Settings
+:PROPERTIES:
+:MAX_PARALLEL_COMPONENTS: 4
+:MAX_CODE_REVIEW_ITERATIONS: 10
+:MAX_SECURITY_ITERATIONS: 8
+:MAX_CONTINUATIONS: 10
+:REQUIRE_TESTS: true
+:AUTONOMOUS_MODE: true
+:REQUIRE_ALL_GATES: true
+:END:
+
+* Execution Waves
+
+Components execute in dependency waves:
+- Wave N contains all components whose dependencies are fully completed
+- Up to MAX_PARALLEL_COMPONENTS execute simultaneously per wave
+- Each component runs a full sub-workflow (plan → implement → review → security → QG → completion)
+- Each component creates its own PR from its worktree branch
+
+* Rate Limit Handling
+
+When rate limits are hit:
+1. Save state with rate_limit.resumes_at timestamp
+2. Schedule CronCreate one-shot timer for exact reset time
+3. If session ends: session-start hook shows active epic, user runs /workflow:resume
+
+* Integration Strategy
+
+After all components complete:
+1. Create integration branch from main
+2. Merge component branches in dependency order (leaves first)
+3. Resolve conflicts via epic-integrator agent
+4. Run full project test suite
+5. Run integration review (architect + security)
+6. Create final integration PR
+
+* When to Use
+
+- Building entire applications from scratch
+- Large-scale migrations across many modules
+- Multi-component systems (compilers, frameworks, platforms)
+- Projects requiring days/weeks of autonomous work
+- Any task too large for a single workflow run

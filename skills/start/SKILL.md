@@ -71,6 +71,7 @@ Only pause for:
 - `feature` - Full feature development (plan → implement → review → security → test)
 - `bugfix` - Bug investigation and fix pipeline
 - `refactor` - Code refactoring with safety checks
+- `epic` - Multi-component project orchestration (worktree isolation, PR per component, dependency-ordered integration)
 
 ## Execution Modes
 
@@ -106,6 +107,7 @@ Only pause for:
 /workflow:start feature swarm: Build complete notification system with email, SMS, push
 /workflow:start feature Implement user management --mode=swarm
 /workflow:start feature Add API endpoint --format=md
+/workflow:start epic Build a complete REST API with auth, CRUD, and real-time notifications
 ```
 
 ## Input
@@ -201,6 +203,50 @@ If creation fails, STOP and tell user to run `/workflow:setup`.
 
    **Step 2d: Apply selected mode** — use recommendation if accepted, user override if specified. Log decision in workflow state.
 
+#### Epic Type Special Handling
+
+When type is `epic`:
+- **Mode**: Always `thorough` (mandatory — cannot override with `--mode`)
+- **Tests**: Always enabled (mandatory — skip test optionality question)
+- **Branch**: Managed automatically (epic/{component_id} per component — skip branch question)
+- **Template**: Use `templates/epic-development.<format>` instead of `templates/feature-development.<format>`
+- **Initial phase**: `architecture` (not `planning`)
+- **Phase order**: architecture → component_execution → integration → completion_guard
+
+The JSON state sidecar uses an extended schema for epic workflows:
+```json
+{
+  "$schema": "1.0.0",
+  "workflow_id": "<id>",
+  "org_file": "<path>",
+  "workflow": { "type": "epic", "description": "<desc>", "branch": "main" },
+  "mode": { "current": "thorough", "original": "thorough" },
+  "config": {
+    "tests_enabled": true,
+    "max_parallel_components": 4,
+    "max_code_review_iterations": 10,
+    "max_security_iterations": 8
+  },
+  "phase": {
+    "current": "architecture",
+    "completed": [],
+    "remaining": ["component_execution", "integration", "completion_guard"],
+    "rate_limit": { "paused_at": null, "resumes_at": null, "cron_job_id": null, "reason": null }
+  },
+  "gates": {
+    "architecture": { "status": "pending", "iteration": 0 },
+    "component_execution": { "status": "pending", "iteration": 0 },
+    "integration": { "status": "pending", "iteration": 0 },
+    "completion_guard": { "status": "pending", "iteration": 0 }
+  },
+  "architecture": { "components": [], "dependency_order": [], "interfaces": {} },
+  "components": {},
+  "integration": { "branch": null, "merge_order": [], "merged": [], "conflicts_resolved": [], "test_results": null, "review_status": "pending", "pr_url": null, "status": "pending" },
+  "agent_log": [],
+  "updated_at": "<timestamp>"
+}
+```
+
 #### Step 2.5: Test optionality
 
 After mode is selected, determine test preference:
@@ -283,6 +329,20 @@ Use the correct agent based on the mode:
 | Testing | workflow:test-writer | - | - | workflow:test-writer | workflow:test-writer (parallel) |
 | Performance | - | - | - | workflow:perf-reviewer | workflow:perf-reviewer |
 | Documentation | - | - | - | workflow:doc-writer | workflow:doc-writer |
+
+#### Epic Workflow Routing
+
+Epic workflows use a different phase sequence:
+
+| Phase | Agent | Model |
+|-------|-------|-------|
+| Architecture | workflow:architect | opus |
+| Component execution | (full sub-workflow per component — see epic-orchestration skill) | thorough mode |
+| Integration | workflow:epic-integrator | sonnet |
+| Integration review | workflow:reviewer-deep + workflow:security-deep | opus |
+| Completion guard | workflow:completion-guard | opus |
+
+The epic orchestrator loads `skills/phases/epic-orchestration` for the full execution flow.
 
 ### Model Selection
 
@@ -392,6 +452,17 @@ The orchestrator dispatches each phase to the appropriate agent. Agents know HOW
 5. Capture output, update state file + JSON sidecar
 6. If review FAIL: increment iteration, re-dispatch (see review loop below)
 7. Advance to next phase
+
+#### Epic Dispatch
+
+For epic workflows, the dispatch is different from standard workflows:
+
+1. **Architecture phase**: Spawn `workflow:architect` (opus) to decompose the project
+2. **Component execution**: Follow the epic orchestration skill (`phases/epic-orchestration`) for worktree-based parallel execution with dependency ordering
+3. **Integration**: Spawn `workflow:epic-integrator` to merge all component branches, then run integration review
+4. **Completion guard**: Standard completion guard with full verification
+
+The epic orchestrator skill handles rate limit detection, CronCreate scheduling, and cross-session resume.
 
 **Review Loop (code review + security review):**
 ```

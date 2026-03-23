@@ -1,0 +1,88 @@
+#+TITLE: Epic: {{TITLE}}
+#+AUTHOR: Claude Code Workflow
+#+DATE: {{DATE}}
+#+PROPERTY: WORKFLOW_ID {{WORKFLOW_ID}}
+#+PROPERTY: WORKFLOW_TYPE epic
+#+PROPERTY: STATUS active
+#+PROPERTY: MODE thorough
+#+PROPERTY: STATE_FILE {{STATE_FILE}}
+#+PROPERTY: TESTS_ENABLED true
+
+* Overview
+:PROPERTIES:
+:CREATED_AT: {{TIMESTAMP}}
+:UPDATED_AT: {{TIMESTAMP}}
+:DESCRIPTION: {{DESCRIPTION}}
+:BASE_BRANCH: {{BASE_BRANCH}}
+:END:
+
+* Architecture
+:PROPERTIES:
+:STATUS: pending
+:STARTED_AT:
+:COMPLETED_AT:
+:END:
+
+** Component DAG
+#+BEGIN_SRC text
+(Generated during architecture phase)
+#+END_SRC
+
+** Interface Contracts
+#+BEGIN_SRC markdown
+(Written to CONTRACTS.md during architecture phase)
+#+END_SRC
+
+** Dependency Order
+#+BEGIN_SRC text
+(Topologically sorted execution waves)
+#+END_SRC
+
+* Components
+
+(Generated during architecture phase - one section per component)
+
+* Integration
+:PROPERTIES:
+:STATUS: pending
+:BRANCH:
+:STARTED_AT:
+:COMPLETED_AT:
+:END:
+
+** Merge Order
+#+BEGIN_SRC text
+(Topologically sorted merge order - leaves first)
+#+END_SRC
+
+** Merge Log
+
+** Integration Tests
+#+BEGIN_SRC text
+(Test results after all merges)
+#+END_SRC
+
+** Integration Review
+:PROPERTIES:
+:REVIEW_STATUS: pending
+:SECURITY_STATUS: pending
+:END:
+
+* Completion
+:PROPERTIES:
+:STATUS: pending
+:COMPLETED_AT:
+:TOTAL_DURATION:
+:END:
+
+** Summary
+
+** Components Completed
+
+** PRs Created
+
+** Learnings
+
+* Rate Limit Log
+
+* Intervention Log
