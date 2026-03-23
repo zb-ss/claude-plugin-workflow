@@ -7,8 +7,9 @@ Automated development workflow orchestration with tiered agents and execution mo
 ## Highlights
 
 - **📋 Org-mode & Markdown plans** - Human-readable, editable workflow state files
-- **🤖 23 tiered agents** - From quick haiku checks to deep opus reviews
+- **🤖 25 tiered agents** - From quick haiku checks to deep opus reviews
 - **🐝 Swarm mode** - 4 parallel executors with 3-architect validation
+- **🏗️ Epic mode** - Multi-component projects with worktree isolation, PR per component, rate limit resilience
 - **🧠 Auto-learning** - Learnings saved to project CLAUDE.md, auto-loaded by CC
 - **🔒 Hardened review system** - Zero-issue PASS, structured issue tracking, auto-escalation
 - **📊 Status line** - Live API usage limits, context window, and session cost in your status bar
@@ -16,7 +17,11 @@ Automated development workflow orchestration with tiered agents and execution mo
 
 ## What's New
 
-**Agent Orchestration Refactoring** - Phase skills for resilient agent orchestration (`skills/phases/`). Native CC agent features (`maxTurns`, `permissionMode`, `skills`, `mcpServers`) now govern agent behavior via frontmatter. New `/workflow:test-live` command for interactive browser testing via Playwright MCP. The Task tool has been renamed to Agent in CC v2.1.63+ (both work, Agent preferred).
+**Epic Workflow Mode** - Build entire applications from scratch with `/workflow:start epic`. Projects are decomposed into components with dependency ordering. Each component runs in an isolated git worktree, executes a full quality pipeline, and creates its own PR. Rate limits are handled gracefully — the workflow pauses and auto-resumes using exact reset times from the statusline cache. An integration phase merges all PRs in dependency order, resolves conflicts, and runs full test suites.
+
+**Quality Hardening** - Review loops now iterate until PASS with no hard caps. Mode config iteration limits are soft triggers for opus auto-escalation. Zero-tolerance enforced at ALL severity levels. Completion guard independently re-runs tests and verifies each requirement against actual code. Agents use `effort: high` for deeper reasoning on critical reviews.
+
+**Agent Orchestration Refactoring** - Phase skills (`skills/phases/`) carry procedural knowledge per agent, surviving context compaction. Native CC agent features (`permissionMode`, `skills`, `mcpServers`, `effort`) govern agent behavior via frontmatter. New `/workflow:test-live` command for interactive browser testing. Task tool renamed to Agent in CC v2.1.63+ (both work, Agent preferred).
 
 **E2E Playwright Testing** - Generate end-to-end test suites automatically. The new `/workflow:test-e2e` command explores your web app via Playwright MCP browser automation, builds an app map, generates test specs with accessibility-first selectors, and validates through review gates. Supports Symfony, Laravel, Vue, React, and Next.js with form/token/cookie auth strategies. [Details](docs/e2e-testing.md)
 
@@ -49,6 +54,12 @@ After installation, restart CC and run `/workflow:setup` to configure permission
 # Swarm mode for large features
 /workflow:start feature swarm: "Build notification system"
 
+# Epic mode for multi-component projects
+/workflow:start epic "Build a C++ compiler from scratch"
+
+# Interactive live testing
+/workflow:test-live http://localhost:8080 --user=admin@test.com --pass=secret
+
 # Markdown state files (default is org)
 /workflow:start feature "Add feature" --format=md
 ```
@@ -57,28 +68,37 @@ After installation, restart CC and run `/workflow:setup` to configure permission
 
 | Mode | Model | Code Review | Security | Best For |
 |------|-------|-------------|----------|----------|
-| `eco` | haiku | max 2 | max 1 | Simple tasks, budget-conscious |
-| `turbo` | haiku | max 2 | max 1 | Speed, prototypes |
-| `standard` | sonnet | max 3 | max 2 | Regular development (default) |
-| `thorough` | opus | max 3 | max 2 | Security-sensitive, production |
+| `eco` | haiku | iterate until PASS | iterate until PASS | Simple tasks, budget-conscious |
+| `turbo` | haiku | iterate until PASS | iterate until PASS | Speed, prototypes |
+| `standard` | sonnet | iterate until PASS | iterate until PASS | Regular development (default) |
+| `thorough` | opus | iterate until PASS | iterate until PASS | Security-sensitive, production |
 | `swarm` | opus | 3-architect | 3-architect | Large multi-file features |
+| `epic` | opus | full pipeline per component | full pipeline per component | Multi-component projects |
 
-All modes enforce **mandatory blocking reviews** with auto-escalation to opus if iterations exhaust. [Full mode guide](docs/modes.md)
+All modes enforce **mandatory blocking reviews** that iterate until PASS. Mode-specific iteration limits are soft triggers for auto-escalation to opus. [Full mode guide](docs/modes.md)
 
 ## Pipeline
 
+**Standard/Thorough/Swarm:**
 ```
-Codebase Analysis -> Planning -> Implementation
-     |
-Code Review (structured issue IDs, re-review verification)
-     | auto-escalation to opus if needed
-Security Review
-     |
-QUALITY GATE (build, type, lint, test, security)
-     | post-QG review if auto-fixes were made
-COMPLETION GUARD (requirements + code quality spot-check)
-     |
-COMPLETE
+Codebase Analysis → Planning → Implementation
+  → Code Review (iterate until PASS, auto-escalate to opus)
+  → Security Review (iterate until PASS)
+  → QUALITY GATE (build, type, lint, test, regression check)
+  → COMPLETION GUARD (independent test re-run, requirement verification)
+  → COMPLETE (suggest /workflow:test-live if web files changed)
+```
+
+**Epic:**
+```
+Architecture (decompose into components + dependency DAG)
+  → Component Execution (parallel worktrees, each runs full pipeline above)
+    → Wave 1: independent components (parallel, max 4)
+    → Wave 2: components depending on wave 1
+    → ... (rate limit? pause → auto-resume)
+  → Integration (merge PRs in order, resolve conflicts, full test suite)
+  → COMPLETION GUARD
+  → COMPLETE
 ```
 
 ## Review System
@@ -99,7 +119,7 @@ Re-review:
 
 ## Agents
 
-23 tiered agents organized by function:
+25 tiered agents organized by function:
 
 | Category | Agents | Models |
 |----------|--------|--------|
@@ -110,8 +130,9 @@ Re-review:
 | Code Review | reviewer-lite, reviewer, reviewer-deep | haiku, sonnet, opus |
 | Security | security-lite, security, security-deep | haiku, sonnet, opus |
 | Quality Gates | quality-gate, completion-guard | sonnet, opus |
-| E2E Testing | e2e-explorer, e2e-generator, e2e-reviewer | haiku, sonnet, opus |
+| E2E Testing | e2e-explorer, e2e-generator, e2e-reviewer | sonnet |
 | Browser Testing | web-tester | sonnet |
+| Epic Integration | epic-integrator | sonnet |
 | Other | explorer, test-writer, perf-lite, perf-reviewer, doc-writer | haiku, sonnet |
 
 ## Skills
