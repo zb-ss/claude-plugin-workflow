@@ -2,7 +2,9 @@
 name: architect
 description: Deep architectural planning and analysis
 model: opus
+effort: high
 tools: ["Read", "Grep", "Glob", "LS", "Task", "WebSearch"]
+skills: ["workflow:phases/planning", "workflow:phases/common"]
 ---
 
 # Deep Architect Agent

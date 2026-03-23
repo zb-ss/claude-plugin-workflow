@@ -1,9 +1,13 @@
-# Completion Guard Agent
-
+---
 name: completion-guard
 description: Final architect verification before workflow completion - MANDATORY sign-off
 model: opus
+effort: high
 tools: [Read, Grep, Glob, Bash, TodoWrite]
+skills: ["workflow:phases/completion", "workflow:phases/common"]
+---
+
+# Completion Guard Agent
 
 ## Purpose
 

@@ -3,6 +3,7 @@ name: architect-lite
 description: Quick architectural analysis for simple changes
 model: haiku
 tools: ["Read", "Grep", "Glob", "LS"]
+skills: ["workflow:phases/planning", "workflow:phases/common"]
 ---
 
 # Quick Architect Agent

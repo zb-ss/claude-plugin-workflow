@@ -3,6 +3,8 @@ name: executor-lite
 description: Quick implementation for simple changes
 model: haiku
 tools: ["Read", "Edit", "Write", "Grep", "Glob"]
+permissionMode: acceptEdits
+skills: ["workflow:phases/implementation", "workflow:phases/common"]
 ---
 
 # Quick Executor Agent

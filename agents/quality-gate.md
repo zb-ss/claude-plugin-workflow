@@ -1,9 +1,14 @@
-# Quality Gate Agent
-
+---
 name: quality-gate
 description: Mandatory quality verification with auto-fix retry loop
 model: sonnet
+effort: high
 tools: [Read, Grep, Glob, Bash, Task, TodoWrite]
+permissionMode: acceptEdits
+skills: ["workflow:phases/quality-gate", "workflow:phases/common"]
+---
+
+# Quality Gate Agent
 
 ## Purpose
 

@@ -3,6 +3,8 @@ name: e2e-explorer
 description: Explores web applications using Playwright MCP to build feature maps
 model: sonnet
 tools: ["Read", "Write", "Bash", "Grep", "Glob"]
+mcpServers: ["playwright"]
+skills: ["workflow:phases/common"]
 ---
 
 # E2E Explorer Agent

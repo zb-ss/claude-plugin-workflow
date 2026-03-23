@@ -3,6 +3,7 @@ name: security-lite
 description: Quick security scan for obvious vulnerabilities
 model: haiku
 tools: ["Read", "Grep", "Glob"]
+skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # Quick Security Agent

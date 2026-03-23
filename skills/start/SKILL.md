@@ -31,7 +31,7 @@ The Write, Read, Glob, and Edit tools do NOT expand `~`. You MUST run `echo $HOM
 - Run validation commands (`php -l`, `npm run lint`, `tsc --noEmit`)
 - Run build commands (`npm run build`, `composer install`)
 - Run test suites (`npm test`, `phpunit`, `pytest`)
-- Spawn subagents via Task tool
+- Spawn subagents via Agent tool
 - File operations (`mkdir`, `cp`, `mv` within project)
 - Git operations (`git add`, `git status`, `git diff`, `git stash`)
 
@@ -71,6 +71,7 @@ Only pause for:
 - `feature` - Full feature development (plan → implement → review → security → test)
 - `bugfix` - Bug investigation and fix pipeline
 - `refactor` - Code refactoring with safety checks
+- `epic` - Multi-component project orchestration (worktree isolation, PR per component, dependency-ordered integration)
 
 ## Execution Modes
 
@@ -81,15 +82,6 @@ Only pause for:
 | `eco` | Token-efficient | haiku | 1 code review |
 | `thorough` | Maximum quality | opus (reviews) | Multi-gate chain |
 | `swarm` | Maximum parallelism | opus (validation) | 3-architect competitive |
-
-### Swarm Mode Details
-
-Swarm mode enables:
-- **Orchestrator-only execution** - Main agent never writes code, only delegates
-- **Aggressive task decomposition** - Break work into parallel batches
-- **4 parallel executors** per batch for implementation
-- **3-architect validation** - Functional, Security, Quality (all must pass)
-- **Supervisor agent** coordinates all work
 
 ## Planning Styles
 
@@ -115,6 +107,7 @@ Swarm mode enables:
 /workflow:start feature swarm: Build complete notification system with email, SMS, push
 /workflow:start feature Implement user management --mode=swarm
 /workflow:start feature Add API endpoint --format=md
+/workflow:start epic Build a complete REST API with auth, CRUD, and real-time notifications
 ```
 
 ## Input
@@ -146,7 +139,7 @@ For long-running modes (swarm, thorough) or when the user's session already has 
 **Launch pattern:**
 ```python
 # Parent session launches workflow in fresh context
-Task(
+Agent(
     subagent_type="general-purpose",
     model="sonnet",
     max_turns=50,
@@ -162,12 +155,7 @@ Task(
 # Parent monitors via TaskOutput and reports progress to user
 ```
 
-The subagent runs the FULL workflow (planning, implementation, review). The parent session only launches it and relays results. This means:
-- Fresh context window for the orchestrator
-- Each executor subagent spawned by the orchestrator also gets fresh context
-- User's session stays lean — just monitoring output
-
-If the user wants interactive control (pausing between steps), skip the subagent launch and run inline.
+The parent session only launches and relays results. For interactive control (pausing between steps), skip the subagent launch and run inline.
 
 ### Initialization
 
@@ -177,41 +165,16 @@ If the user wants interactive control (pausing between steps), skip the subagent
 
 **BEFORE doing anything else**, ensure workflow directories exist.
 
-**Step 0a: Get the absolute home directory path**
+**Step 0a:** Run `echo $HOME` → store result as `$HOME_PATH` for ALL tool calls (never use `~`).
 
-Run this bash command first:
-```bash
-echo $HOME
+**Step 0b:** Create workflow directories using Write tool with absolute paths:
 ```
-This returns something like `/home/zashboy` or `/Users/alice`. Store this value - you need it for ALL Write tool calls below.
-
-**Step 0b: Create directories**
-
-⚠️ **CRITICAL: The Write tool DOES NOT expand `~`** ⚠️
-
-You MUST replace `$HOME_PATH` below with the ACTUAL path from Step 0a.
-
-- ❌ WRONG: `Write(file_path="~/.claude/workflows/active/.gitkeep")` → WILL FAIL
-- ✅ RIGHT: `Write(file_path="/home/zashboy/.claude/workflows/active/.gitkeep")` → WORKS
-
-Create these directories (substitute your actual home path):
+active/.gitkeep, completed/.gitkeep, context/.gitkeep, memory/.gitkeep → under $HOME_PATH/.claude/workflows/
+$HOME_PATH/.claude/plans/.gitkeep
 ```
-Write(file_path="$HOME_PATH/.claude/workflows/active/.gitkeep", content="")
-Write(file_path="$HOME_PATH/.claude/workflows/completed/.gitkeep", content="")
-Write(file_path="$HOME_PATH/.claude/workflows/context/.gitkeep", content="")
-Write(file_path="$HOME_PATH/.claude/workflows/memory/.gitkeep", content="")
-Write(file_path="$HOME_PATH/.claude/plans/.gitkeep", content="")
-```
+If creation fails, STOP and tell user to run `/workflow:setup`.
 
-If directories cannot be created, **STOP** and inform the user to run `/workflow:setup`.
-
-**Step 0c: Get the OS temp directory path**
-
-Run this bash command to get the platform-specific temp directory:
-```bash
-node -e "console.log(require('os').tmpdir())"
-```
-This returns `/tmp` on Linux, `/var/folders/.../T` on macOS, or `C:\Users\...\AppData\Local\Temp` on Windows. Store this as `$TMPDIR_PATH` — you need it for session binding below.
+**Step 0c:** Run `node -e "console.log(require('os').tmpdir())"` → store as `$TMPDIR_PATH`.
 
 #### Step 1: Parse input
 
@@ -234,45 +197,55 @@ This returns `/tmp` on Linux, `/var/folders/.../T` on macOS, or `C:\Users\...\Ap
 
    **Step 2b: If no prefix, analyze task complexity**
 
-   Spawn task-analyzer (haiku - fast and cheap):
-   ```
-   Task(
-     subagent_type="workflow:task-analyzer",
-     model="haiku",
-     prompt="""
-     Analyze this task for complexity and recommend a workflow mode.
+   Spawn `workflow:task-analyzer` (haiku) with task type + description. Returns `recommended_mode`, `confidence`, and `reasoning`.
 
-     Task type: {workflow_type}
-     Description: {description}
+   **Step 2c: Present recommendation to user** — show mode, confidence, reasoning, and offer `[Enter] Accept | [--mode=X] Override`.
 
-     Return:
-     - recommended_mode: thorough|standard|turbo|eco
-     - confidence: high|medium|low
-     - reasoning: [list of factors]
-     """
-   )
-   ```
+   **Step 2d: Apply selected mode** — use recommendation if accepted, user override if specified. Log decision in workflow state.
 
-   **Step 2c: Present recommendation to user**
-   ```
-   ┌─────────────────────────────────────────────────┐
-   │ AUTO-DETECTED MODE: thorough                    │
-   │                                                 │
-   │ Reasoning:                                      │
-   │ • Task involves authentication (+2)             │
-   │ • Security-sensitive keywords detected (+2)    │
-   │ • Multiple files likely affected (+1)          │
-   │                                                 │
-   │ Confidence: HIGH                               │
-   │                                                 │
-   │ [Enter] Accept  |  [--mode=X] Override         │
-   └─────────────────────────────────────────────────┘
-   ```
+#### Epic Type Special Handling
 
-   **Step 2d: Apply selected mode**
-   - If user accepts (or no response within context), use recommended mode
-   - If user specifies `--mode=X`, use their choice
-   - Log the mode selection decision in workflow state
+When type is `epic`:
+- **Mode**: Always `thorough` (mandatory — cannot override with `--mode`)
+- **Tests**: Always enabled (mandatory — skip test optionality question)
+- **Branch**: Managed automatically (epic/{component_id} per component — skip branch question)
+- **Template**: Use `templates/epic-development.<format>` instead of `templates/feature-development.<format>`
+- **Initial phase**: `architecture` (not `planning`)
+- **Phase order**: architecture → component_execution → integration → completion_guard
+
+The JSON state sidecar uses an extended schema for epic workflows:
+```json
+{
+  "$schema": "1.0.0",
+  "workflow_id": "<id>",
+  "org_file": "<path>",
+  "workflow": { "type": "epic", "description": "<desc>", "branch": "main" },
+  "mode": { "current": "thorough", "original": "thorough" },
+  "config": {
+    "tests_enabled": true,
+    "max_parallel_components": 4,
+    "max_code_review_iterations": 10,
+    "max_security_iterations": 8
+  },
+  "phase": {
+    "current": "architecture",
+    "completed": [],
+    "remaining": ["component_execution", "integration", "completion_guard"],
+    "rate_limit": { "paused_at": null, "resumes_at": null, "cron_job_id": null, "reason": null }
+  },
+  "gates": {
+    "architecture": { "status": "pending", "iteration": 0 },
+    "component_execution": { "status": "pending", "iteration": 0 },
+    "integration": { "status": "pending", "iteration": 0 },
+    "completion_guard": { "status": "pending", "iteration": 0 }
+  },
+  "architecture": { "components": [], "dependency_order": [], "interfaces": {} },
+  "components": {},
+  "integration": { "branch": null, "merge_order": [], "merged": [], "conflicts_resolved": [], "test_results": null, "review_status": "pending", "pr_url": null, "status": "pending" },
+  "agent_log": [],
+  "updated_at": "<timestamp>"
+}
+```
 
 #### Step 2.5: Test optionality
 
@@ -284,138 +257,57 @@ After mode is selected, determine test preference:
 
 Store the result as `tests_enabled` (boolean) for JSON state creation.
 
-3. **Load mode configuration**:
-   - Read `modes/<mode>.org` from the workflow plugin directory
-   - Extract agent routing and settings
-   - Apply to workflow execution
+3. **Load mode configuration**: Read `modes/<mode>.org` from the workflow plugin directory. Extract agent routing and settings.
 
-4. **Ask about branch**:
-   - "Should I create a new branch for this work?"
-   - Suggest: `feature/<short-description>` or `fix/<short-description>`
-   - Or use current branch
+4. **Ask about branch**: Suggest `feature/<short-description>` or `fix/<short-description>`, or use current branch.
 
 5. **Create workflow state** (CRITICAL - use Write tool with ABSOLUTE paths):
    - Generate ID: `YYYYMMDD-<random>` (e.g., `20260204-a1b2c3`)
    - Use the home directory path from Step 0a (e.g., `/home/user`)
 
    **If style=full**:
-   - Determine file extension from format: `.org` or `.md`
-   - Read template from plugin: `templates/<type>-development.<format>`
-   - Replace placeholders in template:
-     - `{{WORKFLOW_ID}}` → generated ID
-     - `{{TITLE}}` → description (first 50 chars)
-     - `{{DESCRIPTION}}` → full description
-     - `{{DATE}}` → current date (YYYY-MM-DD)
-     - `{{TIMESTAMP}}` → current ISO timestamp
-     - `{{BRANCH}}` → branch name
-     - `{{BASE_BRANCH}}` → base branch (main/master)
-     - `{{MODE}}` → selected mode
-     - `{{STATE_FILE}}` → path to JSON state sidecar (Step 5b)
-     - `{{TESTS_ENABLED}}` → "true" or "false"
-   - **Use Write tool with ABSOLUTE path**: `/home/user/.claude/workflows/active/<id>.<format>`
-   - Example: `Write(file_path="/home/zashboy/.claude/workflows/active/20260204-abc123.org", content=<template>)`
-   - **VERIFY** the file was created by reading it back
+   - Read template from plugin: `templates/<type>-development.<format>` (use `.org` or `.md` per format flag)
+   - Replace placeholders: `{{WORKFLOW_ID}}`, `{{TITLE}}` (first 50 chars), `{{DESCRIPTION}}`, `{{DATE}}`, `{{TIMESTAMP}}`, `{{BRANCH}}`, `{{BASE_BRANCH}}`, `{{MODE}}`, `{{STATE_FILE}}` (Step 5b path), `{{TESTS_ENABLED}}`
+   - Write to ABSOLUTE path: `<HOME>/.claude/workflows/active/<id>.<format>` — VERIFY by reading back
 
    **Step 5b: Create JSON state sidecar** (CRITICAL — enables hook enforcement):
 
-   After creating the org/md file, create a `.state.json` file alongside it.
-   This file is the machine-readable state that hooks use to enforce workflow phases.
+   Write `<HOME>/.claude/workflows/active/<id>.state.json` — VERIFY by reading back.
 
    ```json
    {
      "$schema": "1.0.0",
-     "workflow_id": "<generated-id>",
+     "workflow_id": "<id>",
      "org_file": "<HOME>/.claude/workflows/active/<id>.<format>",
-     "workflow": {
-       "type": "<feature|bugfix|refactor>",
-       "description": "<full description>",
-       "branch": "<branch-name>"
-     },
-     "mode": {
-       "current": "<selected-mode>",
-       "original": "<selected-mode>"
-     },
-     "config": {
-       "tests_enabled": <true|false from Step 2.5>,
-       "max_code_review_iterations": <from mode config>,
-       "max_security_iterations": <from mode config>
-     },
-     "phase": {
-       "current": "planning",
-       "completed": [],
-       "remaining": ["implementation", "code_review", "security_review", "tests", "quality_gate", "completion_guard"]
-     },
+     "workflow": { "type": "<feature|bugfix|refactor>", "description": "<desc>", "branch": "<branch>" },
+     "mode": { "current": "<mode>", "original": "<mode>" },
+     "config": { "tests_enabled": <bool>, "max_code_review_iterations": <n>, "max_security_iterations": <n> },
+     "phase": { "current": "planning", "completed": [], "remaining": ["implementation","code_review","security_review","tests","quality_gate","completion_guard"] },
      "gates": {
-       "planning":         { "status": "pending", "iteration": 0 },
-       "implementation":   { "status": "pending", "iteration": 0 },
-       "code_review":      { "status": "pending", "iteration": 0 },
-       "security_review":  { "status": "pending", "iteration": 0 },
-       "tests":            { "status": "pending", "iteration": 0 },
-       "quality_gate":     { "status": "pending", "iteration": 0 },
-       "completion_guard": { "status": "pending", "iteration": 0 }
+       "planning": {"status":"pending","iteration":0}, "implementation": {"status":"pending","iteration":0},
+       "code_review": {"status":"pending","iteration":0}, "security_review": {"status":"pending","iteration":0},
+       "tests": {"status":"pending","iteration":0}, "quality_gate": {"status":"pending","iteration":0},
+       "completion_guard": {"status":"pending","iteration":0}
      },
-     "agent_log": [],
-     "updated_at": "<current ISO timestamp>"
+     "agent_log": [], "updated_at": "<ISO timestamp>"
    }
    ```
 
-   **Gate status adjustments based on config:**
-   - If `tests_enabled === false`: set `gates.tests.status = "skipped"` and `gates.tests.reason = "tests_enabled=false"`
-   - Remove `"tests"` from `phase.remaining` when skipped
-
-   **Write using absolute path:**
-   ```
-   Write(file_path="<HOME>/.claude/workflows/active/<id>.state.json", content=<json>)
-   ```
-
-   **VERIFY** the state file was created by reading it back.
+   If `tests_enabled === false`: set `gates.tests.status = "skipped"`, `reason = "tests_enabled=false"`, remove from `phase.remaining`.
 
    **Step 5c: Bind session to workflow** (enables multi-workflow sessions):
 
-   After creating the state file, bind this session to the workflow so hooks only affect this workflow:
+   Glob for `$TMPDIR_PATH/workflow-session-marker-*.json`, read the most recent to get `session_id`. Write `$TMPDIR_PATH/workflow-binding-{session_id}.json` with `{session_id, workflow_path, workflow_id, bound_at}` — verify by reading back. If no marker found, skip (hooks fall back to most recent workflow).
 
-   1. Glob for `$TMPDIR_PATH/workflow-session-marker-*.json` and read the most recent file to get the `session_id`
-   2. Write `$TMPDIR_PATH/workflow-binding-{session_id}.json` with:
-      ```json
-      {
-        "session_id": "<session_id>",
-        "workflow_path": "<HOME>/.claude/workflows/active/<id>.state.json",
-        "workflow_id": "<generated-id>",
-        "bound_at": "<ISO timestamp>"
-      }
-      ```
-   3. Verify by reading the binding file back
-
-   If no session marker is found, skip this step (backward compatible — hooks will fall back to most recent workflow).
-
-   **If style=light**:
-   - **Use Write tool with ABSOLUTE path**: `/home/user/.claude/workflows/state.json`
-   - Use TodoWrite for step tracking
-
-   **IMPORTANT:** Never use `~` in Write tool paths. Always use the absolute path from Step 0a.
+   **If style=light**: Write `$HOME_PATH/.claude/workflows/state.json`, use TodoWrite for step tracking.
 
 6. **Run Codebase Analysis** (unless eco mode or context is fresh):
-   - **Use Read tool** to check if context file exists: `<HOME>/.claude/workflows/context/<project-slug>.md`
-   - Prefer Read or Glob tools for cross-platform reliability
-   - If file doesn't exist or is older than 7 days, run `codebase-analyzer` agent
-   - Store context file for all subsequent agents to reference
-   - In eco mode, skip analysis to save tokens (use existing context if available)
+   Check if `<HOME>/.claude/workflows/context/<project-slug>.md` exists and is under 7 days old. If not, spawn `codebase-analyzer` agent. In eco mode, skip and use existing context if available.
 
 7. **Load Project Memory** (lightweight, always run):
-   - **Use Read tool** to check for memory file: `<HOME>/.claude/workflows/memory/<project-slug>.md`
-   - Prefer Read tool for cross-platform reliability
-   - If exists, read key learnings to inform this workflow:
-     - Key decisions from past workflows
-     - Patterns discovered in this codebase
-     - Issues previously resolved (avoid repeating)
-     - Project-specific conventions
-   - Memory is lightweight (~1-2k tokens) and improves workflow quality
+   Read `<HOME>/.claude/workflows/memory/<project-slug>.md` if it exists. Key learnings (~1-2k tokens): past decisions, codebase patterns, resolved issues, project conventions.
 
-8. **Confirm with user**:
-   - Show workflow ID and state location
-   - Show selected mode and its implications
-   - Show context file status (fresh/generated/skipped)
-   - "Ready to begin Step 1: Planning?"
+8. **Confirm with user**: show workflow ID + state location, mode, context file status (fresh/generated/skipped), ask "Ready to begin Step 1: Planning?"
 
 ### Agent Routing by Mode
 
@@ -438,23 +330,23 @@ Use the correct agent based on the mode:
 | Performance | - | - | - | workflow:perf-reviewer | workflow:perf-reviewer |
 | Documentation | - | - | - | workflow:doc-writer | workflow:doc-writer |
 
+#### Epic Workflow Routing
+
+Epic workflows use a different phase sequence:
+
+| Phase | Agent | Model |
+|-------|-------|-------|
+| Architecture | workflow:architect | opus |
+| Component execution | (full sub-workflow per component — see epic-orchestration skill) | thorough mode |
+| Integration | workflow:epic-integrator | sonnet |
+| Integration review | workflow:reviewer-deep + workflow:security-deep | opus |
+| Completion guard | workflow:completion-guard | opus |
+
+The epic orchestrator loads `skills/phases/epic-orchestration` for the full execution flow.
+
 ### Model Selection
 
-When spawning agents, specify the model:
-
-```
-Task(
-  subagent_type="<agent>",
-  model="<haiku|sonnet|opus>",  # Based on mode
-  prompt=<instructions>
-)
-```
-
-| Agent Suffix | Model |
-|--------------|-------|
-| `-lite` | haiku |
-| (standard) | sonnet |
-| `-deep` | opus |
+Always specify `model=` when spawning agents. Suffix maps to model: `-lite` → haiku, (standard) → sonnet, `-deep` → opus.
 
 ### Codebase Context Injection
 
@@ -469,436 +361,138 @@ Focus on: [list relevant sections for this task, e.g., "Naming Conventions, Test
 ---
 ```
 
-**Why reference, not embed:** Embedding the full context (~5K+ tokens) into every agent spawn wastes the supervisor's context budget and duplicates information. Each agent reads the file themselves using their own context window, and only loads the sections they need.
-
-This ensures:
-- Agents follow established naming conventions
-- Architectural patterns are maintained
-- Code style is consistent
-- Testing patterns match existing tests
-- Supervisor context stays lean across many agent spawns
+**Why reference, not embed:** Each agent reads only what it needs in its own context window. Supervisor context stays lean across many agent spawns.
 
 ### MANDATORY: State File Updates
 
-**CRITICAL:** The state file (`.org` or `.md`) is the source of truth. You MUST update it:
+The state file (`.org` or `.md`) is the source of truth. Update it BEFORE (set in-progress) and AFTER (write output, check off objectives, set COMPLETED_AT) every step. After planning, write the FULL plan (files, steps, strategy, risks). After reviews, record findings and verdicts. On any error, log it. Use the Edit tool for targeted updates, Write for larger section replacements. **NEVER skip state updates.**
 
-1. **BEFORE each step** - Mark status as `in-progress`, set `STARTED_AT`
-2. **AFTER each step** - Write outputs, check off objectives, set `COMPLETED_AT`
-3. **After planning** - Write the FULL plan to the Plan section
-4. **After implementation** - List all changed files
-5. **After reviews** - Record findings and verdicts
-6. **On any error** - Log the error in the state file
-
-**State Update Pattern:**
-```
-# Read current state
-Read(file_path="<HOME>/.claude/workflows/active/<id>.org")
-
-# Update the relevant section using Edit tool
-Edit(file_path="<HOME>/.claude/workflows/active/<id>.org",
-     old_string="**Status:** pending",
-     new_string="**Status:** in-progress")
-
-# Or for larger updates, use Write to replace sections
-```
-
-**NEVER skip state updates.** The user may be following along in their editor.
+Also update the JSON sidecar (`<id>.state.json`) after each phase: set `gates.<phase>.status`, increment `gates.<phase>.iteration`, update `phase.current`, `phase.completed`, `phase.remaining`, and `updated_at`.
 
 ### Step Execution Pattern
 
-For each step:
+For each phase: read state → look up agent+model → update state to in-progress → report to user → spawn agent → capture output → update state to complete → report to user → check for user input.
 
+Agent spawn template:
 ```
-1. READ the step from state file (may have been modified by user)
-2. LOAD codebase context from <HOME>/.claude/workflows/context/<project>.md
-3. **UPDATE STATE FILE:** set STARTED_AT, STATUS: in-progress
-4. REPORT to user: "Starting Step X: <name> (using <agent>)"
-5. SPAWN subagent with mode-appropriate agent:
-   Task(
-     subagent_type=<agent from routing table>,
-     model=<model from mode>,
-     max_turns=<from mode config MAX_TURNS_* property>,
-     prompt="""
-       ## Codebase Context
-       Read the context file at: <HOME>/.claude/workflows/context/<project>.md
-       Focus on: [relevant sections for this task]
-
-       ## Task
-       {detailed instructions}
-
-       ## Context Efficiency
-       - Use Read with offset/limit for files >200 lines
-       - Write each file to disk immediately after changes
-       - Update state file after each objective
-     """
-   )
-6. CAPTURE output from subagent
-7. **UPDATE STATE FILE IMMEDIATELY:**
-   - Write output to appropriate section
-   - Check off completed objectives (change [ ] to [x])
-   - Set COMPLETED_AT timestamp
-   - Mark step as DONE
-8. REPORT to user: "Step X complete. <brief summary>"
-9. CHECK for user input before proceeding
+Agent(
+  subagent_type=<from routing table>,
+  model=<from mode>,
+  prompt="""
+  Workflow ID: {workflow_id}
+  ## Codebase Context
+  Read: <HOME>/.claude/workflows/context/<project>.md
+  Focus on: [relevant sections]
+  ## Task
+  {phase-specific instructions}
+  """
+)
 ```
-
-**After Planning Phase - REQUIRED:**
-Write the COMPLETE plan to the state file's Plan section. Include:
-- All files to modify/create
-- Implementation steps
-- Testing strategy
-- Risks identified
 
 ### Parallel Execution
 
-**IMPORTANT:** Use parallel Task tool calls where phases are independent to maximize efficiency.
+Use parallel Agent calls where phases are independent. Parallelize: code review + security scan (turbo/standard), perf + doc advisory checks (thorough), independent file implementations. Do NOT parallelize: implementation before review, security before code review in thorough mode (may depend on fixes), dependent file changes.
 
-#### Parallel Opportunities
-
-1. **Turbo/Standard Reviews** - Code review + Security scan (no dependencies):
-   ```
-   # Send BOTH in a single message with multiple Task calls:
-   Task(subagent_type="workflow:reviewer-lite", prompt=..., run_in_background=true)
-   Task(subagent_type="workflow:security-lite", prompt=..., run_in_background=true)
-   # Then collect results from both
-   ```
-
-2. **Thorough Mode Advisory Checks** - Performance + Documentation (after gates pass):
-   ```
-   # These are advisory, run in parallel:
-   Task(subagent_type="workflow:perf-reviewer", prompt=..., run_in_background=true)
-   Task(subagent_type="workflow:doc-writer", prompt=..., run_in_background=true)
-   ```
-
-3. **Multi-file Implementation** - When plan has independent file changes:
-   ```
-   # If files are independent (e.g., new service + new test):
-   Task(subagent_type="workflow:executor-lite", prompt="Implement service...", run_in_background=true)
-   Task(subagent_type="workflow:executor-lite", prompt="Implement tests...", run_in_background=true)
-   ```
-
-#### When NOT to Parallelize
-
-- Code review must complete before security review **in thorough mode** (security may depend on fixes)
-- Implementation must complete before any review
-- Test writing should follow implementation
-- Dependent file changes (imports, shared state)
+Background pattern:
+```python
+agent1 = Agent(subagent_type="workflow:reviewer", run_in_background=true, ...)
+agent2 = Agent(subagent_type="workflow:security", run_in_background=true, ...)
+result1 = TaskOutput(task_id=agent1.id)
+result2 = TaskOutput(task_id=agent2.id)
+```
 
 ### Context Limit Recovery
 
-If an agent's output signals context exhaustion (contains "context limit", "conversation too long", is empty, or is severely truncated):
+If agent output signals exhaustion (empty, truncated, or contains "context limit"): assess completed objectives in state file (`[x]` vs `[ ]`), spawn a NEW agent with remaining objectives + 2-3 sentence summary + context file path. Track continuation count in state. Max continuations from mode config `MAX_CONTINUATIONS` (default: 3); if exhausted, break into sub-steps or pause. See `resources/context-resilience.md` for spawn template.
 
-1. **Assess** — Read the state file. Check which objectives were completed (`[x]` vs `[ ]`). Verify file artifacts on disk.
-2. **Continue** — Spawn a **NEW** agent (never `resume`) with only the remaining objectives, a 2-3 sentence summary of completed work, and the context file path reference.
-3. **Track** — Mark continuation count in the state file.
-4. **Limit** — Max continuations per step from mode config `MAX_CONTINUATIONS` (default: 3). If exhausted, break into smaller sub-steps or pause for user intervention.
+### Review Gates by Mode
 
-See `resources/context-resilience.md` for the full continuation protocol and spawn template.
+| Mode | Code Review | Security | Quality Gate | Completion |
+|------|------------|----------|-------------|------------|
+| eco | blocking, iterate until PASS | blocking, iterate until PASS | mandatory (build+lint) | mandatory |
+| turbo | blocking, iterate until PASS | blocking, iterate until PASS | mandatory (abbreviated) | mandatory |
+| standard | blocking, iterate until PASS | blocking, iterate until PASS | mandatory (full) | mandatory |
+| thorough | blocking, iterate until PASS (opus) | blocking, iterate until PASS (opus) | mandatory (full) | mandatory (opus) |
+| swarm | 3-architect parallel (all must pass) | included in architects | mandatory | mandatory (opus) |
 
-#### Background Agent Pattern
+**Zero tolerance:** ALL gates must PASS. No exceptions, no partial passes, no scope reduction. Iterate until done - do not stop because iteration count is high.
+Review agents know the verdict format and rules via their loaded `phases/review` skill.
 
-```python
-# Launch parallel agents
-agent1 = Task(subagent_type="workflow:reviewer", run_in_background=true, ...)
-agent2 = Task(subagent_type="workflow:security", run_in_background=true, ...)
+#### Swarm Mode Validation
 
-# Collect results (use TaskOutput or read output files)
-result1 = TaskOutput(task_id=agent1.id)
-result2 = TaskOutput(task_id=agent2.id)
+In swarm mode, the supervisor agent orchestrates 3-architect parallel validation:
+1. Architect 1: Functional completeness (opus)
+2. Architect 2: Security (security-deep/opus)
+3. Architect 3: Code quality (reviewer-deep/opus)
 
-# Process combined results
-```
+All three must PASS. Max 3 retry cycles. See `agents/supervisor.md` for full orchestration details.
 
-### Review Loops by Mode - MANDATORY QUALITY GATES
+### Phase Dispatch Pattern
 
-**CRITICAL:** Reviews are NOT optional. ALL gates must PASS before completion.
+The orchestrator dispatches each phase to the appropriate agent. Agents know HOW to execute their phase via their loaded skills. The orchestrator only provides WHAT (context data).
 
-#### Standard Mode
-- Code review: max 3 iterations, **BLOCKING**
-- Security: max 2 iterations, **BLOCKING**
-- Quality Gate: **MANDATORY** before completion
-- Completion Guard: **MANDATORY** architect sign-off
+**For each phase:**
+1. Read current phase from state file
+2. Look up agent + model from routing table above
+3. Spawn agent (no max_turns - let agents run until done):
+   ```
+   Agent(
+     subagent_type=<from routing table>,
+     model=<from mode>,
+     prompt="""
+     Workflow ID: {workflow_id}
+     Project: {project_path}
+     Changed files: {changed_files_list}
+     Mode: {workflow_mode}
 
-#### Turbo Mode
-- Code review: max 2 iterations, **BLOCKING**
-- Security: max 1 iteration, **BLOCKING**
-- Quality Gate: **MANDATORY** (abbreviated)
-- Completion Guard: **MANDATORY** (quick check)
+     [Phase-specific context below]
+     """
+   )
+   ```
+5. Capture output, update state file + JSON sidecar
+6. If review FAIL: increment iteration, re-dispatch (see review loop below)
+7. Advance to next phase
 
-#### Eco Mode
-- Code review: max 2 iterations, **BLOCKING**
-- Security: max 1 iteration, **BLOCKING**
-- Quality Gate: **MANDATORY** (build + lint only)
-- Completion Guard: **MANDATORY**
+#### Epic Dispatch
 
-#### Thorough Mode
-- Code review: max 3 iterations, **BLOCKING** (reviewer-deep)
-- Security: max 2 iterations, **BLOCKING** (security-deep)
-- Test coverage: 80% minimum, **BLOCKING**
-- Quality Gate: **FULL** (all checks)
-- Completion Guard: **FULL** verification with opus
-- Performance: advisory (after all gates pass)
-- Documentation: advisory (after all gates pass)
+For epic workflows, the dispatch is different from standard workflows:
 
-#### Swarm Mode - 3-Architect Competitive Validation
+1. **Architecture phase**: Spawn `workflow:architect` (opus) to decompose the project
+2. **Component execution**: Follow the epic orchestration skill (`phases/epic-orchestration`) for worktree-based parallel execution with dependency ordering
+3. **Integration**: Spawn `workflow:epic-integrator` to merge all component branches, then run integration review
+4. **Completion guard**: Standard completion guard with full verification
 
-**Orchestrator-only execution:** The supervisor agent coordinates all work. You NEVER write code directly.
+The epic orchestrator skill handles rate limit detection, CronCreate scheduling, and cross-session resume.
 
-**Implementation Phase:**
-1. Supervisor decomposes task into parallel batches
-2. Max 4 parallel executors per batch
-3. Batch 1: interfaces/types
-4. Batch 2: implementations (depends on batch 1)
-5. Batch 3: tests (depends on batch 2)
-
-**3-Architect Validation (all must pass):**
-```
-┌─────────────────────────────────────────────────────────┐
-│              3-ARCHITECT VALIDATION                     │
-├─────────────────────────────────────────────────────────┤
-│  ARCHITECT 1       ARCHITECT 2       ARCHITECT 3       │
-│  Functional        Security          Code Quality      │
-│  Completeness      (security-deep)   (reviewer-deep)   │
-│  (architect)       OWASP, auth       SOLID, patterns   │
-│       │                │                  │            │
-│       └────────────────┴──────────────────┘            │
-│                        │                               │
-│                    AGGREGATOR                          │
-│              ALL PASS → Continue                       │
-│              ANY FAIL → Fix → Retry                    │
-└─────────────────────────────────────────────────────────┘
-```
-
-- Architect 1: Functional completeness review (opus)
-- Architect 2: Security review (security-deep/opus)
-- Architect 3: Code quality review (reviewer-deep/opus)
-- ALL three run in **parallel**
-- ALL three must **PASS**
-- Max 3 retry cycles if failures
-
-**Quality Gates:**
-- Quality Gate: **MANDATORY** after 3-architect approval
-- Completion Guard: **MANDATORY** with opus
-
-### Zero Tolerance Policy
-
-**NEVER:**
-- Skip review gates
-- Accept "advisory" results as passes
-- Allow partial completion
-- Reduce scope to pass tests
-- Delete failing tests
-- Comment out problematic code
-
-### Quality Gate Pipeline
-
-After implementation and code review, ALWAYS run:
-
-```
-Implementation Complete → Code Review PASS
-        ↓
-┌───────────────────────────────────────┐
-│          QUALITY GATE                 │
-│  (quality-gate agent - MANDATORY)     │
-│                                       │
-│  Build → Type → Lint → Test → Security│
-│           ↓ FAIL                      │
-│      Auto-fix loop (max 3)            │
-└───────────────────────────────────────┘
-        ↓ ALL PASS
-┌───────────────────────────────────────┐
-│      POST-QUALITY-GATE REVIEW         │
-│  (if quality gate made code changes)  │
-│                                       │
-│  Targeted reviewer-lite on changed    │
-│  files only. Max 2 iterations.        │
-└───────────────────────────────────────┘
-        ↓ PASS (or no changes made)
-┌───────────────────────────────────────┐
-│        COMPLETION GUARD               │
-│  (completion-guard agent - MANDATORY) │
-│                                       │
-│  ✓ Requirements verified              │
-│  ✓ No incomplete code                 │
-│  ✓ Code quality spot-check            │
-│  ✓ Build passes                       │
-│  ✓ Tests pass                         │
-│  ✓ TODO list complete (0 pending)     │
-│  ✓ Quality gates passed               │
-└───────────────────────────────────────┘
-        ↓ APPROVED
-    Workflow Complete
-
-If REJECTED → Fix issues → Re-run guards (max 3)
-```
-
-### Review Loop Implementation
-
+**Review Loop (code review + security review):**
 ```
 iteration = 0
-max_iterations = <from mode config>
 escalated = false
-previous_issues = []
 
-while iteration < max_iterations:
-    # Include previous issues for re-review verification
-    Run review agent with:
-      - previous_issues_list = previous_issues (if iteration > 0)
-      - iteration_number = iteration + 1
+loop:
+    Spawn review agent with: iteration, previous_issues
 
-    if verdict == PASS:
-        Mark step complete
-        break
+    if PASS: mark complete, advance to next phase
     else:
-        previous_issues = extract_issues_from_review(verdict)
         iteration++
-        Update ITERATION in state
-        Log in Review Log
+        Spawn executor with review issues (executor knows fix protocol via skill)
 
-        if iteration < max_iterations:
-            Report: "Review found issues. Sending back to executor for fixes."
-            # Spawn executor with structured fix protocol
-            Task(
-              subagent_type="workflow:executor",
-              prompt="""
-              ## Review Issues to Fix (MANDATORY - fix ALL)
-
-              {numbered_issues_from_review}
-
-              ## Fix Protocol
-              1. Address EVERY issue by ID - no exceptions
-              2. For each issue:
-                 a. Read the file at the specified line
-                 b. Understand the root cause
-                 c. Apply the fix
-                 d. Self-verify: re-read the code to confirm the fix is correct
-              3. Report fixes in this format:
-                 - [ISSUE-1] FIXED: <what was changed and why>
-                 - [ISSUE-2] FIXED: <what was changed and why>
-              4. If you believe an issue is a false positive:
-                 - [ISSUE-N] DISPUTE: <detailed justification>
-                 - The reviewer will evaluate your dispute on re-review
-              5. CRITICAL: Do NOT skip any issue. Every issue ID must appear in your output.
-              """
-            )
-        elif NOT escalated:
-            # AUTO-ESCALATE: Switch to opus for both reviewer and executor
+        if iteration >= mode_config_soft_limit AND NOT escalated:
             escalated = true
-            max_iterations += 2  # Grant 2 more iterations at opus tier
-            Report: "Escalating to opus tier for review + fixes"
-            Log: "AUTO-ESCALATION: Switching to opus model for reviewer-deep + executor"
-            # Next iteration uses workflow:reviewer-deep + opus executor
-            Task(
-              subagent_type="workflow:executor",
-              model="opus",
-              prompt="... (same structured fix protocol as above with opus-level analysis)"
-            )
-        else:
-            # Already escalated and still failing after extra iterations
-            Report: "BLOCKING after opus escalation. Max review iterations reached."
-            Report: "Issues that could not be resolved:"
-            List remaining issues with IDs
-            Ask user: "Manual intervention required. Fix these issues and run /workflow:resume"
-            PAUSE workflow - DO NOT CONTINUE
+            Switch to opus tier for both reviewer and executor
+            Log: "Auto-escalating to opus after {iteration} iterations"
+
+        Continue loop (iterate until PASS - no hard cap)
 ```
 
-### Mandatory Quality Gate Invocation
+The mode config values (MAX_CODE_REVIEW_ITERATIONS, MAX_SECURITY_ITERATIONS) are **soft limits** that trigger auto-escalation to opus, NOT hard stops. The loop continues until PASS.
 
-After implementation phase, ALWAYS spawn quality-gate:
-
-```
-Task(
-  subagent_type="workflow:quality-gate",
-  model="sonnet",
-  prompt="""
-  QUALITY GATE CHECK
-
-  Project: {project_path}
-  Changed files: {changed_files}
-  Mode: {workflow_mode}
-
-  Run ALL applicable checks:
-  - Build verification
-  - Type checking
-  - Lint checking
-  - Test suite
-  - Security scan
-
-  Auto-fix issues up to 3 iterations.
-  Report final verdict: PASS or FAIL with details.
-  """
-)
-```
-
-### Post-Quality-Gate Review (if fixes were made)
-
-If the quality gate made code changes (CHANGES_MADE: true in its output):
-
-```python
-# Check if quality gate made changes
-if quality_gate_result.changes_made:
-    Task(
-      subagent_type="workflow:reviewer-lite",
-      model="haiku",
-      max_turns=8,
-      prompt="""
-      POST-FIX REVIEW: Quality gate made code changes.
-      Review ONLY these files for regressions: {quality_gate_changed_files}
-
-      Focus: Did the quality gate fixes introduce bugs, break patterns,
-      or deviate from project conventions?
-
-      ## Codebase Context
-      Read the context file at: <HOME>/.claude/workflows/context/<project>.md
-      Focus on: Code style, naming conventions
-
-      VERDICT: PASS or FAIL with structured issues.
-      """
-    )
-
-    # If FAIL: Send back to executor to fix, then re-run quality gate
-    # Max 2 iterations for post-fix review loop
-    post_fix_iteration = 0
-    while post_fix_result.verdict == "FAIL" and post_fix_iteration < 2:
-        Task(subagent_type="workflow:executor-lite", prompt="Fix post-QG review issues: {issues}")
-        Task(subagent_type="workflow:quality-gate", prompt="Re-verify after post-fix corrections")
-        post_fix_iteration++
-```
-
-### Mandatory Completion Guard Invocation
-
-After quality gate passes, ALWAYS spawn completion-guard:
-
-```
-Task(
-  subagent_type="workflow:completion-guard",
-  model="opus",  # Always opus for final verification
-  prompt="""
-  COMPLETION GUARD - FINAL VERIFICATION
-
-  Original Task: {original_task_description}
-  Workflow ID: {workflow_id}
-  Mode: {workflow_mode}
-
-  Verify:
-  1. ALL requirements from original task are implemented
-  2. NO incomplete code markers (TODO, FIXME, etc.)
-  3. Build passes
-  4. Tests pass
-  5. TODO list has 0 pending/in_progress items
-  6. Quality gate has passed
-
-  Return APPROVED or REJECTED with specific issues.
-  """
-)
-```
-
-If completion-guard returns REJECTED:
-1. Send issues to executor for fixes
-2. Re-run quality-gate
-3. Re-run completion-guard
-4. Repeat max 3 times
-5. If still failing, PAUSE for manual intervention
+**Quality Gate → Completion Guard flow:**
+1. Spawn quality-gate agent (knows its pipeline via skill)
+2. If CHANGES_MADE in output: spawn reviewer-lite for targeted review of changed files
+3. Spawn completion-guard agent (independently re-runs tests, verifies each requirement)
+4. If REJECTED: fix → re-run quality-gate → re-run completion-guard
+5. Iterate until APPROVED (no hard cap on retries)
 
 ### Handling User Intervention
 
@@ -944,53 +538,14 @@ When `--style=light` is used:
 
 ### Completion
 
-When all steps done:
-
-1. **Update state**:
-   - Fill Completion Summary section
-   - Set COMPLETED_AT timestamp
-   - Calculate TOTAL_DURATION
-
-2. **Generate summary** for user:
-   - Mode used
-   - Files changed
-   - Tests added (if thorough mode)
-   - Review iterations taken
-   - Any warnings or notes
-
-3. **Save learnings to memory** (automatic):
-   - Extract patterns discovered during this workflow
-   - Save to `~/.claude/workflows/memory/<project-slug>.md`
-   - Include:
-     - Key decisions made and their reasoning
-     - Issues resolved and solutions
-     - New conventions discovered
-     - Workflow outcome (success/partial/issues)
-   - This enables continuous learning across sessions
-
-4. **Ask about commit**:
-   - "Workflow complete! Should I commit these changes?"
-   - Suggest commit message based on work done
-
-5. **Clean up temp files**:
-   - Remove workflow session temp files using the `$TMPDIR_PATH` from Step 0c:
-   ```bash
-   TMPDIR_PATH=$(node -e "console.log(require('os').tmpdir())")
-   rm -f "$TMPDIR_PATH/workflow-session-marker-${SESSION_ID}.json"
-   rm -f "$TMPDIR_PATH/workflow-binding-${SESSION_ID}.json"
-   rm -f "$TMPDIR_PATH/workflow-stop-${SESSION_ID}."*
-   rm -f "$TMPDIR_PATH/workflow-deny-${SESSION_ID}.json"
-   rm -f "$TMPDIR_PATH/workflow-complete-${SESSION_ID}-"*
-   ```
-   - Where `${SESSION_ID}` is the session_id discovered during Step 5c (session binding)
-   - If session_id was not discovered (no marker found), skip this step
-
-6. **Archive state**:
-   - Update JSON state: set `phase.current = "completed"` and `updated_at`
-   - Move BOTH files to `~/.claude/workflows/completed/`:
-     - Org/md file: `active/<id>.org` → `completed/<id>.org`
-     - State JSON: `active/<id>.state.json` → `completed/<id>.state.json`
-   - For light style: update JSON state with completed status
+When all gates pass:
+1. Update state: fill Completion Summary, set COMPLETED_AT, calculate TOTAL_DURATION
+2. Generate summary for user (mode, files changed, review iterations, warnings)
+3. Save learnings to `<HOME>/.claude/workflows/memory/<project-slug>.md` (completion-guard agent handles this via its skill)
+4. **Offer live testing** if the completion guard detected web-facing file changes — surface the `/workflow:test-live` suggestion with pre-filled URL if detectable
+5. Ask about commit (suggest message based on work done)
+6. Clean up session temp files from `$TMPDIR_PATH` (workflow-session-marker, workflow-binding, workflow-stop, workflow-deny, workflow-complete files) — use the session_id from Step 5c; skip if none found
+7. Archive: update JSON state to `completed`, move org/md + state.json from `active/` to `completed/`
 
 ### Error Handling
 
@@ -1019,15 +574,8 @@ If a subagent fails or returns unexpected results:
 
 ### File Format Reference
 
-**Org format (default):**
-- Extension: `.org`
-- Features: Collapsible sections, property drawers, TODO states
-- Best for: Emacs users, structured note-taking
-
-**Markdown format:**
-- Extension: `.md`
-- Features: GitHub-compatible, easy to read in any editor
-- Best for: GitHub users, general text editors
+`.org` (default): Emacs org-mode — collapsible sections, property drawers, TODO states.
+`.md`: GitHub-compatible, readable in any editor.
 
 ### Agent Reference
 

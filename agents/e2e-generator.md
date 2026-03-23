@@ -3,6 +3,9 @@ name: e2e-generator
 description: Generates Playwright E2E test specs from app exploration maps
 model: sonnet
 tools: ["Read", "Edit", "Write", "Grep", "Glob", "Bash"]
+permissionMode: acceptEdits
+mcpServers: ["playwright"]
+skills: ["workflow:phases/common"]
 ---
 
 # E2E Test Generator Agent

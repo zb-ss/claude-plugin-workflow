@@ -44,7 +44,9 @@
     "./agents/supervisor.md",
     "./agents/e2e-explorer.md",
     "./agents/e2e-generator.md",
-    "./agents/e2e-reviewer.md"
+    "./agents/e2e-reviewer.md",
+    "./agents/web-tester.md",
+    "./agents/epic-integrator.md"
   ],
   "skills": [
     "./skills/"

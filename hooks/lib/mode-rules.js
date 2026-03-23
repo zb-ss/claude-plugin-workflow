@@ -34,6 +34,10 @@ const MODEL_CONSTRAINTS = {
     preferred: 'sonnet',
     description: 'Parallel execution, opus for validation',
   },
+  epic: {
+    forbidden: [],
+    preferred: 'sonnet',
+  },
 };
 
 /**
@@ -63,6 +67,8 @@ const AGENT_GATE_MAP = {
   'workflow:e2e-explorer': 'e2e_exploration',
   'workflow:e2e-generator': 'e2e_generation',
   'workflow:e2e-reviewer': 'e2e_validation',
+  'workflow:web-tester': 'live_testing',
+  'workflow:epic-integrator': 'integration',
 };
 
 /**
@@ -89,6 +95,17 @@ const E2E_PHASE_ORDER = [
   'e2e_generation',
   'e2e_validation',
   'quality_gate',
+  'completion_guard',
+];
+
+/**
+ * Epic workflow phase ordering.
+ * Defines the expected flow through an epic workflow.
+ */
+const EPIC_PHASE_ORDER = [
+  'architecture',
+  'component_execution',
+  'integration',
   'completion_guard',
 ];
 
@@ -121,6 +138,7 @@ module.exports = {
   AGENT_GATE_MAP,
   PHASE_ORDER,
   E2E_PHASE_ORDER,
+  EPIC_PHASE_ORDER,
   isModelForbidden,
   getGateForAgent,
   getPreferredModel,

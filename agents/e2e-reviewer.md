@@ -3,6 +3,8 @@ name: e2e-reviewer
 description: Reviews E2E Playwright tests for quality, flakiness, and best practices
 model: sonnet
 tools: ["Read", "Grep", "Glob", "Bash"]
+mcpServers: ["playwright"]
+skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # E2E Test Reviewer Agent
