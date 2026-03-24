@@ -79,7 +79,20 @@ After the architect completes:
 
 ## Phase 2: Component Execution
 
-Execute components in dependency waves. For each wave, run up to MAX_PARALLEL_COMPONENTS simultaneously.
+Execute components in dependency waves. The number of parallel components is **dynamic** — the supervisor decides based on task complexity, available quota, and component independence.
+
+### Dynamic Parallelism
+
+The supervisor chooses the parallel component count:
+- **Default**: 4 parallel components (MAX_PARALLEL_COMPONENTS in mode config)
+- **Scale up** to 6-8 if: components are small/independent, plenty of API quota remains
+- **Scale down** to 1-2 if: components are large/complex, near rate limits, many file overlaps
+- Read the statusline cache (`/tmp/claude-statusline-usage.json`) to check remaining quota before spawning
+
+The supervisor should report its reasoning:
+```
+Parallel strategy: spawning 6 components (all independent, small scope, 72% quota remaining)
+```
 
 ### Worktree Creation
 
@@ -94,96 +107,107 @@ This creates an isolated working copy on a new branch. Verify creation:
 git worktree list
 ```
 
-### Component Agent Spawn
+### Component Agent Spawn (Swarm-Style)
 
-Each component gets a single agent that runs the full sub-workflow pipeline internally:
+Each component gets a **supervisor agent** that orchestrates swarm-style parallel execution within its worktree. This is far more efficient than a single sequential agent — the component supervisor decomposes its work into parallel batches, just like swarm mode does for features.
 
+For **small components** (complexity: low, <5 files), a single executor agent is sufficient.
+For **medium/large components** (complexity: medium/high), use the full swarm pattern.
+
+The supervisor decides which approach to use based on the architect's complexity estimate.
+
+#### Small Component (single agent):
 ```
 Agent(
   subagent_type="workflow:executor",
   model="sonnet",
   run_in_background=true,
   prompt="""
-  ## Component Sub-Workflow: {component_name}
-  
-  You are implementing component "{component_id}" of epic workflow "{workflow_id}".
-  
+  ## Component: {component_name}
+
   **WORKING DIRECTORY:** {absolute_worktree_path}
   ALL file operations MUST use paths under this directory.
   Run `cd {absolute_worktree_path}` before any bash commands.
-  
+
   **SCOPE:** Only modify files in: {files_scope}
-  
+
   ## Interface Contracts
   Read: {project_root}/CONTRACTS.md
-  Your component MUST implement these interfaces: {interfaces.produces}
-  Your component MAY consume these interfaces: {interfaces.consumes}
-  
+  Your component MUST implement: {interfaces.produces}
+  Your component MAY consume: {interfaces.consumes}
+
   ## Dependency Context
   {summary_of_completed_dependency_outputs}
-  
-  ## Execute This Pipeline In Order
-  
-  ### 1. Planning
-  Analyze the component scope. Plan the implementation:
-  - Files to create/modify
-  - Implementation approach
-  - How interfaces will be implemented
-  - Testing strategy
-  
-  ### 2. Implementation
-  Implement the component. Follow project conventions.
-  Write each file immediately after creating it.
-  
-  ### 3. Self-Review
-  Review your own code against these criteria:
-  - VERDICT: PASS or FAIL
-  - Check: correctness, error handling, edge cases, naming conventions
-  - If FAIL: fix issues, then re-review
-  - Iterate until PASS
-  
-  ### 4. Security Check
-  Review for security issues:
-  - Input validation
-  - Injection vulnerabilities
-  - Data exposure
-  - Authentication/authorization (if applicable)
-  
-  ### 5. Quality Gate
-  Run available checks:
-  ```bash
+
+  ## Pipeline
+  1. Plan → 2. Implement → 3. Self-review (iterate until PASS)
+  4. Security check → 5. Run tests → 6. Verify completeness
+
+  ## Create PR when done
   cd {absolute_worktree_path}
-  npm test 2>&1 || vendor/bin/phpunit 2>&1 || pytest 2>&1 || echo "No tests"
-  npm run build 2>&1 || echo "No build step"
-  ```
-  Fix any failures. Iterate until all pass.
-  
-  ### 6. Completion Check
-  Verify:
-  - All planned files created
-  - Interfaces implemented per CONTRACTS.md
-  - No TODO/FIXME markers
-  - Tests pass
-  
-  ## Create PR
-  
-  After all checks pass, create a PR:
-  ```bash
-  cd {absolute_worktree_path}
-  git add -A
-  git commit -m "feat({component_id}): {component_name} implementation"
+  git add -A && git commit -m "feat({component_id}): {component_name}"
   git push -u origin epic/{component_id}
-  gh pr create --base main --head epic/{component_id} \
-    --title "feat({component_id}): {component_name}" \
-    --body "Component of epic workflow {workflow_id}. ..."
-  ```
-  
-  ## Output
-  Report:
-  - Files created/modified (list)
-  - Test results
-  - PR URL
-  - Any issues or warnings
+  gh pr create --base main --head epic/{component_id} --title "feat({component_id}): {component_name}" --body "..."
+
+  Report: files changed, test results, PR URL
+  """
+)
+```
+
+#### Medium/Large Component (swarm-style):
+```
+Agent(
+  subagent_type="workflow:supervisor",
+  model="sonnet",
+  run_in_background=true,
+  prompt="""
+  ## Component Supervisor: {component_name}
+
+  You are the ORCHESTRATOR for component "{component_id}".
+  You NEVER write code — only delegate to executor agents.
+
+  **WORKING DIRECTORY:** {absolute_worktree_path}
+  ALL agents must work exclusively in this directory.
+
+  **SCOPE:** {files_scope}
+
+  ## Interface Contracts
+  Read: {project_root}/CONTRACTS.md
+  Component MUST implement: {interfaces.produces}
+  Component MAY consume: {interfaces.consumes}
+
+  ## Dependency Context
+  {summary_of_completed_dependency_outputs}
+
+  ## Orchestration Pipeline
+
+  ### 1. Planning (yourself or spawn workflow:architect)
+  Decompose this component into parallel implementation tasks.
+  Each task gets non-overlapping file scope.
+
+  ### 2. Implementation (parallel executors)
+  Spawn up to 4 workflow:executor agents with run_in_background=true.
+  Each gets a subset of files. Wait for all to complete.
+
+  ### 3. Review (parallel reviewers)
+  Spawn workflow:reviewer-deep + workflow:security-deep in parallel.
+  Both must PASS. If FAIL: spawn executor to fix, then re-review.
+  Iterate until both PASS.
+
+  ### 4. Quality Gate
+  Spawn workflow:quality-gate to run build/lint/test pipeline.
+  Fix any failures. Iterate until PASS.
+
+  ### 5. Completion Check
+  Verify: all files created, interfaces match CONTRACTS.md, no TODOs, tests pass.
+
+  ### 6. Create PR
+  cd {absolute_worktree_path}
+  git add -A && git commit -m "feat({component_id}): {component_name}"
+  git push -u origin epic/{component_id}
+  gh pr create --base main --head epic/{component_id} --title "feat({component_id}): {component_name}" --body "..."
+
+  Report: files changed, test results, PR URL, agent summary
   """
 )
 ```
@@ -194,36 +218,44 @@ Agent(
 for each wave in dependency_order:
     # Filter to pending components only (skip completed on resume)
     pending = [c for c in wave if components[c].status == "pending"]
-    
-    # Spawn up to MAX_PARALLEL_COMPONENTS
+
+    # Determine parallel count dynamically
+    quota = read_statusline_cache()  # check remaining API quota
+    parallel_count = decide_parallelism(pending, quota):
+        if quota.utilization > 85%: return min(2, len(pending))
+        if all components are low complexity: return min(8, len(pending))
+        if mixed complexity: return min(4, len(pending))
+        default: return min(4, len(pending))
+
+    # Spawn batch
     running_agents = []
-    for component_id in pending[:MAX_PARALLEL_COMPONENTS]:
+    for component_id in pending[:parallel_count]:
         Create worktree
         Update component status to "in_progress"
+        Choose agent type: supervisor (for medium/large) or executor (for small)
         Spawn agent with run_in_background=true
         running_agents.append(agent)
-    
-    # Wait for all agents in this wave
+
+    Report: "Wave {N}: spawning {parallel_count} components ({reasoning})"
+
+    # Wait for all agents in this batch
     for agent in running_agents:
         result = agent output
         Parse PR URL from result
         Update component: status=completed, pr_url=..., completed_at=...
-        
+
         # Check if rate limited
         if result indicates rate limit:
             Handle rate limit (see below)
             return  # Will resume later
-    
-    # After wave completes, check for newly unblocked components
+
+    # If wave has more pending components, run next batch
+    remaining_in_wave = [c for c in wave if components[c].status == "pending"]
+    if remaining_in_wave: continue wave loop
+
+    # After wave fully completes, check for newly unblocked components
     Update state file
 ```
-
-### Handling Remaining Components in Large Waves
-
-If a wave has more components than MAX_PARALLEL_COMPONENTS:
-- Run the first batch, wait for completion
-- Run the next batch from the same wave
-- Continue until all components in the wave are done
 
 ## Rate Limit Handling
 
