@@ -179,27 +179,30 @@ If creation fails, STOP and tell user to run `/workflow:setup`.
 #### Step 1: Parse input
 
 1. **Parse input**:
-   - First word = workflow type
-   - Look for `--mode=<mode>` flag (if present, skip auto-detection)
+   - First word = workflow type (feature, bugfix, refactor, epic)
+   - Look for `--mode=<mode>` flag (if present, skip mode auto-detection)
    - Look for `--style=<style>` flag (default: `full`)
    - Look for `--format=<format>` flag (default: `org`, options: `org`, `md`)
    - Rest = description
-   - If type unknown, list available types and ask
+   - If type is missing or unknown: spawn `workflow:task-analyzer` to auto-detect both type AND mode (see Step 2)
 
-#### Step 2: Auto-detect mode (if no `--mode` flag)
+#### Step 2: Auto-detect type and mode
 
    **Step 2a: Check for explicit keyword prefixes**
    ```
    thorough:, careful:, production: → thorough mode
    quick:, fast:, prototype: → turbo mode
    eco:, simple:, minor: → eco mode
+   epic: → epic type (with thorough mode, mandatory)
    ```
 
-   **Step 2b: If no prefix, analyze task complexity**
+   **Step 2b: If no prefix (or type not specified), analyze task**
 
-   Spawn `workflow:task-analyzer` (haiku) with task type + description. Returns `recommended_mode`, `confidence`, and `reasoning`.
+   Spawn `workflow:task-analyzer` (haiku) with task description. Returns `recommended_type` (feature/bugfix/refactor/epic), `recommended_mode`, `confidence`, and `reasoning`.
 
-   **Step 2c: Present recommendation to user** — show mode, confidence, reasoning, and offer `[Enter] Accept | [--mode=X] Override`.
+   The task-analyzer detects epic type when the description implies multi-component scope (e.g., "build from scratch", "full application with X, Y, Z", 3+ distinct modules).
+
+   **Step 2c: Present recommendation to user** — show type (if auto-detected), mode, confidence, reasoning, and offer `[Enter] Accept | [--type=X] [--mode=X] Override`.
 
    **Step 2d: Apply selected mode** — use recommendation if accepted, user override if specified. Log decision in workflow state.
 
