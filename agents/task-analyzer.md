@@ -9,11 +9,12 @@ tools: [Read, Glob, Grep]
 
 ## Purpose
 
-Analyze a task description to determine the optimal workflow mode based on:
+Analyze a task description to determine the optimal workflow **type** and **mode** based on:
 1. Explicit keyword triggers
 2. Task complexity indicators
 3. Security sensitivity
 4. Estimated scope
+5. Multi-component detection (epic type)
 
 ## Keyword Triggers (Highest Priority)
 
@@ -130,6 +131,7 @@ Return a structured analysis:
 
 ```json
 {
+  "recommended_type": "feature",
   "recommended_mode": "thorough",
   "confidence": "high",
   "reasoning": [
@@ -141,16 +143,49 @@ Return a structured analysis:
   "complexity_score": {
     "thorough": 5,
     "standard": 1,
-    "eco": 0
+    "eco": 0,
+    "epic": 0
   },
   "override_suggestion": null
 }
+```
+
+## Type Detection (Epic vs Standard)
+
+Before mode detection, determine if the task warrants the `epic` workflow type:
+
+### Epic Type Triggers
+```
+epic:, "from scratch", "build a complete", "build an entire",
+"full application", "full system", "full platform",
+"compiler", "framework", "engine", "operating system",
+"multiple components", "multi-component", "multi-module",
+"microservices", "monorepo", "full stack application"
+```
+
+### Epic Complexity Indicators
+Score +2 for each:
+- Description mentions 3+ distinct components/modules
+- Task implies building something from zero (not extending existing code)
+- Task mentions system-level architecture (compiler, engine, framework, platform)
+- Description uses phrases like "with X, Y, and Z" listing 3+ major features
+- Task would clearly take multiple days of work
+
+```
+if has_epic_keyword or epic_score >= 4:
+    recommended_type = "epic"
+    recommended_mode = "thorough"  # epic always uses thorough
+else:
+    recommended_type = <inferred from context: feature|bugfix|refactor>
+    recommended_mode = <from mode analysis below>
 ```
 
 ## Quick Decision Tree
 
 ```
 Task Description
+      │
+      ├─ Epic indicators (multi-component, from scratch, 3+ modules) → TYPE: epic
       │
       ├─ Has "thorough:", "careful:", "production:" → THOROUGH
       ├─ Has "quick:", "fast:", "prototype:" → TURBO
