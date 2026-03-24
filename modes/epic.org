@@ -38,12 +38,13 @@ Epic mode always uses thorough-level quality gates per component.
 :REQUIRE_ALL_GATES: true
 :END:
 
-* Execution Waves
+* Execution Strategy
 
-Components execute in dependency waves:
+Components execute in dependency waves with dynamic parallelism:
 - Wave N contains all components whose dependencies are fully completed
-- Up to MAX_PARALLEL_COMPONENTS execute simultaneously per wave
-- Each component runs a full sub-workflow (plan → implement → review → security → QG → completion)
+- Supervisor dynamically scales parallel count (default 4, up to 8 for small components, down to 1-2 near rate limits)
+- Small components (low complexity, <5 files): single executor agent
+- Medium/large components: swarm-style supervisor with parallel executors + 3-architect validation
 - Each component creates its own PR from its worktree branch
 
 * Rate Limit Handling
