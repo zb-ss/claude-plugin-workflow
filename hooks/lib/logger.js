@@ -1,14 +1,14 @@
 /**
  * Hook logging utility.
- * Appends timestamped entries to ~/.claude/workflows/hook.log.
+ * Appends timestamped entries to ~/.claude-workflows/hook.log.
  * Never throws — logging is best-effort.
  */
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { getHookLogPath } = require('../../lib/paths');
 
-const LOG_FILE = path.join(os.homedir(), '.claude', 'workflows', 'hook.log');
+const LOG_FILE = getHookLogPath();
 
 /**
  * Append a timestamped log entry. Never throws.

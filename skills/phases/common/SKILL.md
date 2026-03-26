@@ -26,8 +26,8 @@ These instructions apply to ALL workflow agents. Follow them strictly.
 
 Before any file operation, run `echo $HOME` to get the absolute home path. Use that in ALL tool calls.
 
-- WRONG: `Write(file_path="~/.claude/workflows/...")`
-- RIGHT: `Write(file_path="/home/user/.claude/workflows/...")`
+- WRONG: `Write(file_path="~/.claude-workflows/...")`
+- RIGHT: `Write(file_path="/home/user/.claude-workflows/...")`
 
 ## State File Updates
 
@@ -40,8 +40,8 @@ The workflow state file (`.org` or `.md`) is the source of truth. Update it:
 
 **Pattern:**
 ```
-Read(file_path="<HOME>/.claude/workflows/active/<id>.org")
-Edit(file_path="<HOME>/.claude/workflows/active/<id>.org",
+Read(file_path="<HOME>/.claude-workflows/active/<id>.org")
+Edit(file_path="<HOME>/.claude-workflows/active/<id>.org",
      old_string="**Status:** pending",
      new_string="**Status:** in-progress")
 ```

@@ -18,8 +18,8 @@ All custom workflow agents must use the `workflow:` prefix (e.g., `workflow:exec
 **The Write tool does NOT expand `~`** - you MUST use absolute paths!
 
 ```
-WRONG: Write(~/.claude/workflows/active/state.org)  → ERROR
-RIGHT: Write(/home/user/.claude/workflows/active/state.org) → SUCCESS
+WRONG: Write(~/.claude-workflows/active/state.org)  → ERROR
+RIGHT: Write(/home/user/.claude-workflows/active/state.org) → SUCCESS
 ```
 
 **Before writing to user directories, ALWAYS get $HOME first:**
@@ -30,7 +30,7 @@ echo $HOME
 # Output: /home/zashboy
 
 # Step 2: Use absolute path in Write tool
-Write(/home/zashboy/.claude/workflows/active/state.org)
+Write(/home/zashboy/.claude-workflows/active/state.org)
 ```
 
 This applies to ALL file operations in `~/.claude/` directories.
@@ -45,7 +45,7 @@ This applies to ALL file operations in `~/.claude/` directories.
 
 ```
 ## Codebase Context
-Read the context file at: <HOME>/.claude/workflows/context/<project-slug>.md
+Read the context file at: <HOME>/.claude-workflows/context/<project-slug>.md
 Focus on: [relevant sections for this task]
 ```
 
@@ -96,7 +96,7 @@ prompt: |
   8. Documentation Style - Docblocks, comments
 
   ## Output
-  Save context document to: $HOME/.claude/workflows/context/{project-slug}.md
+  Save context document to: $HOME/.claude-workflows/context/{project-slug}.md
 
   This context will be injected into all subsequent agent prompts
   to ensure consistency with established patterns.
@@ -106,7 +106,7 @@ prompt: |
 
 ```
 ## Codebase Context
-Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+Read the context file at: <HOME>/.claude-workflows/context/<project>.md
 Focus on: [relevant sections for this task]
 
 ## Task
@@ -334,7 +334,7 @@ prompt: |
   {changed_files_list}
 
   ## Codebase Context
-  Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+  Read the context file at: <HOME>/.claude-workflows/context/<project>.md
   Focus on: Naming conventions, code style
 
   ## Review Focus
@@ -390,7 +390,7 @@ prompt: |
   Review iteration: {iteration_number}
 
   ## Codebase Context
-  Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+  Read the context file at: <HOME>/.claude-workflows/context/<project>.md
   Focus on: Naming conventions, architectural patterns, error handling, code style
 
   ## Language & Framework Best Practices
@@ -461,7 +461,7 @@ prompt: |
   Review iteration: {iteration_number}
 
   ## Codebase Context
-  Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+  Read the context file at: <HOME>/.claude-workflows/context/<project>.md
   Focus on: Naming conventions, architectural patterns, error handling, code style
 
   ## Language & Framework Best Practices

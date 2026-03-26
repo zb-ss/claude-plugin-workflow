@@ -34,7 +34,7 @@ Quick review of changes for: {task_description}
 {changed_files_list}
 
 ## Codebase Context
-Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+Read the context file at: <HOME>/.claude-workflows/context/<project>.md
 Focus on: Naming conventions, code style
 
 ## Review Focus

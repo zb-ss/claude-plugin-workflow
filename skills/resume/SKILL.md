@@ -25,7 +25,7 @@ echo $HOME
 
 Then find the workflow file. **Never use `~` in tool calls** - always use the absolute path:
 ```
-Glob(pattern="<HOME>/.claude/workflows/active/*")
+Glob(pattern="<HOME>/.claude-workflows/active/*")
 ```
 (Replace `<HOME>` with the actual path, e.g., `/home/zashboy`)
 

@@ -107,7 +107,7 @@ for task in decomposed_tasks:
         {task.files}
 
         ## Codebase Context
-        Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+        Read the context file at: <HOME>/.claude-workflows/context/<project>.md
         Focus on sections relevant to your task.
 
         ## Context Efficiency
@@ -268,7 +268,7 @@ if context_limit_detected(agent_output):
         {remaining_objectives_only}
 
         ## Codebase Context
-        Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+        Read the context file at: <HOME>/.claude-workflows/context/<project>.md
 
         ## Files Already Written (do not redo)
         {files_on_disk}
@@ -367,8 +367,8 @@ After completion guard approves, the supervisor MUST ensure:
 
 ```bash
 HOME_DIR=$(echo $HOME)
-mv "$HOME_DIR/.claude/workflows/active/<workflow-id>.org" \
-   "$HOME_DIR/.claude/workflows/completed/"
+mv "$HOME_DIR/.claude-workflows/active/<workflow-id>.org" \
+   "$HOME_DIR/.claude-workflows/completed/"
 ```
 
 ### 2. Save Learnings to Project CLAUDE.md
@@ -391,7 +391,7 @@ This ensures learnings are auto-loaded by Claude Code for ALL future sessions.
 ║  Duration: <total-time>                                        ║
 ║  Files Changed: <count>                                        ║
 ║                                                                 ║
-║  Workflow moved to: ~/.claude/workflows/completed/             ║
-║  Learnings saved to: ~/.claude/workflows/memory/<project>.md   ║
+║  Workflow moved to: ~/.claude-workflows/completed/             ║
+║  Learnings saved to: ~/.claude-workflows/memory/<project>.md   ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```

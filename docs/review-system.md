@@ -123,7 +123,7 @@ If no code changes were made by the quality gate, this step is skipped.
 
 ## Codebase-Aware Reviews
 
-All reviewers read the project's codebase context file (`~/.claude/workflows/context/<project>.md`) to check implementations against:
+All reviewers read the project's codebase context file (`~/.claude-workflows/context/<project>.md`) to check implementations against:
 
 - Established naming conventions
 - Architectural patterns

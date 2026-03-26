@@ -63,7 +63,7 @@ Any findings = FAIL
 
 Read the codebase context file to understand project conventions:
 ```
-Read: <HOME>/.claude/workflows/context/<project>.md
+Read: <HOME>/.claude-workflows/context/<project>.md
 ```
 
 For each changed file, verify:
@@ -230,8 +230,8 @@ When you approve a workflow, you MUST perform these cleanup actions:
 HOME_DIR=$(echo $HOME)
 
 # Move workflow file from active to completed
-mv "$HOME_DIR/.claude/workflows/active/<workflow-id>.org" \
-   "$HOME_DIR/.claude/workflows/completed/<workflow-id>.org"
+mv "$HOME_DIR/.claude-workflows/active/<workflow-id>.org" \
+   "$HOME_DIR/.claude-workflows/completed/<workflow-id>.org"
 ```
 
 This keeps the active directory clean and provides history.
