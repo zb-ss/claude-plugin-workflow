@@ -7,7 +7,8 @@
 
     "additionalDirectories": [
       "~/.claude/workflows",
-      "~/.claude/plans"
+      "~/.claude/plans",
+      "~/.claude/skills"
     ],
 
     "allow": [
@@ -16,6 +17,12 @@
       "Grep",
       "Write",
       "Edit",
+      "Edit(~/.claude/workflows/**)",
+      "Edit(~/.claude/plans/**)",
+      "Edit(~/.claude/skills/**)",
+      "Write(~/.claude/workflows/**)",
+      "Write(~/.claude/plans/**)",
+      "Write(~/.claude/skills/**)",
       "NotebookEdit",
       "NotebookRead",
       "Task",
@@ -57,7 +64,7 @@
   "notes": {
     "usage": "Copy this to your project's .claude/settings.json (shared) or .claude/settings.local.json (personal)",
     "how-it-works": "Rules evaluate: deny > ask > allow. Bash(*) allows all commands except those in deny/ask lists.",
-    "allow": "Bash(*) permits all bash commands. mcp__<server-name> permits all tools from that MCP server. Add your own MCP servers here (e.g., mcp__slack, mcp__playwright).",
+    "allow": "Bash(*) permits all bash commands. Path-scoped Edit/Write rules (e.g., Edit(~/.claude/workflows/**)) ensure state files are written without prompts — additionalDirectories only grants read access. mcp__<server-name> permits all tools from that MCP server. Add your own MCP servers here (e.g., mcp__slack, mcp__playwright).",
     "ask": "These commands prompt for user confirmation before executing",
     "deny": "These commands are always blocked regardless of other rules",
     "env": "Environment variables that enhance workflow capabilities. Agent Teams enables peer-to-peer agent messaging for swarm mode (experimental)."

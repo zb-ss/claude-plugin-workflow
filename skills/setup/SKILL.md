@@ -69,7 +69,27 @@ The workflow plugin requires these permissions for autonomous operation:
 }
 ```
 
-The `additionalDirectories` setting grants access to paths outside the project directory. **Without this, workflows cannot create state files.**
+The `additionalDirectories` setting grants **read** access to paths outside the project directory. **Without this, workflows cannot read state files.**
+
+**CRITICAL for writing state files (MUST be in global `~/.claude/settings.json`):**
+
+Path-scoped Edit/Write rules are required because `additionalDirectories` only grants read access — bare `Edit`/`Write` in the allow list only cover the working directory:
+```json
+{
+  "permissions": {
+    "allow": [
+      "Edit(~/.claude/workflows/**)",
+      "Edit(~/.claude/plans/**)",
+      "Edit(~/.claude/skills/**)",
+      "Write(~/.claude/workflows/**)",
+      "Write(~/.claude/plans/**)",
+      "Write(~/.claude/skills/**)"
+    ]
+  }
+}
+```
+
+**Without these rules, every workflow will prompt for permission when writing state/org files.**
 
 **Recommended for workflows (can be global or project-level):**
 ```json
@@ -78,6 +98,8 @@ The `additionalDirectories` setting grants access to paths outside the project d
     "defaultMode": "acceptEdits",
     "allow": [
       "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite",
+      "Edit(~/.claude/workflows/**)", "Edit(~/.claude/plans/**)", "Edit(~/.claude/skills/**)",
+      "Write(~/.claude/workflows/**)", "Write(~/.claude/plans/**)", "Write(~/.claude/skills/**)",
       "Bash(*)"
     ],
     "ask": [
@@ -91,7 +113,7 @@ The `additionalDirectories` setting grants access to paths outside the project d
 }
 ```
 
-**How it works:** `Bash(*)` allows all bash commands. Rules evaluate: `deny > ask > allow`, so dangerous commands are still blocked and sensitive ones still prompt.
+**How it works:** `Bash(*)` allows all bash commands. Path-scoped `Edit(~/.claude/workflows/**)` and `Write(~/.claude/workflows/**)` allow writing state files without prompts. Rules evaluate: `deny > ask > allow`, so dangerous commands are still blocked and sensitive ones still prompt.
 
 ### Step 4: Show Status
 
@@ -112,14 +134,23 @@ Report the status in a clear format:
 - Global settings (~/.claude/settings.json): [found/not found]
 - Project settings (.claude/settings.json): [found/not found]
 
-### Permission Check
+### Permission Check (Read Access)
 ✓ additionalDirectories includes ~/.claude/workflows
 ✗ additionalDirectories missing ~/.claude/plans
 ✗ additionalDirectories missing ~/.claude/skills
 
+### Permission Check (Write Access)
+✓ Edit(~/.claude/workflows/**) in allow list
+✗ Write(~/.claude/workflows/**) missing from allow list
+✗ Edit(~/.claude/plans/**) missing from allow list
+✗ Write(~/.claude/plans/**) missing from allow list
+✗ Edit(~/.claude/skills/**) missing from allow list
+✗ Write(~/.claude/skills/**) missing from allow list
+
 ### Recommended Actions
 1. Add missing paths to additionalDirectories in ~/.claude/settings.json
-2. [Other recommendations]
+2. Add missing path-scoped Edit/Write rules to allow list
+3. [Other recommendations]
 ```
 
 ### Step 5: Offer to Update
@@ -196,9 +227,15 @@ After making changes, verify:
 - Ensure `additionalDirectories` includes all workflow paths
 - Restart Claude Code after settings changes
 
+**Issue: Permission prompts when writing state/org files**
+- `additionalDirectories` only grants **read** access — you also need path-scoped write rules
+- Ensure these are in your allow list: `Edit(~/.claude/workflows/**)`, `Write(~/.claude/workflows/**)` (and same for plans/skills)
+- Restart Claude Code after settings changes
+
 **Issue: State files not being created**
 - Run `/workflow:setup` to verify directory structure
 - Check that `~/.claude/workflows/active/` is writable
+- Ensure `Write(~/.claude/workflows/**)` is in your allow list
 
 **Issue: Context/memory not loading**
 - Verify `~/.claude/workflows/context/` exists
