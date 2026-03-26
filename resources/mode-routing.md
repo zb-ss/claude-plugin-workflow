@@ -22,7 +22,7 @@ This document explains how agents are selected based on execution mode.
 | eco | SKIP | - | Use existing context only, never generate |
 | thorough | workflow:codebase-analyzer | sonnet | Always regenerate fresh |
 
-Context file: `~/.claude/workflows/context/<project-slug>.md`
+Context file: `~/.claude-workflows/context/<project-slug>.md`
 
 ### Planning Phase
 

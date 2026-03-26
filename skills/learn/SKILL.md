@@ -11,7 +11,7 @@ Extract reusable patterns from the current session and save them for future use.
 
 1. Analyzes the current conversation for reusable patterns
 2. Filters out trivial fixes (typos, simple syntax)
-3. Saves valuable learnings to `~/.claude/workflows/memory/`
+3. Saves valuable learnings to `~/.claude-workflows/memory/`
 4. Creates skill files for highly reusable patterns
 
 ## Input

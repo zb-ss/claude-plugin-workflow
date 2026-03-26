@@ -160,8 +160,8 @@ Store the result (e.g., `/home/zashboy`). Use this for ALL file paths.
 
 Ensure workflow directories exist (use ABSOLUTE paths):
 ```
-$HOME_PATH/.claude/workflows/active/.gitkeep
-$HOME_PATH/.claude/workflows/completed/.gitkeep
+$HOME_PATH/.claude-workflows/active/.gitkeep
+$HOME_PATH/.claude-workflows/completed/.gitkeep
 ```
 
 #### Step 1: Parse input
@@ -251,7 +251,7 @@ Generate workflow ID: `YYYYMMDD-<random>` (e.g., `20260213-abc123`)
   - `{{AUTH_STRATEGY}}` -> auth flag value
   - `{{DEPTH}}` -> depth limit
   - `{{OUTPUT_DIR}}` -> resolved output directory
-- Write to: `$HOME/.claude/workflows/active/<id>.<format>`
+- Write to: `$HOME/.claude-workflows/active/<id>.<format>`
 
 **Create JSON state sidecar:**
 
@@ -259,7 +259,7 @@ Generate workflow ID: `YYYYMMDD-<random>` (e.g., `20260213-abc123`)
 {
   "$schema": "1.0.0",
   "workflow_id": "<id>",
-  "org_file": "<HOME>/.claude/workflows/active/<id>.<format>",
+  "org_file": "<HOME>/.claude-workflows/active/<id>.<format>",
   "workflow": {
     "type": "e2e-testing",
     "description": "<description>",
@@ -297,7 +297,7 @@ Generate workflow ID: `YYYYMMDD-<random>` (e.g., `20260213-abc123`)
 }
 ```
 
-Write to: `$HOME/.claude/workflows/active/<id>.state.json`
+Write to: `$HOME/.claude-workflows/active/<id>.state.json`
 
 Verify both files by reading them back.
 
@@ -316,7 +316,7 @@ Store this as `$TMPDIR_PATH`.
    ```json
    {
      "session_id": "<session_id>",
-     "workflow_path": "<HOME>/.claude/workflows/active/<id>.state.json",
+     "workflow_path": "<HOME>/.claude-workflows/active/<id>.state.json",
      "workflow_id": "<generated-id>",
      "bound_at": "<ISO timestamp>"
    }
@@ -336,7 +336,7 @@ E2E Testing Workflow
   Depth:     <depth>
   Mode:      <mode>
   Output:    <output_dir>
-  State:     ~/.claude/workflows/active/<id>.<format>
+  State:     ~/.claude-workflows/active/<id>.<format>
 
 Ready to begin Phase 0: Setup?
 ```

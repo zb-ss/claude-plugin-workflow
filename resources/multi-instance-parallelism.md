@@ -182,7 +182,7 @@ For maximum parallelism, combine all levels:
 Project memory is stored per-project, so all worktrees share learnings:
 
 ```
-~/.claude/workflows/memory/myapp.md  ← Shared by all worktrees
+~/.claude-workflows/memory/myapp.md  ← Shared by all worktrees
 ```
 
 This means:
@@ -203,10 +203,10 @@ If sessions need to coordinate:
 
 ```bash
 # Session 1: Write a note
-echo "Auth API ready at /api/auth/*" >> ~/.claude/workflows/notes/myapp.md
+echo "Auth API ready at /api/auth/*" >> ~/.claude-workflows/notes/myapp.md
 
 # Session 2: Check for notes
-cat ~/.claude/workflows/notes/myapp.md
+cat ~/.claude-workflows/notes/myapp.md
 ```
 
 ## Quick Reference
