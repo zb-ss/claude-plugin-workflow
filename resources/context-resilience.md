@@ -46,7 +46,7 @@ WRONG (embeds ~5K tokens into every spawn):
 
 RIGHT (agent reads it with their own context budget):
 ## Codebase Context
-Read the context file at: <HOME>/.claude/workflows/context/<project-slug>.md
+Read the context file at: <HOME>/.claude-workflows/context/<project-slug>.md
 Focus on sections relevant to your task: [list relevant sections]
 ```
 
@@ -113,7 +113,7 @@ Task(
     {only the uncompleted objectives from the state file}
 
     ## Codebase Context
-    Read the context file at: <HOME>/.claude/workflows/context/<project>.md
+    Read the context file at: <HOME>/.claude-workflows/context/<project>.md
     Focus on: [relevant sections only]
 
     ## Files Already Modified (do not redo)

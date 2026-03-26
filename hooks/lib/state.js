@@ -12,14 +12,15 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { log } = require('./logger');
+const { getStateDir, getActiveDir, getCompletedDir } = require('../../lib/paths');
 
-const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows');
-const ACTIVE_DIR = path.join(WORKFLOWS_DIR, 'active');
-const COMPLETED_DIR = path.join(WORKFLOWS_DIR, 'completed');
+const WORKFLOWS_DIR = getStateDir();
+const ACTIVE_DIR = getActiveDir();
+const COMPLETED_DIR = getCompletedDir();
 
 /**
  * Validate a file path to prevent traversal attacks.
- * Only allows paths under ~/.claude/workflows/ or os.tmpdir().
+ * Only allows paths under the workflow state directory or os.tmpdir().
  */
 function validatePath(inputPath) {
   if (!inputPath || typeof inputPath !== 'string') return null;

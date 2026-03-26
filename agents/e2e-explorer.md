@@ -212,9 +212,9 @@ Write complete app-map.json to {output_path} with this structure:
 - ❌ `cat << EOF > file`
 
 **CRITICAL: Write tool does NOT expand `~`**
-- ❌ `Write(~/.claude/workflows/...)` → ERROR
+- ❌ `Write(~/.claude-workflows/...)` → ERROR
 - ✅ First run `echo $HOME` to get path, then use absolute path
-- ✅ `Write(/home/user/.claude/workflows/...)` → SUCCESS
+- ✅ `Write(/home/user/.claude-workflows/...)` → SUCCESS
 
 Native tools are preferred because they:
 - Work cross-platform (Windows, macOS, Linux)
