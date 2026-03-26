@@ -35,10 +35,13 @@ Or manually add to your `.claude/settings.json`:
     "defaultMode": "acceptEdits",
     "additionalDirectories": [
       "~/.claude/workflows",
-      "~/.claude/plans"
+      "~/.claude/plans",
+      "~/.claude/skills"
     ],
     "allow": [
       "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite",
+      "Edit(~/.claude/workflows/**)", "Edit(~/.claude/plans/**)", "Edit(~/.claude/skills/**)",
+      "Write(~/.claude/workflows/**)", "Write(~/.claude/plans/**)", "Write(~/.claude/skills/**)",
       "Bash(*)"
     ],
     "ask": [
@@ -54,7 +57,7 @@ Or manually add to your `.claude/settings.json`:
 
 **How it works:** Rules evaluate in order: `deny > ask > allow`. `Bash(*)` allows all bash commands except those matched by `deny` (always blocked) or `ask` (prompts for confirmation).
 
-**Important:** The `additionalDirectories` setting grants Claude Code access to workflow state directories outside your project.
+**Important:** The `additionalDirectories` setting grants Claude Code **read** access to workflow state directories outside your project. The path-scoped `Edit(~/.claude/workflows/**)` and `Write(~/.claude/workflows/**)` rules are what actually allow **writing** state files without permission prompts — bare `Edit`/`Write` alone only cover the working directory.
 
 ## Hooks
 
