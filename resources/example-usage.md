@@ -25,7 +25,7 @@
 2. **Planning Phase:**
    - Supervisor spawns `Plan` agent
    - Agent explores codebase, identifies theme system, components to modify
-   - Creates plan at `.claude/plans/<id>-plan.md`
+   - Creates plan at `.claude-workflows/plans/<id>-plan.md`
    - Supervisor validates plan has actionable steps
 
 3. **Implementation Phase:**

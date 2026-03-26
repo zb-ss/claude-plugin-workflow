@@ -25,9 +25,9 @@ echo $HOME
 
 **Then use Glob tool with the ABSOLUTE path** (never use `~` in tool calls):
 ```
-Glob(pattern="<HOME>/.claude/workflows/active/*")
+Glob(pattern="<HOME>/.claude-workflows/active/*")
 ```
-(Replace `<HOME>` with the actual path, e.g., `/home/zashboy/.claude/workflows/active/*`)
+(Replace `<HOME>` with the actual path, e.g., `/home/zashboy/.claude-workflows/active/*`)
 
 This finds both `.org` and `.md` workflow files.
 
@@ -71,7 +71,7 @@ Steps:
 
 Current: Code Review (iteration 2, found 3 issues)
 
-State file: <HOME>/.claude/workflows/active/<id>.<format>
+State file: <HOME>/.claude-workflows/active/<id>.<format>
 ```
 
 ### 3. Show Recent Completed
@@ -79,7 +79,7 @@ State file: <HOME>/.claude/workflows/active/<id>.<format>
 If `$ARGUMENTS` is "completed" or "history":
 
 ```
-Glob(pattern="<HOME>/.claude/workflows/completed/*")
+Glob(pattern="<HOME>/.claude-workflows/completed/*")
 ```
 (Replace `<HOME>` with the actual absolute path)
 

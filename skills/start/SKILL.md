@@ -14,10 +14,10 @@ This workflow runs in **fully autonomous agentic mode**. Do NOT ask for permissi
 
 The Write, Read, Glob, and Edit tools do NOT expand `~`. You MUST run `echo $HOME` first and use the absolute path in ALL tool calls.
 
-- ❌ `Write(file_path="~/.claude/workflows/...")` → **WILL FAIL**
-- ❌ `Glob(pattern="~/.claude/workflows/*")` → **WILL FAIL**
-- ❌ `Read(file_path="~/.claude/workflows/...")` → **WILL FAIL**
-- ✅ `Write(file_path="/home/zashboy/.claude/workflows/...")` → WORKS
+- ❌ `Write(file_path="~/.claude-workflows/...")` → **WILL FAIL**
+- ❌ `Glob(pattern="~/.claude-workflows/*")` → **WILL FAIL**
+- ❌ `Read(file_path="~/.claude-workflows/...")` → **WILL FAIL**
+- ✅ `Write(file_path="/home/zashboy/.claude-workflows/...")` → WORKS
 
 **Wherever this document references `~/.claude/...` paths, you MUST substitute the actual absolute home path.**
 
@@ -169,8 +169,8 @@ The parent session only launches and relays results. For interactive control (pa
 
 **Step 0b:** Create workflow directories using Write tool with absolute paths:
 ```
-active/.gitkeep, completed/.gitkeep, context/.gitkeep, memory/.gitkeep → under $HOME_PATH/.claude/workflows/
-$HOME_PATH/.claude/plans/.gitkeep
+active/.gitkeep, completed/.gitkeep, context/.gitkeep, memory/.gitkeep → under $HOME_PATH/.claude-workflows/
+$HOME_PATH/.claude-workflows/plans/.gitkeep
 ```
 If creation fails, STOP and tell user to run `/workflow:setup`.
 
@@ -271,17 +271,17 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
    **If style=full**:
    - Read template from plugin: `templates/<type>-development.<format>` (use `.org` or `.md` per format flag)
    - Replace placeholders: `{{WORKFLOW_ID}}`, `{{TITLE}}` (first 50 chars), `{{DESCRIPTION}}`, `{{DATE}}`, `{{TIMESTAMP}}`, `{{BRANCH}}`, `{{BASE_BRANCH}}`, `{{MODE}}`, `{{STATE_FILE}}` (Step 5b path), `{{TESTS_ENABLED}}`
-   - Write to ABSOLUTE path: `<HOME>/.claude/workflows/active/<id>.<format>` — VERIFY by reading back
+   - Write to ABSOLUTE path: `<HOME>/.claude-workflows/active/<id>.<format>` — VERIFY by reading back
 
    **Step 5b: Create JSON state sidecar** (CRITICAL — enables hook enforcement):
 
-   Write `<HOME>/.claude/workflows/active/<id>.state.json` — VERIFY by reading back.
+   Write `<HOME>/.claude-workflows/active/<id>.state.json` — VERIFY by reading back.
 
    ```json
    {
      "$schema": "1.0.0",
      "workflow_id": "<id>",
-     "org_file": "<HOME>/.claude/workflows/active/<id>.<format>",
+     "org_file": "<HOME>/.claude-workflows/active/<id>.<format>",
      "workflow": { "type": "<feature|bugfix|refactor>", "description": "<desc>", "branch": "<branch>" },
      "mode": { "current": "<mode>", "original": "<mode>" },
      "config": { "tests_enabled": <bool>, "max_code_review_iterations": <n>, "max_security_iterations": <n> },
@@ -302,13 +302,13 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
 
    Glob for `$TMPDIR_PATH/workflow-session-marker-*.json`, read the most recent to get `session_id`. Write `$TMPDIR_PATH/workflow-binding-{session_id}.json` with `{session_id, workflow_path, workflow_id, bound_at}` — verify by reading back. If no marker found, skip (hooks fall back to most recent workflow).
 
-   **If style=light**: Write `$HOME_PATH/.claude/workflows/state.json`, use TodoWrite for step tracking.
+   **If style=light**: Write `$HOME_PATH/.claude-workflows/state.json`, use TodoWrite for step tracking.
 
 6. **Run Codebase Analysis** (unless eco mode or context is fresh):
-   Check if `<HOME>/.claude/workflows/context/<project-slug>.md` exists and is under 7 days old. If not, spawn `codebase-analyzer` agent. In eco mode, skip and use existing context if available.
+   Check if `<HOME>/.claude-workflows/context/<project-slug>.md` exists and is under 7 days old. If not, spawn `codebase-analyzer` agent. In eco mode, skip and use existing context if available.
 
 7. **Load Project Memory** (lightweight, always run):
-   Read `<HOME>/.claude/workflows/memory/<project-slug>.md` if it exists. Key learnings (~1-2k tokens): past decisions, codebase patterns, resolved issues, project conventions.
+   Read `<HOME>/.claude-workflows/memory/<project-slug>.md` if it exists. Key learnings (~1-2k tokens): past decisions, codebase patterns, resolved issues, project conventions.
 
 8. **Confirm with user**: show workflow ID + state location, mode, context file status (fresh/generated/skipped), ask "Ready to begin Step 1: Planning?"
 
@@ -359,7 +359,7 @@ All agents receive a **reference** to the codebase context file — never embed 
 Include in every agent prompt:
 ---
 ## Codebase Context
-Read the context file at: <HOME>/.claude/workflows/context/<project-slug>.md
+Read the context file at: <HOME>/.claude-workflows/context/<project-slug>.md
 Focus on: [list relevant sections for this task, e.g., "Naming Conventions, Testing Patterns"]
 ---
 ```
@@ -384,7 +384,7 @@ Agent(
   prompt="""
   Workflow ID: {workflow_id}
   ## Codebase Context
-  Read: <HOME>/.claude/workflows/context/<project>.md
+  Read: <HOME>/.claude-workflows/context/<project>.md
   Focus on: [relevant sections]
   ## Task
   {phase-specific instructions}
@@ -516,7 +516,7 @@ If user types anything during the workflow:
 
 When `--style=light` is used:
 
-1. Use `<HOME>/.claude/workflows/state.json` instead of org files
+1. Use `<HOME>/.claude-workflows/state.json` instead of org files
 2. Use TodoWrite tool for step tracking
 3. Skip org file creation
 4. State structure:
@@ -544,7 +544,7 @@ When `--style=light` is used:
 When all gates pass:
 1. Update state: fill Completion Summary, set COMPLETED_AT, calculate TOTAL_DURATION
 2. Generate summary for user (mode, files changed, review iterations, warnings)
-3. Save learnings to `<HOME>/.claude/workflows/memory/<project-slug>.md` (completion-guard agent handles this via its skill)
+3. Save learnings to `<HOME>/.claude-workflows/memory/<project-slug>.md` (completion-guard agent handles this via its skill)
 4. **Offer live testing** if the completion guard detected web-facing file changes — surface the `/workflow:test-live` suggestion with pre-filled URL if detectable
 5. Ask about commit (suggest message based on work done)
 6. Clean up session temp files from `$TMPDIR_PATH` (workflow-session-marker, workflow-binding, workflow-stop, workflow-deny, workflow-complete files) — use the session_id from Step 5c; skip if none found
@@ -565,13 +565,13 @@ If a subagent fails or returns unexpected results:
 
 - Mode configs: `modes/` in plugin directory
 - Templates: `templates/` in plugin directory (both `.org` and `.md` formats)
-- **Active state files**: `<HOME>/.claude/workflows/active/<id>.org` or `<id>.md`
-- JSON state (light style): `<HOME>/.claude/workflows/state.json`
-- Completed: `<HOME>/.claude/workflows/completed/`
-- Codebase context: `<HOME>/.claude/workflows/context/`
-- **Project memory**: `<HOME>/.claude/workflows/memory/`
+- **Active state files**: `<HOME>/.claude-workflows/active/<id>.org` or `<id>.md`
+- JSON state (light style): `<HOME>/.claude-workflows/state.json`
+- Completed: `<HOME>/.claude-workflows/completed/`
+- Codebase context: `<HOME>/.claude-workflows/context/`
+- **Project memory**: `<HOME>/.claude-workflows/memory/`
 - Learned skills: `<HOME>/.claude/skills/learned/`
-- Hook logs: `<HOME>/.claude/workflows/hook.log`
+- Hook logs: `<HOME>/.claude-workflows/hook.log`
 
 **Note:** `<HOME>` = absolute home path from `echo $HOME`. Never use `~` in tool calls.
 

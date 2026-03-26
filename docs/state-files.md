@@ -24,7 +24,7 @@ Use `--format=md` to create markdown state files:
 
 ## Org-Mode Format (Default)
 
-State files are stored at `~/.claude/workflows/active/<id>.org`:
+State files are stored at `~/.claude-workflows/active/<id>.org`:
 
 ```org
 #+TITLE: Feature: Add user authentication
@@ -93,9 +93,9 @@ Claude reads the state file before each step, so your edits are respected.
 
 | Path | Purpose |
 |------|---------|
-| `~/.claude/workflows/active/` | Active workflow state files |
-| `~/.claude/workflows/completed/` | Archived completed workflows |
-| `~/.claude/workflows/context/` | Codebase context files |
-| `~/.claude/workflows/memory/` | Project memory files |
-| `~/.claude/plans/` | Plan files |
+| `~/.claude-workflows/active/` | Active workflow state files |
+| `~/.claude-workflows/completed/` | Archived completed workflows |
+| `~/.claude-workflows/context/` | Codebase context files |
+| `~/.claude-workflows/memory/` | Project memory files |
+| `~/.claude-workflows/plans/` | Plan files |
 ```

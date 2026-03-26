@@ -14,6 +14,7 @@ const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { getStateDir } = require('../lib/paths');
 
 // Get file path from environment variable
 const filePath = process.env.CLAUDE_FILE_PATH;
@@ -190,11 +191,12 @@ function validateFilePath(inputPath) {
     const tmpDir = os.tmpdir();
     const homeDir = os.homedir();
 
-    // Allowed paths: current working directory, temp, or under home/.claude
+    // Allowed paths: current working directory, temp, home/.claude, or workflow state dir
     const allowedRoots = [
       path.resolve(cwd),
       path.resolve(tmpDir),
       path.resolve(path.join(homeDir, '.claude')),
+      path.resolve(getStateDir()),
     ];
 
     // Check if path is under an allowed root

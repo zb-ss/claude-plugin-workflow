@@ -268,7 +268,7 @@ Testing: Jest, supertest for integration
 
 ## Context File Location
 
-Save to: `<HOME>/.claude/workflows/context/{project-slug}.md` (resolve `<HOME>` via `echo $HOME` - never use `~` in Write tool paths)
+Save to: `<HOME>/.claude-workflows/context/{project-slug}.md` (resolve `<HOME>` via `echo $HOME` - never use `~` in Write tool paths)
 
 The project slug is derived from the git remote or directory name.
 

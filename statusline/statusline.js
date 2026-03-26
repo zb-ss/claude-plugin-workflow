@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
+const { getTranslateDir } = require('../lib/paths');
 
 // --- Configuration ---
 const CACHE_TTL_MS = 60_000;
@@ -226,7 +227,7 @@ function formatCost(cost_usd) {
 
 // --- Translate workflow progress ---
 function getTranslateProgress(sessionId, cwd) {
-  const TRANSLATE_DIR = path.join(os.homedir(), '.claude', 'workflows', 'translate');
+  const TRANSLATE_DIR = getTranslateDir();
   try {
     if (!fs.existsSync(TRANSLATE_DIR)) return null;
 
