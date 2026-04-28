@@ -128,6 +128,27 @@ if still_failing:
     pause_for_user_intervention()
 #+end_src
 
+** Rate-Limit Handling
+
+Swarm supervisors follow the same rate-limit protocol as every other workflow
+type. See =skills/shared/rate-limit-handling.md= for the full protocol.
+
+After every parallel batch (executors or architects), the supervisor runs
+=detectRateLimit()= on each agent's output. If any agent reports a marker:
+
+1. Capture partial results from agents that *did* return successfully — the
+   pause should not throw away work already done.
+2. Call =applyRateLimitPause(state, { reason, resumesAt, workflowPhase })= with
+   =workflowPhase= set to the swarm phase the supervisor was in
+   (=implementation=, =validation=, =quality_gate=).
+3. Schedule =CronCreate= with =buildResumePrompt(workflow_id)= and
+   =buildCronExpression(resumesAt)=.
+4. Print =buildPauseReport(...)= and exit the supervisor turn.
+
+On =/workflow:resume=, the resume skill clears the pause and re-enters swarm
+mode at the recorded phase, picking up only the work units that did NOT
+complete before the pause.
+
 ** Comparison with Other Modes
 
 | Feature                    | standard | thorough | swarm     |

@@ -259,49 +259,23 @@ for each wave in dependency_order:
 
 ## Rate Limit Handling
 
-### Detection
+Rate-limit detection and pause/resume are **shared across all workflow types**.
+Follow the protocol defined in
+`skills/shared/rate-limit-handling.md` — the same logic that swarm, feature,
+and translate workflows use.
 
-Watch for these signals after agent spawns:
-- Agent output contains: "rate limit", "429", "capacity", "overloaded", "throttled"
-- Agent returns empty or error output unexpectedly
-- Multiple agents fail simultaneously
+In short:
+1. After every agent spawn, run `detectRateLimit(<agent output>)` from
+   `hooks/lib/rate-limit.js`.
+2. If non-null, call `applyRateLimitPause(state, …)` with the soonest reset
+   time from `getNextResetIso()`.
+3. Schedule a one-shot `CronCreate` with the prompt from `buildResumePrompt`
+   and the cron expression from `buildCronExpression`.
+4. Report the pause via `buildPauseReport()` and return.
 
-### Response
-
-1. Read the statusline cache for exact reset time:
-```bash
-cat /tmp/claude-statusline-usage.json
-```
-Parse `data.five_hour.resets_at` or `data.seven_day.resets_at` (whichever is sooner).
-
-2. Update state:
-```json
-"phase": {
-  "rate_limit": {
-    "paused_at": "<now ISO>",
-    "resumes_at": "<resets_at ISO>",
-    "reason": "5-hour session limit reached"
-  }
-}
-```
-
-3. Schedule auto-resume (within current session):
-Calculate the cron expression from resets_at:
-```
-resets_at = "2026-03-24T15:30:00Z"
-→ Convert to local time
-→ CronCreate(cron="30 15 24 3 *", prompt="/workflow:resume {workflow_id}", recurring=false)
-```
-Store the cron job ID in state: `rate_limit.cron_job_id`
-
-4. Report to user:
-```
-Rate limit reached. Workflow paused.
-  Resumes at: {resets_at} ({human_readable_countdown})
-  Auto-resume scheduled: Yes (within this session)
-  
-  If you close this session, run /workflow:resume when you return.
-```
+Resume is handled by `/workflow:resume`, which clears the pause when
+`resumes_at` has passed and dispatches into the epic resume branch
+(component-level or integration-level — see resume/SKILL.md).
 
 ## Phase 3: Integration
 
@@ -364,6 +338,32 @@ After integration PR is created, clean up worktrees:
 git worktree remove .claude/worktrees/epic-{component_id}
 git branch -d epic/{component_id}  # or leave for reference
 ```
+
+## Phase 4: Post-Merge Multi-Architect Review (mandatory in thorough)
+
+After Phase 3 closes with all components merged and integration tests green,
+the supervisor MUST run the post-merge multi-architect review. See
+`skills/phases/post-merge-review/SKILL.md` for the full protocol.
+
+In summary:
+
+1. Spawn three opus architects in parallel: `workflow:architect` (functional),
+   `workflow:security-deep` (security), `workflow:reviewer-deep` (quality).
+2. Each architect compares the integrated codebase against
+   `state.workflow.description` + `state.architecture.components` +
+   `state.components` (per-component plans) and returns a `[PASS]/[FAIL]`
+   checklist with a final `VERDICT:` line.
+3. Aggregate. If any architect returns `VERDICT: FAIL`, run an executor to
+   fix every `[FAIL]` line and re-spawn all three architects. Loop up to
+   `MAX_REVIEW_ITERATIONS` (default 5).
+4. On 100% PASS: write all architect outputs to `<id>.review.md`, mark
+   `gates.post_merge_review.status = "passed"`, advance to `completion_guard`.
+5. On exhausted iterations: pause and surface the still-failing items to the
+   user — do not auto-pass.
+
+This phase is **zero-tolerance**: a single missing acceptance criterion, even
+cosmetic, fails the gate. The trade-off is honest: epic-level investments
+deserve the scrutiny.
 
 ## State Update Pattern
 

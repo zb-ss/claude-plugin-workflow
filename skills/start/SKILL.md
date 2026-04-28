@@ -17,9 +17,19 @@ The Write, Read, Glob, and Edit tools do NOT expand `~`. You MUST run `echo $HOM
 - ❌ `Write(file_path="~/.claude-workflows/...")` → **WILL FAIL**
 - ❌ `Glob(pattern="~/.claude-workflows/*")` → **WILL FAIL**
 - ❌ `Read(file_path="~/.claude-workflows/...")` → **WILL FAIL**
-- ✅ `Write(file_path="/home/zashboy/.claude-workflows/...")` → WORKS
+- ✅ `Write(file_path="<HOME>/.claude-workflows/active/<repo-key>/...")` → WORKS
 
 **Wherever this document references `~/.claude/...` paths, you MUST substitute the actual absolute home path.**
+
+### CRITICAL: Workflows are repo-scoped
+
+Workflow state lives under `<state-root>/active/<repo-key>/` where `<repo-key>` is
+derived from the current repo's git remote (or its toplevel path). This keeps
+workflows in different repos isolated from each other.
+
+**Always resolve `<ACTIVE_DIR>` before reading or writing state files.** Use the
+plugin helper (Step 0d below) — never hardcode a repo-key, never write to the
+flat `<state-root>/active/` root for new workflows.
 
 ### Permission Model
 
@@ -176,6 +186,26 @@ If creation fails, STOP and tell user to run `/workflow:setup`.
 
 **Step 0c:** Run `node -e "console.log(require('os').tmpdir())"` → store as `$TMPDIR_PATH`.
 
+**Step 0d (CRITICAL — repo-scoped active dir):** Resolve the per-repo active
+directory by invoking the plugin helper:
+
+```bash
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
+ACTIVE_DIR=$(node "$PLUGIN_ROOT/lib/active-dir-cli.js")
+echo "$ACTIVE_DIR"
+```
+
+Store the output as `$ACTIVE_DIR` and use it as the parent directory for ALL
+state files created in this workflow. The helper auto-creates the directory
+and honors `CLAUDE_WORKFLOW_STATE_DIR` and `CLAUDE_WORKFLOW_REPO_KEY` env vars.
+
+If the helper cannot be found at the standard location, fall back to:
+```bash
+ACTIVE_DIR="$HOME_PATH/.claude-workflows/active/$(cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" && basename "$PWD")-$(printf %s "$(git remote get-url origin 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || pwd)" | { command -v sha256sum >/dev/null && sha256sum || shasum -a 256; } | cut -c1-12)"
+mkdir -p "$ACTIVE_DIR"
+```
+But prefer the helper — it is the source of truth.
+
 #### Step 1: Parse input
 
 1. **Parse input**:
@@ -214,7 +244,17 @@ When type is `epic`:
 - **Branch**: Managed automatically (epic/{component_id} per component — skip branch question)
 - **Template**: Use `templates/epic-development.<format>` instead of `templates/feature-development.<format>`
 - **Initial phase**: `architecture` (not `planning`)
-- **Phase order**: architecture → component_execution → integration → completion_guard
+- **Phase order**: architecture → component_execution → integration → **post_merge_review** → completion_guard
+
+The `post_merge_review` phase runs the zero-tolerance multi-architect review
+defined in `skills/phases/post-merge-review/SKILL.md` — three opus architects
+(functional / security / quality) in parallel, comparing every delivered file
+against the original `workflow.description` and per-component plans. Any FAIL
+loops back into a fix-and-re-review cycle until 100% PASS.
+
+For non-epic workflows running in `thorough` mode, `post_merge_review` is
+**also** inserted (between `quality_gate` and `completion_guard`). Standard /
+turbo / eco modes skip it.
 
 The JSON state sidecar uses an extended schema for epic workflows:
 ```json
@@ -233,13 +273,14 @@ The JSON state sidecar uses an extended schema for epic workflows:
   "phase": {
     "current": "architecture",
     "completed": [],
-    "remaining": ["component_execution", "integration", "completion_guard"],
-    "rate_limit": { "paused_at": null, "resumes_at": null, "cron_job_id": null, "reason": null }
+    "remaining": ["component_execution", "integration", "post_merge_review", "completion_guard"],
+    "rate_limit": { "paused_at": null, "resumes_at": null, "cron_job_id": null, "reason": null, "workflow_phase": null }
   },
   "gates": {
     "architecture": { "status": "pending", "iteration": 0 },
     "component_execution": { "status": "pending", "iteration": 0 },
     "integration": { "status": "pending", "iteration": 0 },
+    "post_merge_review": { "status": "pending", "iteration": 0, "verdicts": { "functional": null, "security": null, "quality": null } },
     "completion_guard": { "status": "pending", "iteration": 0 }
   },
   "architecture": { "components": [], "dependency_order": [], "interfaces": {} },
@@ -267,21 +308,22 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
 5. **Create workflow state** (CRITICAL - use Write tool with ABSOLUTE paths):
    - Generate ID: `YYYYMMDD-<random>` (e.g., `20260204-a1b2c3`)
    - Use the home directory path from Step 0a (e.g., `/home/user`)
+   - Use `$ACTIVE_DIR` from Step 0d as the parent for the org and state files
 
    **If style=full**:
    - Read template from plugin: `templates/<type>-development.<format>` (use `.org` or `.md` per format flag)
    - Replace placeholders: `{{WORKFLOW_ID}}`, `{{TITLE}}` (first 50 chars), `{{DESCRIPTION}}`, `{{DATE}}`, `{{TIMESTAMP}}`, `{{BRANCH}}`, `{{BASE_BRANCH}}`, `{{MODE}}`, `{{STATE_FILE}}` (Step 5b path), `{{TESTS_ENABLED}}`
-   - Write to ABSOLUTE path: `<HOME>/.claude-workflows/active/<id>.<format>` — VERIFY by reading back
+   - Write to ABSOLUTE path: `$ACTIVE_DIR/<id>.<format>` — VERIFY by reading back
 
    **Step 5b: Create JSON state sidecar** (CRITICAL — enables hook enforcement):
 
-   Write `<HOME>/.claude-workflows/active/<id>.state.json` — VERIFY by reading back.
+   Write `$ACTIVE_DIR/<id>.state.json` — VERIFY by reading back.
 
    ```json
    {
      "$schema": "1.0.0",
      "workflow_id": "<id>",
-     "org_file": "<HOME>/.claude-workflows/active/<id>.<format>",
+     "org_file": "<ACTIVE_DIR>/<id>.<format>",
      "workflow": { "type": "<feature|bugfix|refactor>", "description": "<desc>", "branch": "<branch>" },
      "mode": { "current": "<mode>", "original": "<mode>" },
      "config": { "tests_enabled": <bool>, "max_code_review_iterations": <n>, "max_security_iterations": <n> },
@@ -565,9 +607,9 @@ If a subagent fails or returns unexpected results:
 
 - Mode configs: `modes/` in plugin directory
 - Templates: `templates/` in plugin directory (both `.org` and `.md` formats)
-- **Active state files**: `<HOME>/.claude-workflows/active/<id>.org` or `<id>.md`
+- **Active state files**: `<HOME>/.claude-workflows/active/<repo-key>/<id>.org` or `<id>.md` (resolve `<repo-key>` via `$ACTIVE_DIR` from Step 0d)
 - JSON state (light style): `<HOME>/.claude-workflows/state.json`
-- Completed: `<HOME>/.claude-workflows/completed/`
+- Completed: `<HOME>/.claude-workflows/completed/<repo-key>/`
 - Codebase context: `<HOME>/.claude-workflows/context/`
 - **Project memory**: `<HOME>/.claude-workflows/memory/`
 - Learned skills: `<HOME>/.claude/skills/learned/`

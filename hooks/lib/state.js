@@ -12,11 +12,23 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { log } = require('./logger');
-const { getStateDir, getActiveDir, getCompletedDir } = require('../../lib/paths');
+const {
+  getStateDir,
+  getActiveDir,
+  getActiveBaseDir,
+  getCompletedDir,
+  getCompletedBaseDir,
+} = require('../../lib/paths');
+const { getRepoKey } = require('../../lib/repo-key');
 
 const WORKFLOWS_DIR = getStateDir();
+// NOTE: ACTIVE_DIR / COMPLETED_DIR resolve at module-load time using the cwd in
+// which the hook was invoked. For multi-repo correctness we also expose helpers
+// that re-derive the path on demand. validatePath only requires WORKFLOWS_DIR.
 const ACTIVE_DIR = getActiveDir();
 const COMPLETED_DIR = getCompletedDir();
+const ACTIVE_BASE_DIR = getActiveBaseDir();
+const COMPLETED_BASE_DIR = getCompletedBaseDir();
 
 /**
  * Validate a file path to prevent traversal attacks.
@@ -108,35 +120,111 @@ function updateState(statePath, fn) {
 }
 
 /**
- * Scan for active .state.json files.
- * Returns array of { path, state } sorted by updated_at descending.
+ * Collect .state.json files in a single directory (non-recursive).
+ * Returns array of { path, state }.
  */
-function findActiveStates() {
+function readStatesInDir(dir) {
+  const out = [];
   try {
-    if (!fs.existsSync(ACTIVE_DIR)) return [];
-
-    const files = fs.readdirSync(ACTIVE_DIR)
-      .filter(f => f.endsWith('.state.json'));
-
-    const states = [];
-    for (const file of files) {
-      const filePath = path.join(ACTIVE_DIR, file);
+    if (!fs.existsSync(dir)) return out;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.state.json')) continue;
+      const filePath = path.join(dir, entry.name);
       const state = readState(filePath);
-      if (state) {
-        states.push({ path: filePath, state });
+      if (state) out.push({ path: filePath, state });
+    }
+  } catch {
+    // ignore — return whatever was collected
+  }
+  return out;
+}
+
+/**
+ * Scan for active .state.json files.
+ *
+ * @param {Object} [opts]
+ * @param {string} [opts.cwd] - cwd used to derive the current repo-key
+ *   (defaults to process.cwd()).
+ * @param {string} [opts.scope] - 'current' (default) returns workflows for the
+ *   current repo plus legacy flat-layout files; 'all' returns workflows from
+ *   every repo bucket plus legacy.
+ * @returns {Array<{path:string, state:object, scope:string}>} sorted by
+ *   updated_at descending. Each entry includes its `scope`: 'current',
+ *   'other:<repo-key>', or 'legacy'.
+ */
+function findActiveStates(opts) {
+  const o = opts || {};
+  const scope = o.scope || 'current';
+  const collected = [];
+
+  try {
+    if (!fs.existsSync(ACTIVE_BASE_DIR)) return [];
+
+    let currentKey = null;
+    try {
+      currentKey = getRepoKey(o.cwd);
+    } catch {
+      // No repo key — fall through to legacy-only listing
+    }
+
+    // Legacy flat-layout files at the active root (pre-repo-scoping).
+    for (const entry of readStatesInDir(ACTIVE_BASE_DIR)) {
+      collected.push({ ...entry, scope: 'legacy' });
+    }
+
+    // Per-repo subdirectories.
+    const subdirs = fs.readdirSync(ACTIVE_BASE_DIR, { withFileTypes: true })
+      .filter(e => e.isDirectory())
+      .map(e => e.name);
+
+    for (const sub of subdirs) {
+      // Treat directories starting with "_" as reserved (e.g., _archive).
+      if (sub.startsWith('_')) continue;
+      const isCurrent = sub === currentKey;
+      if (scope === 'current' && !isCurrent) continue;
+      const states = readStatesInDir(path.join(ACTIVE_BASE_DIR, sub));
+      for (const entry of states) {
+        collected.push({ ...entry, scope: isCurrent ? 'current' : `other:${sub}` });
       }
     }
 
-    states.sort((a, b) => {
+    collected.sort((a, b) => {
       const dateA = new Date(a.state.updated_at || 0);
       const dateB = new Date(b.state.updated_at || 0);
       return dateB - dateA;
     });
 
-    return states;
+    return collected;
   } catch {
     return [];
   }
+}
+
+/**
+ * Count workflows that exist in repo buckets *other* than the current cwd's.
+ * Cheap helper for the SessionStart "N workflows in other repos" hint.
+ */
+function countOtherRepoStates(opts) {
+  const o = opts || {};
+  let currentKey = null;
+  try { currentKey = getRepoKey(o.cwd); } catch { /* ignore */ }
+  let count = 0;
+  try {
+    if (!fs.existsSync(ACTIVE_BASE_DIR)) return 0;
+    const subdirs = fs.readdirSync(ACTIVE_BASE_DIR, { withFileTypes: true })
+      .filter(e => e.isDirectory() && !e.name.startsWith('_'))
+      .map(e => e.name);
+    for (const sub of subdirs) {
+      if (sub === currentKey) continue;
+      try {
+        const files = fs.readdirSync(path.join(ACTIVE_BASE_DIR, sub))
+          .filter(f => f.endsWith('.state.json'));
+        count += files.length;
+      } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+  return count;
 }
 
 /**
@@ -357,37 +445,50 @@ function cleanupStaleMarkers(maxAgeMs = 24 * 60 * 60 * 1000) {
 }
 
 /**
- * Find orphaned org files (org/md files without a corresponding .state.json).
+ * Find orphaned org files (org/md files without a corresponding .state.json)
+ * across the current repo's bucket and the legacy flat layout.
  */
-function findOrphanedOrgFiles() {
+function findOrphanedOrgFiles(opts) {
+  const o = opts || {};
+  const dirs = [ACTIVE_BASE_DIR];
   try {
-    if (!fs.existsSync(ACTIVE_DIR)) return [];
+    const key = getRepoKey(o.cwd);
+    dirs.push(path.join(ACTIVE_BASE_DIR, key));
+  } catch { /* ignore */ }
 
-    const files = fs.readdirSync(ACTIVE_DIR);
-    const orgFiles = files.filter(f => f.endsWith('.org') || f.endsWith('.md'));
-    const stateFiles = new Set(
-      files.filter(f => f.endsWith('.state.json'))
-        .map(f => f.replace('.state.json', ''))
-    );
-
-    return orgFiles.filter(f => {
-      const base = f.replace(/\.(org|md)$/, '');
-      return !stateFiles.has(base);
-    }).map(f => path.join(ACTIVE_DIR, f));
-  } catch {
-    return [];
+  const orphans = [];
+  for (const dir of dirs) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      const files = fs.readdirSync(dir, { withFileTypes: true })
+        .filter(e => e.isFile())
+        .map(e => e.name);
+      const orgFiles = files.filter(f => f.endsWith('.org') || f.endsWith('.md'));
+      const stateFiles = new Set(
+        files.filter(f => f.endsWith('.state.json'))
+          .map(f => f.replace('.state.json', ''))
+      );
+      for (const f of orgFiles) {
+        const base = f.replace(/\.(org|md)$/, '');
+        if (!stateFiles.has(base)) orphans.push(path.join(dir, f));
+      }
+    } catch { /* ignore this dir */ }
   }
+  return orphans;
 }
 
 module.exports = {
   WORKFLOWS_DIR,
   ACTIVE_DIR,
+  ACTIVE_BASE_DIR,
   COMPLETED_DIR,
+  COMPLETED_BASE_DIR,
   validatePath,
   readState,
   writeState,
   updateState,
   findActiveStates,
+  countOtherRepoStates,
   getActiveWorkflow,
   writeSessionMarker,
   bindSessionToWorkflow,

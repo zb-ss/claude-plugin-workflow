@@ -23,14 +23,33 @@ First, get the absolute home path:
 echo $HOME
 ```
 
-Then find the workflow file. **Never use `~` in tool calls** - always use the absolute path:
+**Resolve the repo-scoped active directory** (workflows are isolated per repo
+since v2):
+```bash
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
+ACTIVE_DIR=$(node "$PLUGIN_ROOT/lib/active-dir-cli.js")
+echo "$ACTIVE_DIR"
 ```
-Glob(pattern="<HOME>/.claude-workflows/active/*")
-```
-(Replace `<HOME>` with the actual path, e.g., `/home/zashboy`)
+Store as `$ACTIVE_DIR`. Also note the legacy flat directory
+`$HOME/.claude-workflows/active/` — workflows created before repo-scoping live
+there directly (no subdirectory).
 
-- If `$ARGUMENTS` is empty: Find most recent `.org` or `.md` file in the active directory
-- If `$ARGUMENTS` provided: Look for matching workflow ID
+Then find the workflow file. **Never use `~` in tool calls** — always use the
+absolute path. Search BOTH the repo-scoped dir and the legacy flat root:
+```
+Glob(pattern="$ACTIVE_DIR/*")
+Glob(pattern="$HOME/.claude-workflows/active/*.state.json")    # legacy
+Glob(pattern="$HOME/.claude-workflows/active/*.org")           # legacy
+Glob(pattern="$HOME/.claude-workflows/active/*.md")            # legacy
+```
+
+- If `$ARGUMENTS` is empty: prefer the most recent `.org`/`.md` file in
+  `$ACTIVE_DIR`. Fall back to a legacy file only if the repo-scoped dir is
+  empty.
+- If `$ARGUMENTS` provided: search both locations for a matching workflow ID.
+
+If a workflow is found in the legacy flat layout, leave it where it is — do not
+auto-migrate. Resume operates in place.
 
 ### 2. Read and Parse the Org File
 
@@ -100,34 +119,52 @@ If a step was started but not completed:
    b) Skip it and move to the next step
    c) Mark it as complete (if you finished it manually)"
 
-### 7. Workflow-Type-Specific Resume Logic
+### 7. Rate-Limit Resume (ALL workflow types)
 
-After determining the workflow type from the state file, branch on `state.workflow.type` for specialized resume behavior.
+**Always check `state.phase.rate_limit` first**, regardless of workflow type.
+Rate-limit pauses are now common to every workflow (epic, swarm, feature,
+bugfix, refactor, translate). The shared protocol lives in
+`skills/shared/rate-limit-handling.md`.
+
+```
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
+
+# Compute the current state of the rate-limit pause:
+node <<EOF
+const fs = require('fs');
+const { isRateLimited, clearRateLimitPause } = require('$PLUGIN_ROOT/hooks/lib/rate-limit');
+const statePath = process.env.WORKFLOW_STATE_FILE;
+const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+if (!state.phase || !state.phase.rate_limit || !state.phase.rate_limit.paused_at) {
+  console.log('NO_PAUSE');
+  process.exit(0);
+}
+if (isRateLimited(state)) {
+  console.log('STILL_LIMITED ' + state.phase.rate_limit.resumes_at);
+} else {
+  clearRateLimitPause(state);
+  state.updated_at = new Date().toISOString();
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n');
+  console.log('CLEARED');
+}
+EOF
+```
+
+- `NO_PAUSE` → proceed straight to step 8 (workflow-type branch).
+- `CLEARED` → log "Rate limit cleared. Resuming <type> workflow." and proceed.
+- `STILL_LIMITED <iso>` → report ETA and offer the user three options:
+  1. **Wait** — re-schedule CronCreate for the exact reset time and exit.
+  2. **Cancel pause** — call `clearRateLimitPause` and try anyway (warn that
+     work may fail again immediately).
+  3. **Exit** — leave state intact and let the existing cron fire.
+
+### 8. Workflow-Type-Specific Resume Logic
+
+After the rate-limit check, branch on `state.workflow.type`.
 
 ### Epic Workflow Resume
 
 When resuming an epic workflow (`state.workflow.type === "epic"`), follow this specialized logic:
-
-#### Rate Limit Resume
-
-Check if the workflow was paused due to rate limits:
-```
-if state.phase.rate_limit.paused_at is set:
-    if current_time > state.phase.rate_limit.resumes_at:
-        # Rate limit has cleared
-        Clear rate_limit fields in state (set all to null)
-        Report: "Rate limit cleared. Resuming epic workflow."
-        Continue to component/integration resume below
-    else:
-        # Still rate limited
-        remaining = state.phase.rate_limit.resumes_at - now
-        Report: "Rate limit active. Resets in {remaining}."
-
-        Offer options:
-        1. Wait (schedule CronCreate for exact reset time)
-        2. Cancel the pause and try anyway
-        3. Exit and come back later
-```
 
 #### Component-Level Resume
 
@@ -178,6 +215,18 @@ git branch --list "epic/*/integration"
 ```
 
 3. Resume from the appropriate point in the integration phase
+
+#### Post-Merge Review Resume
+
+When `state.phase.current === "post_merge_review"`:
+- Read `state.gates.post_merge_review.iteration` to know which retry we're on
+- Re-spawn the three architects in parallel per
+  `skills/phases/post-merge-review/SKILL.md`
+- If a previous fix-executor was mid-flight when the workflow paused (e.g.,
+  rate limit), check git status for uncommitted changes — commit them with
+  `chore(epic): post-merge fixes (resumed)` before re-running architects
+- If `iteration >= MAX_REVIEW_ITERATIONS` already, surface the last failure
+  list and ask the user how to proceed (do not auto-pass)
 
 #### Completion Guard Resume
 
