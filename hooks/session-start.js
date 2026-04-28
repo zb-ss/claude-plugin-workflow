@@ -12,7 +12,13 @@
 const fs = require('fs');
 
 try {
-  const { findActiveStates, findOrphanedOrgFiles, writeSessionMarker, cleanupStaleMarkers } = require('./lib/state');
+  const {
+    findActiveStates,
+    countOtherRepoStates,
+    findOrphanedOrgFiles,
+    writeSessionMarker,
+    cleanupStaleMarkers,
+  } = require('./lib/state');
   const { log } = require('./lib/logger');
 
   // Read stdin (hook input JSON)
@@ -30,21 +36,31 @@ try {
     cleanupStaleMarkers(24 * 60 * 60 * 1000);
   }
 
-  const activeStates = findActiveStates();
-  const orphanedOrgs = findOrphanedOrgFiles();
+  // Default scope: current repo + legacy flat-layout files (which are not
+  // repo-scoped at all). Workflows from other repo buckets are summarized as a
+  // count so they don't bleed into this session's context.
+  const cwd = (input && input.cwd) || process.cwd();
+  const activeStates = findActiveStates({ cwd, scope: 'current' });
+  const otherRepoCount = countOtherRepoStates({ cwd });
+  const orphanedOrgs = findOrphanedOrgFiles({ cwd });
 
-  // No active workflows and no orphans — exit silently
-  if (activeStates.length === 0 && orphanedOrgs.length === 0) {
+  // No active workflows in this repo, no legacy files, no orphans, no others.
+  if (activeStates.length === 0 && orphanedOrgs.length === 0 && otherRepoCount === 0) {
     process.exit(0);
   }
 
   const contextParts = [];
 
   if (activeStates.length > 0) {
+    const legacyCount = activeStates.filter(e => e.scope === 'legacy').length;
+    const heading = legacyCount === activeStates.length
+      ? `There are ${activeStates.length} active workflow(s) (legacy / unscoped — created before repo-scoping).`
+      : `There are ${activeStates.length} active workflow(s) for this repository.`;
+
     contextParts.push(
       '## Active Workflows',
       '',
-      `There are ${activeStates.length} active workflow(s). Use \`/workflow:resume [id]\` to continue one, or \`/workflow:start\` to create a new workflow.`,
+      `${heading} Use \`/workflow:resume [id]\` to continue one, or \`/workflow:start\` to create a new workflow.`,
       '',
     );
 
@@ -54,8 +70,9 @@ try {
         .filter(([, g]) => g.status !== 'passed' && g.status !== 'skipped')
         .map(([name]) => name);
 
+      const scopeTag = entry.scope === 'legacy' ? ' [legacy]' : '';
       contextParts.push(
-        `- **${state.workflow_id}** — ${state.workflow?.type || 'unknown'} (${state.mode?.current || '?'})`,
+        `- **${state.workflow_id}**${scopeTag} — ${state.workflow?.type || 'unknown'} (${state.mode?.current || '?'})`,
         `  - Phase: ${state.phase?.current || 'unknown'}`,
         `  - Pending Gates: ${pendingGates.length > 0 ? pendingGates.join(', ') : 'none'}`,
         `  - Org File: ${state.org_file}`,
@@ -67,7 +84,15 @@ try {
       }
     }
 
-    log('session-start', `Found ${activeStates.length} active workflow(s)`);
+    log('session-start', `Found ${activeStates.length} active workflow(s) in current repo (${legacyCount} legacy)`);
+  }
+
+  if (otherRepoCount > 0) {
+    contextParts.push(
+      '',
+      `_${otherRepoCount} active workflow(s) belong to other repositories on this machine and are hidden from this session. Run \`/workflow:list --all\` to view them, or \`cd\` into the relevant repo._`,
+    );
+    log('session-start', `${otherRepoCount} workflow(s) hidden (other repos)`);
   }
 
   // Report orphaned org files

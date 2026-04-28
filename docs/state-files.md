@@ -24,7 +24,16 @@ Use `--format=md` to create markdown state files:
 
 ## Org-Mode Format (Default)
 
-State files are stored at `~/.claude-workflows/active/<id>.org`:
+State files are stored at `~/.claude-workflows/active/<repo-key>/<id>.org`,
+where `<repo-key>` is derived from the current repository's git remote (or
+toplevel path) so workflows in different repos do not collide. Resolve the
+exact path by running `node ~/.claude/plugins/workflow/lib/active-dir-cli.js`,
+or override either piece via `CLAUDE_WORKFLOW_STATE_DIR` /
+`CLAUDE_WORKFLOW_REPO_KEY`.
+
+Pre-v2 workflows that live directly under `~/.claude-workflows/active/` (no
+subdirectory) are still resumable — they are surfaced under a `[legacy]` tag
+in every session until they complete.
 
 ```org
 #+TITLE: Feature: Add user authentication
@@ -93,9 +102,18 @@ Claude reads the state file before each step, so your edits are respected.
 
 | Path | Purpose |
 |------|---------|
-| `~/.claude-workflows/active/` | Active workflow state files |
-| `~/.claude-workflows/completed/` | Archived completed workflows |
-| `~/.claude-workflows/context/` | Codebase context files |
-| `~/.claude-workflows/memory/` | Project memory files |
+| `~/.claude-workflows/active/<repo-key>/` | Active workflow state files (per repository) |
+| `~/.claude-workflows/active/` (flat) | Legacy / pre-v2 workflow state files |
+| `~/.claude-workflows/completed/<repo-key>/` | Archived completed workflows |
+| `~/.claude-workflows/context/` | Codebase context files (shared across repos) |
+| `~/.claude-workflows/memory/` | Project memory files (shared across repos) |
 | `~/.claude-workflows/plans/` | Plan files |
+
+### Environment overrides
+
+| Variable | Effect |
+|----------|--------|
+| `CLAUDE_WORKFLOW_STATE_DIR` | Override the entire state root (default `~/.claude-workflows`) |
+| `CLAUDE_WORKFLOW_REPO_KEY` | Override the per-repo bucket name (default: derived from git remote / toplevel) |
+| `CLAUDE_STATUSLINE_CACHE` | Override the rate-limit reset cache path read by `hooks/lib/rate-limit.js` |
 ```

@@ -42,13 +42,27 @@ Test Coverage Check (80% minimum) → FAIL → Add tests → Retry
      ↓
 [Advisory] Documentation Check (doc-writer) → Warn only
      ↓
+Post-Merge Multi-Architect Review (3× opus, parallel) → FAIL → Fix → Retry (max 5)
+     ↓ PASS
 COMPLETE
 #+END_SRC
+
+The post-merge review is **mandatory** in thorough mode and runs the
+zero-tolerance protocol from =skills/phases/post-merge-review/SKILL.md=:
+three opus architects in parallel (functional / security / quality), each
+producing a per-requirement [PASS]/[FAIL] checklist comparing the integrated
+codebase against the original workflow description and any per-component
+plans. Any single [FAIL] forces a fix-and-re-review iteration.
+
+Insert =post_merge_review= into =state.phase.remaining= immediately before
+=completion_guard= when initializing a thorough-mode workflow.
 
 * Settings
 :PROPERTIES:
 :MAX_CODE_REVIEW_ITERATIONS: 10
 :MAX_SECURITY_ITERATIONS: 8
+:MAX_POST_MERGE_REVIEW_ITERATIONS: 5
+:REQUIRE_POST_MERGE_REVIEW: true
 :REQUIRE_TESTS: true
 :MIN_COVERAGE: 80
 :PARALLEL_ADVISORY: true
