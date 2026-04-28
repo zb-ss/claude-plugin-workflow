@@ -18,18 +18,24 @@ $ARGUMENTS
 
 If no `$ARGUMENTS` provided, list all active workflows.
 
-**First, get the home directory path:**
+**First, resolve the home and repo-scoped active directories:**
 ```bash
 echo $HOME
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
+ACTIVE_DIR=$(node "$PLUGIN_ROOT/lib/active-dir-cli.js")
 ```
 
-**Then use Glob tool with the ABSOLUTE path** (never use `~` in tool calls):
+**Then use Glob tool with ABSOLUTE paths** (never use `~` in tool calls). Search
+both the repo-scoped dir AND the legacy flat root for backward compatibility:
 ```
-Glob(pattern="<HOME>/.claude-workflows/active/*")
+Glob(pattern="$ACTIVE_DIR/*")
+Glob(pattern="$HOME/.claude-workflows/active/*.state.json")    # legacy
+Glob(pattern="$HOME/.claude-workflows/active/*.org")           # legacy
+Glob(pattern="$HOME/.claude-workflows/active/*.md")            # legacy
 ```
-(Replace `<HOME>` with the actual path, e.g., `/home/zashboy/.claude-workflows/active/*`)
 
-This finds both `.org` and `.md` workflow files.
+This finds both `.org` and `.md` workflow files for this repository (and legacy
+flat-layout files if any remain).
 
 For each workflow file found:
 1. Read the file using Read tool
@@ -71,7 +77,7 @@ Steps:
 
 Current: Code Review (iteration 2, found 3 issues)
 
-State file: <HOME>/.claude-workflows/active/<id>.<format>
+State file: $ACTIVE_DIR/<id>.<format>     (or legacy: $HOME/.claude-workflows/active/<id>.<format>)
 ```
 
 ### 3. Show Recent Completed
@@ -79,9 +85,10 @@ State file: <HOME>/.claude-workflows/active/<id>.<format>
 If `$ARGUMENTS` is "completed" or "history":
 
 ```
-Glob(pattern="<HOME>/.claude-workflows/completed/*")
+COMPLETED_DIR="$HOME/.claude-workflows/completed/$(node "$PLUGIN_ROOT/lib/repo-key-cli.js")"
+Glob(pattern="$COMPLETED_DIR/*")
+Glob(pattern="$HOME/.claude-workflows/completed/*")    # legacy
 ```
-(Replace `<HOME>` with the actual absolute path)
 
 Show last 5 completed workflows with their summaries.
 
