@@ -213,13 +213,18 @@ mark_completed("Batch 1: UserService interface")
 ## Failure Handling
 
 On agent failure:
-1. Log the failure with details
-2. Determine if retryable
-3. Spawn replacement agent with adjusted prompt
-4. If 3 failures on same task, escalate to user
+1. **First, check for rate limits** (see "Rate-Limit Handling" below) — do not
+   retry against an exhausted quota.
+2. Log the failure with details
+3. Determine if retryable
+4. Spawn replacement agent with adjusted prompt
+5. If 3 failures on same task, escalate to user
 
 ```python
 if agent_failed:
+    if rate_limit_detected(agent_output):
+        pause_for_rate_limit()  # see protocol below
+        return
     if retry_count < 3:
         spawn_retry_agent(
             original_task,
@@ -229,6 +234,42 @@ if agent_failed:
     else:
         pause_workflow("Task failed 3 times: {task}")
 ```
+
+## Rate-Limit Handling
+
+After **every** agent spawn or tool call, scan the result for rate-limit
+markers and pause the workflow if any are found. This is mandatory for every
+mode (standard, thorough, swarm, eco, turbo) and every workflow type (feature,
+bugfix, refactor, epic, translate).
+
+The shared protocol — detection markers, state shape, scheduling helpers,
+and resume behaviour — is defined in
+`skills/shared/rate-limit-handling.md`. Follow it verbatim.
+
+Quick checklist after each agent batch:
+
+```python
+for output in batch_outputs:
+    marker = detectRateLimit(output)        # hooks/lib/rate-limit.js
+    if marker:
+        applyRateLimitPause(state, {
+          reason: f"detected marker: {marker}",
+          resumesAt: getNextResetIso(),     # from statusline cache
+          workflowPhase: state.phase.current,
+        })
+        cron_id = CronCreate(
+            cron=buildCronExpression(resumesAt),
+            prompt=buildResumePrompt(workflow_id),
+            recurring=False,
+        )
+        state.phase.rate_limit.cron_job_id = cron_id
+        write_state(state)
+        print(buildPauseReport(workflow_id, resumesAt, marker))
+        return  # exit supervisor turn — cron will fire /workflow:resume
+```
+
+Do **not** continue spawning agents after a rate-limit pause. Resume happens
+via `/workflow:resume`, which the cron schedules automatically.
 
 ## Context Limit Recovery
 
