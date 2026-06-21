@@ -249,14 +249,16 @@ The JSON state sidecar uses an extended schema for epic workflows:
   "phase": {
     "current": "architecture",
     "completed": [],
-    "remaining": ["component_execution", "integration", "post_merge_review", "e2e_validation", "scrub_gate", "completion_guard"],
+    "remaining": ["capability_preflight", "component_execution", "integration", "post_merge_review", "spec_conformance", "e2e_validation", "scrub_gate", "completion_guard"],
     "rate_limit": { "paused_at": null, "resumes_at": null, "cron_job_id": null, "reason": null, "workflow_phase": null }
   },
   "gates": {
     "architecture": { "status": "pending", "iteration": 0 },
+    "capability_preflight": { "status": "pending", "iteration": 0 },
     "component_execution": { "status": "pending", "iteration": 0 },
     "integration": { "status": "pending", "iteration": 0 },
     "post_merge_review": { "status": "pending", "iteration": 0, "verdicts": { "functional": null, "security": null, "quality": null } },
+    "spec_conformance": { "status": "pending", "iteration": 0 },
     "e2e_validation": { "status": "pending", "iteration": 0 },
     "scrub_gate": { "status": "pending", "iteration": 0 },
     "completion_guard": { "status": "pending", "iteration": 0 }
@@ -301,11 +303,12 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
      "org_file": "<ACTIVE_DIR>/<id>.<format>",
      "workflow": { "type": "<swarm|epic>", "description": "<desc>", "branch": "<branch>" },
      "config": { "tests_enabled": <bool>, "max_code_review_iterations": <n>, "max_security_iterations": <n> },
-     "phase": { "current": "planning", "completed": [], "remaining": ["implementation","code_review","security_review","tests","quality_gate","e2e_validation","scrub_gate","completion_guard"] },
+     "phase": { "current": "planning", "completed": [], "remaining": ["capability_preflight","implementation","code_review","security_review","tests","quality_gate","spec_conformance","e2e_validation","scrub_gate","completion_guard"] },
      "gates": {
-       "planning": {"status":"pending","iteration":0}, "implementation": {"status":"pending","iteration":0},
+       "planning": {"status":"pending","iteration":0}, "capability_preflight": {"status":"pending","iteration":0}, "implementation": {"status":"pending","iteration":0},
        "code_review": {"status":"pending","iteration":0}, "security_review": {"status":"pending","iteration":0},
        "tests": {"status":"pending","iteration":0}, "quality_gate": {"status":"pending","iteration":0},
+       "spec_conformance": {"status":"pending","iteration":0},
        "e2e_validation": {"status":"pending","iteration":0},
        "scrub_gate": {"status":"pending","iteration":0},
        "completion_guard": {"status":"pending","iteration":0}
@@ -491,6 +494,59 @@ Enforced **twice**: the `scrub_gate` state phase (which `stop-guard` /
 write to a non-private repo whose surface carries markers — so even a background
 agent cannot leak. In **epic** mode the scrub runs before *each* component PR and
 the integration PR; in **swarm**, once before the commit/PR.
+
+#### Capability Preflight Gate (after planning, before implementation)
+
+Once the plan exists and before any code is written, run the **capability
+preflight** so the burst codes to the project's standards and doesn't fail
+mid-pipeline on a missing tool:
+
+```bash
+node "$PLUGIN_ROOT/lib/capability-cli.js" "$REPO_ROOT"
+```
+
+It reports the detected stack, the **convention skills** to load
+(`recommended_skills` — e.g. `laravel-conventions`, `vue-conventions`), the
+required CLI tools with availability, and recommended MCP. Then:
+1. **Load** every `recommended_skill` not already active, so executors follow the
+   project's conventions instead of generic defaults.
+2. If a **required tool is missing** (`missing_required_tools` non-empty) or a
+   mandatory MCP for the task is absent: in attended mode tell the user; in
+   **autonomous** mode **park the task `blocked`** (set `state.parked`, comment the
+   missing requirement) rather than limp ahead and fail three gates later.
+3. On success set `gates.capability_preflight = passed`; if nothing is needed
+   (e.g. a docs-only task) mark it `skipped` with a reason.
+
+This is also where **risk classification** seeds the review-depth floor. There is
+no diff yet, so classify the architect's **planned file scope** (path signals
+alone are enough for migrations / auth / payment / api paths):
+```bash
+echo '{"files": [<planned files>], "diff": ""}' | node "$PLUGIN_ROOT/lib/risk-classify-cli.js" classify
+```
+Record `review_depth` into state — the **floor** for the review phases (min
+reviewers, `security` vs `security-deep`, mandatory human-gate). The code-review
+and security phases then **re-run** `risk-classify-cli.js --git "$BASE_BRANCH"` on
+the actual committed diff to refine (and flag `diff_smell`). Risky areas
+(auth/payments/migrations) escalate; trivial diffs take the light path; the
+loop-until-dry fan-out still runs on top of the floor.
+
+#### Spec-Conformance Gate (after quality, before E2E)
+
+After the quality gate, an independent judge verifies the work did **what was
+asked** — not merely that the code is good:
+
+1. Spawn `workflow:spec-conformance` with the task's **Acceptance Criteria** +
+   Description, the diff/changed files, and the test results.
+2. It maps **each criterion → a `[CRITERION-N]` block** with `status: PASS|FAIL`
+   and concrete `evidence` (a `file:line`, a passing test name, or observed
+   behavior), emitting `GATE VERDICT: PASS` only if **zero** criteria FAIL.
+3. `PASS` → `gates.spec_conformance = passed` (via `AGENT_GATE_MAP`). `FAIL` →
+   route the unmet criteria back to implementation (same loop as `[ISSUE-N]`
+   review findings), then re-run the gate. Vague/absent criteria → the judge
+   blocks for clarification rather than rubber-stamping.
+
+This catches *good code that solved the wrong problem* — the failure mode the
+code/security/quality/E2E gates structurally cannot see.
 
 ### Phase Dispatch Pattern
 

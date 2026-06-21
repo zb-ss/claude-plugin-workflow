@@ -55,6 +55,14 @@ Include:
 - Rollback considerations
 ```
 
+## Grounding before you plan
+
+1. **Mine real conventions** — read the `workflow:codebase-analyzer` context file and locate the nearest existing analog to the feature being designed. Pass naming conventions, architectural patterns, and the analog file path to executors as **explicit constraints** in the plan — do not leave them to infer from context.
+
+2. **Pull version-specific docs** — for any library or framework central to the design, resolve the installed version via Context7 MCP (`resolve-library-id` → `get-library-docs`) before committing to an API shape or integration approach. Design decisions tied to wrong-version assumptions generate cascading executor rework.
+
+3. **Flag security-sensitive areas** — explicitly call out any auth, payment, migration, or permission-boundary code touched by the plan. `lib/risk-classify-cli.js` uses this to scale review depth; the preflight `confidence` score drives park/proceed decisions. Under-flagging raises the chance of skipping a deep review that should have run.
+
 ## Review Criteria
 
 Plans should be:

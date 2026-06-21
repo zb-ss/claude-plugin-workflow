@@ -135,6 +135,85 @@ for agent in agents:
     aggregate_results(result)
 ```
 
+## Gate: capability_preflight
+
+Run immediately after planning/architecture is complete, before spawning any
+implementation or component-execution agents.
+
+```python
+# 1. Capability scan
+cap_result = Bash(f'node "$PLUGIN_ROOT/lib/capability-cli.js" "$REPO_ROOT"')
+cap = parse_json(cap_result)
+
+# Load recommended skills listed in cap.recommended_skills (spawn or note for user)
+
+# 2. Missing-tool check
+if cap.missing_required_tools:  # non-empty list OR a required MCP is absent
+    if autonomous_mode:
+        state.parked = True
+        state.parked_reason = f"capability_preflight: missing tools {cap.missing_required_tools}"
+        write_state(state)
+        # Add a comment in the workflow state file explaining what is missing
+        set_gate("capability_preflight", "blocked")
+        return  # do not proceed to implementation
+    else:
+        tell_user(f"Required tools missing: {cap.missing_required_tools}. "
+                  "Install them before proceeding.")
+        return
+
+# 3. Risk classification — sets the floor for review depth
+risk_result = Bash(f'node "$PLUGIN_ROOT/lib/risk-classify-cli.js" --git "$BASE_BRANCH"')
+risk = parse_json(risk_result)
+state.review_depth = risk.review_depth   # e.g. "standard" | "security" | "security-deep"
+# review_depth governs: min reviewers, security vs security-deep lens, mandatory human-gate
+
+write_state(state)
+set_gate("capability_preflight", "passed")   # or "skipped" if cap was empty and no risk
+# Proceed to implementation / component execution
+```
+
+## Gate: spec_conformance
+
+Run after `quality_gate` (swarm) or after integration (epic), before `e2e_validation`.
+
+```python
+# Spawn the conformance checker with the full acceptance-criteria context
+verdict = Agent(
+    subagent_type="workflow:spec-conformance",
+    model="opus",
+    prompt=f"""
+    ## Spec Conformance Check
+
+    Acceptance criteria:
+    {state.workflow.acceptance_criteria}
+
+    Diff / changed files:
+    {state.implementation.diff_summary}
+
+    Test results:
+    {state.quality_gate.test_output}
+
+    For each criterion emit:
+      PASS [CRITERION-N]: <one line>
+      FAIL [CRITERION-N]: <gap description>
+
+    Final line MUST be either:
+      GATE VERDICT: PASS
+      GATE VERDICT: FAIL
+    """
+)
+
+if verdict contains "GATE VERDICT: PASS":
+    set_gate("spec_conformance", "passed")
+    # Continue to e2e_validation
+else:
+    # Extract every FAIL [CRITERION-N] line
+    failed_criteria = parse_failed_criteria(verdict)
+    # Route back to implementation — same loop used for [ISSUE-N] findings
+    spawn_executor_for_criteria_fixes(failed_criteria)
+    # After fixes: re-run quality_gate, then re-run spec_conformance (loop until PASS)
+```
+
 ## Validation Orchestration
 
 Invoke the fan-out review engine (`skills/phases/post-merge-review/SKILL.md`):
