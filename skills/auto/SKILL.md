@@ -113,25 +113,26 @@ Node resolver is the single source of truth.
 
 ## Step 1: Check the In-Flight Task
 
-### 1a. Discover the active state file
+### 1a. Discover the active autopilot task (across ALL repo buckets)
 
-Glob for `$ACTIVE_DIR/*.state.json`. If multiple files exist, take the one with
-the most-recent `updated_at`. If none exist, skip to Step 2.
-
-Read the state:
+An autopilot burst runs in its **target repo's** bucket
+(`active/<target-repo-key>/`) — which is **not** the driver's cwd, and varies per
+task. So do **not** glob a single `$ACTIVE_DIR`; that only sees one repo and would
+miss an in-flight task running in another target repo (causing the driver to start
+a second task concurrently). Scan **every** bucket for tasks stamped with a
+`queue_issue_number` (the autopilot marker):
 
 ```bash
-node -e "
-const fs = require('fs');
-const files = require('fs').readdirSync('$ACTIVE_DIR')
-  .filter(f => f.endsWith('.state.json'))
-  .map(f => ({ f, s: JSON.parse(fs.readFileSync('$ACTIVE_DIR/' + f, 'utf8')) }))
-  .sort((a, b) => new Date(b.s.updated_at) - new Date(a.s.updated_at));
-if (files.length) console.log(JSON.stringify({ path: '$ACTIVE_DIR/' + files[0].f, state: files[0].s }));
-"
+node "$PLUGIN_ROOT/lib/autopilot-active-cli.js"
 ```
 
-Store as `$STATE_PATH` and `$STATE_JSON`.
+This prints a newest-first JSON array of `{ path, repo_key, state }`, filtered to
+autopilot tasks only — manual (hand-run) workflows have no `queue_issue_number`
+and are ignored, so a workflow you ran by hand in another repo never confuses the
+driver. Take element `[0]` as the in-flight task; the driver is **strictly
+sequential**, so there is at most one. If the array is empty, skip to Step 2.
+
+Store `[0].path` as `$STATE_PATH` and `[0].state` as `$STATE_JSON`.
 
 ### 1b. Burst-still-running guard
 
