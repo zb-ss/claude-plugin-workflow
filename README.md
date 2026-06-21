@@ -4,6 +4,9 @@ Long-running autonomous development workflows with parallel agent execution, zer
 
 **State tracking in Emacs org-mode or Markdown** — edit your plans live while Claude works.
 
+> ### 🤖 Run it fully autonomously
+> Point your coding agent at **[`SETUP.md`](SETUP.md)** — *"Set up the autopilot system by following SETUP.md"* — and it provisions the private task queue, scrub gate, and config on its own, then hands you the few manual steps (restart, schedule). Day-to-day you queue and manage work as GitHub issues, even from your phone. → [Autonomous Setup](#autonomous-setup)
+
 ## Highlights
 
 - **Org-mode & Markdown plans** — Human-readable, editable workflow state files
@@ -26,7 +29,13 @@ Long-running autonomous development workflows with parallel agent execution, zer
 
 After installation, restart CC and run `/workflow:setup` to configure permissions.
 
-**To run fully autonomously** (queue-driven, unattended across repos), point your coding agent at [`SETUP.md`](SETUP.md): *"Set up the autopilot system by following SETUP.md."* It provisions the private control repo, queue, scrub denylist, and config, then hands you the few manual steps to finish (restart, schedule).
+## Autonomous Setup
+
+To run the plugin **fully autonomously** — a private GitHub-issues queue feeding a scheduled driver that works tasks across your repos unattended — point your coding agent at **[`SETUP.md`](SETUP.md)**:
+
+> "Set up the autopilot system by following SETUP.md."
+
+The agent does everything it safely can on its own — creates the private control repo, the queue labels, the task template, seeds the scrub denylist (asking you for your internal names), and wires the config — then live-verifies it and hands you a short checklist of the steps only you can do (restart Claude Code, the `/schedule` spike). After that you queue and manage work entirely as GitHub issues, even from your phone.
 
 ## Quick Start
 
