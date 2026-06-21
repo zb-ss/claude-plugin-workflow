@@ -30,26 +30,24 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
 ACTIVE_DIR=$(node "$PLUGIN_ROOT/lib/active-dir-cli.js")
 echo "$ACTIVE_DIR"
 ```
-Store as `$ACTIVE_DIR`. Also note the legacy flat directory
-`$HOME/.claude-workflows/active/` — workflows created before repo-scoping live
-there directly (no subdirectory).
+Store as `$ACTIVE_DIR`. This is the **only** place this repo's workflows live —
+resume is strictly scoped to the current repo so a workflow started elsewhere
+cannot be picked up here.
 
 Then find the workflow file. **Never use `~` in tool calls** — always use the
-absolute path. Search BOTH the repo-scoped dir and the legacy flat root:
+absolute path. Search ONLY the repo-scoped bucket:
 ```
 Glob(pattern="$ACTIVE_DIR/*")
-Glob(pattern="$HOME/.claude-workflows/active/*.state.json")    # legacy
-Glob(pattern="$HOME/.claude-workflows/active/*.org")           # legacy
-Glob(pattern="$HOME/.claude-workflows/active/*.md")            # legacy
 ```
 
-- If `$ARGUMENTS` is empty: prefer the most recent `.org`/`.md` file in
-  `$ACTIVE_DIR`. Fall back to a legacy file only if the repo-scoped dir is
-  empty.
-- If `$ARGUMENTS` provided: search both locations for a matching workflow ID.
+- If `$ARGUMENTS` is empty: pick the most recent `.org`/`.md` file in `$ACTIVE_DIR`.
+- If `$ARGUMENTS` provided: match the workflow ID within `$ACTIVE_DIR`.
 
-If a workflow is found in the legacy flat layout, leave it where it is — do not
-auto-migrate. Resume operates in place.
+**Do NOT resume unscoped legacy files** from the flat
+`$HOME/.claude-workflows/active/` root, and do NOT resume another repo's bucket.
+Legacy flat files (no `repo_key`) predate repo-scoping and belong to no repo —
+if the requested workflow exists only there, tell the user to run
+`/workflow:migrate-legacy` to assign it to a repo first, then resume.
 
 ### 2. Read and Parse the Org File
 
@@ -119,12 +117,12 @@ If a step was started but not completed:
    b) Skip it and move to the next step
    c) Mark it as complete (if you finished it manually)"
 
-### 7. Rate-Limit Resume (ALL workflow types)
+### 7. Quota-Window / Rate-Limit Resume (all workflows)
 
-**Always check `state.phase.rate_limit` first**, regardless of workflow type.
-Rate-limit pauses are now common to every workflow (epic, swarm, feature,
-bugfix, refactor, translate). The shared protocol lives in
-`skills/shared/rate-limit-handling.md`.
+**Always check `state.phase.rate_limit` first**, regardless of execution style.
+Pauses are common to every workflow (swarm and epic) and cover both transient API
+rate limits and subscription **quota windows** (the 5-hour / weekly Claude usage
+limit). The shared protocol lives in `skills/shared/rate-limit-handling.md`.
 
 ```
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
@@ -150,8 +148,12 @@ if (isRateLimited(state)) {
 EOF
 ```
 
-- `NO_PAUSE` → proceed straight to step 8 (workflow-type branch).
-- `CLEARED` → log "Rate limit cleared. Resuming <type> workflow." and proceed.
+- `NO_PAUSE` → proceed straight to step 8 (execution-style branch).
+- `CLEARED` → log "Usage limit cleared. Resuming workflow." and re-enter at the
+  **last completed gate boundary**: `state.phase.rate_limit.workflow_phase`
+  records where the supervisor was, so resume restarts that phase. A gate that was
+  mid-flight when the limit hit re-runs whole (per-gate `{status,iteration}` is
+  the finest durable checkpoint). Then proceed to the swarm/epic branch.
 - `STILL_LIMITED <iso>` → report ETA and offer the user three options:
   1. **Wait** — re-schedule CronCreate for the exact reset time and exit.
   2. **Cancel pause** — call `clearRateLimitPause` and try anyway (warn that
@@ -219,14 +221,16 @@ git branch --list "epic/*/integration"
 #### Post-Merge Review Resume
 
 When `state.phase.current === "post_merge_review"`:
-- Read `state.gates.post_merge_review.iteration` to know which retry we're on
-- Re-spawn the three architects in parallel per
-  `skills/phases/post-merge-review/SKILL.md`
+- Read `state.gates.post_merge_review.iteration` to know which fix cycle we're on
+- Re-enter the fan-out review engine (`skills/phases/post-merge-review/SKILL.md`)
+  from a clean `seen`/`dry` state — loop-until-dry is naturally resumable; a
+  resumed session re-runs the find→verify loop from scratch against the current
+  codebase state
 - If a previous fix-executor was mid-flight when the workflow paused (e.g.,
   rate limit), check git status for uncommitted changes — commit them with
-  `chore(epic): post-merge fixes (resumed)` before re-running architects
-- If `iteration >= MAX_REVIEW_ITERATIONS` already, surface the last failure
-  list and ask the user how to proceed (do not auto-pass)
+  `chore(epic): post-merge fixes (resumed)` before re-entering the engine
+- If `iteration >= MAX_FIX_CYCLES` already, surface the still-confirmed
+  findings and ask the user how to proceed (do not auto-pass)
 
 #### Completion Guard Resume
 

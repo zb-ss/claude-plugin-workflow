@@ -23,19 +23,22 @@ If you're getting permission prompts **for writing state files** (org files, sta
 ## State Files Not Being Created
 
 1. Run `/workflow:setup` to verify directory structure
-2. Check that `~/.claude-workflows/active/` exists and is writable
+2. Check that `~/.claude-workflows/active/<repo-key>/` exists and is writable (the repo-scoped bucket is created automatically on first workflow start)
 3. The plugin uses Write tool (not bash) to create files — ensure path-scoped `Write(~/.claude-workflows/**)` is in your allow list
-
-## Context Not Loading
-
-1. Verify directory exists: `~/.claude-workflows/context/`
-2. Run `/workflow:setup` if missing
-3. Learnings are now saved to project's `CLAUDE.md` (auto-loaded by CC)
+4. To find the active directory for the current repo: `node ~/.claude/plugins/workflow/lib/active-dir-cli.js`
 
 ## Switching Between Org and Markdown
 
 Both formats are fully supported. Use `--format=md` or `--format=org` when starting workflows:
 
 ```bash
-/workflow:start feature "My task" --format=md
+/workflow:start swarm: "My task" --format=md
+```
+
+## Legacy State Files (pre-v2)
+
+Workflows created before the repo-scoped schema live flat under `~/.claude-workflows/active/`. They appear with a `[legacy]` tag in `/workflow:status`. Migrate them to the new per-repo buckets:
+
+```bash
+/workflow:migrate-legacy
 ```

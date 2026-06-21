@@ -25,17 +25,20 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
 ACTIVE_DIR=$(node "$PLUGIN_ROOT/lib/active-dir-cli.js")
 ```
 
-**Then use Glob tool with ABSOLUTE paths** (never use `~` in tool calls). Search
-both the repo-scoped dir AND the legacy flat root for backward compatibility:
+**Then use Glob tool with ABSOLUTE paths** (never use `~` in tool calls). The
+repo-scoped bucket holds this repository's workflows; the flat root may still
+hold *unscoped legacy* files that belong to no repo:
 ```
-Glob(pattern="$ACTIVE_DIR/*")
-Glob(pattern="$HOME/.claude-workflows/active/*.state.json")    # legacy
-Glob(pattern="$HOME/.claude-workflows/active/*.org")           # legacy
-Glob(pattern="$HOME/.claude-workflows/active/*.md")            # legacy
+Glob(pattern="$ACTIVE_DIR/*")                                 # this repo
+Glob(pattern="$HOME/.claude-workflows/active/*.state.json")   # unscoped legacy
+Glob(pattern="$HOME/.claude-workflows/active/*.org")          # unscoped legacy
+Glob(pattern="$HOME/.claude-workflows/active/*.md")           # unscoped legacy
 ```
 
-This finds both `.org` and `.md` workflow files for this repository (and legacy
-flat-layout files if any remain).
+List this repository's workflows (`.org`/`.md` in `$ACTIVE_DIR`) as the active
+set. List any unscoped legacy flat-root files under a **separate "Unscoped legacy
+(not tied to this repo — run `/workflow:migrate-legacy`)"** heading — never mix
+them into this repo's active workflows.
 
 For each workflow file found:
 1. Read the file using Read tool

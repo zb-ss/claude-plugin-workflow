@@ -1,36 +1,44 @@
 ---
-description: Zero-tolerance multi-architect post-merge review. Runs three opus architects in parallel against the original scope, requires per-requirement PASS/FAIL, and loops until 100% green.
+description: N-reviewer fan-out review-gate engine. Scales a roster of independent review lenses, adversarially verifies every finding, routes confirmed issues to fixes, and loops until dry under zero tolerance. Used by the code_review, security_review, quality, and post_merge_review gates.
 disable-model-invocation: true
 ---
 
-# Post-Merge Multi-Architect Review
+# Multi-Lens Fan-Out Review Engine
 
-This phase runs after **all** component branches have been merged and the
-integration test suite is green. It is the final quality gate before
-`completion_guard` and is **mandatory** for `thorough` mode (epics, swarm-style
-features, anything explicitly opted in). Standard / turbo / eco modes skip this
-phase to keep token cost predictable.
+This is the canonical review-gate engine for autonomous workflows. It replaces
+single-pass review (which under-reports — one lens misses what another catches)
+with a scalable fan-out that is **broad on finding** and **strict on verdict**:
 
-The pattern is the same parallel 3-architect validation that swarm mode runs at
-its `validation` phase — extracted here so the epic workflow (and any other
-mode that wants production-grade scrutiny) can reuse it.
+1. **Find** — spawn a roster of *N* independent review lenses in parallel; each
+   reports **every** candidate finding (coverage, not self-filtering).
+2. **Loop-until-dry** — keep spawning rounds until *K* consecutive rounds surface
+   nothing new. Different lenses (and re-runs) catch the tail a single pass drops.
+3. **Adversarially verify** — every fresh finding is challenged by ≥3 independent
+   skeptics that try to *refute* it; only findings that survive are "confirmed".
+4. **Route (zero tolerance)** — any confirmed finding blocks, routes to an
+   executor fix, and the **entire gate re-runs** (a fixed point, not a single
+   pass). The gate passes only on a fully dry cycle with zero confirmed findings.
 
-## When to invoke
+Scrutiny scales with the change and with remaining quota; the verdict bar does
+not. This engine is mandatory for `post_merge_review` (epic + swarm) and is the
+mechanism behind the `code_review`, `security_review`, and `quality` gates.
 
-The supervisor invokes this skill after a successful integration:
+## Which gate is invoking me?
 
-- Epic / thorough: after `integration` phase passes its tests, **before**
-  `completion_guard`. Insert into `state.phase.remaining` between those two
-  phases on workflow create (see start/SKILL.md).
-- Feature / thorough: optional, after `quality_gate` passes. Recommended for
-  any change touching auth, billing, or anything tagged `production:` or
-  `critical:`.
-- Swarm: this skill *is* the validation phase. Swarm mode already runs it.
+The roster (the set of lenses) depends on the gate. The loop, verification, and
+zero-tolerance routing are identical for all of them.
+
+| Gate | Core lenses (always) | Compared against |
+|---|---|---|
+| `code_review` | correctness, code-quality, error-handling, test-adequacy | changed files vs. project conventions |
+| `security_review` | authz, injection, secrets, ssrf/path-traversal, crypto, deps | changed surface (OWASP-complete) |
+| `quality` | build, lint, types, test pipeline (via `workflow:quality-gate`) | the whole build |
+| `post_merge_review` | functional-completeness, security, code-quality (+ extended below) | the **original scope** (see Inputs) |
 
 ## Inputs available in state
 
-Before spawning architects, the supervisor extracts the **original scope** so
-each architect can compare delivered work against what was promised:
+Extract the **original scope** so each lens compares delivered work against what
+was promised, and read **remaining quota** so the roster scales sanely:
 
 ```bash
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
@@ -48,230 +56,186 @@ console.log(JSON.stringify(scope, null, 2));
 EOF
 ```
 
-The output is `<scope>` below — pass it (verbatim) into every architect prompt.
+Read remaining quota the same way the epic orchestrator does — the statusline
+usage cache (`getNextResetIso` / the `CLAUDE_STATUSLINE_CACHE` JSON). Use it only
+to **size** the roster and verifier counts, never to lower the verdict bar.
 
-## Spawning the three architects
+## Step 1 — Build the roster (scale N to the change, not the verdict)
 
-Spawn **all three in parallel** with `run_in_background=true` and wait for
-all to complete. Use opus tier — quality > cost at this gate.
+Always include the gate's **core lenses** (table above). Add **extended lenses**
+when the change profile warrants and quota allows — never drop a core lens:
+
+> performance · concurrency/data-races · data-integrity & migrations ·
+> API-contract/integration · observability/logging · config & secrets ·
+> dependency/supply-chain · accessibility (FE-facing) · resilience/failure-modes
+
+Sizing heuristic (raise N for any that apply): many files / high LOC changed;
+criticality tags (`auth`, `billing`, `payment`, `production`, `critical`);
+FE-facing diff (adds accessibility); schema/migration changes (adds
+data-integrity); concurrency primitives touched (adds data-races). When
+remaining quota is low, shrink the *extended* set and lean on loop-until-dry
+across resumed sessions — keep the core lenses and the ≥3-skeptic verification.
+
+## Step 2 — Find: spawn the roster in parallel
+
+Spawn every lens with `run_in_background=true`, opus tier (quality > cost at a
+gate), and wait for all. Each lens **reports every candidate finding** in the
+`[ISSUE-N]` format from `skills/phases/review/SKILL.md` — with a `confidence`
+(high/medium/low) and `severity` (CRITICAL/MAJOR/MINOR) per finding. Lenses do
+**not** self-filter and do **not** emit a gate verdict — coverage is their job;
+verification and the verdict are this engine's job.
 
 ```
+# one Agent() per lens — example for the security lens
 Agent(
-  subagent_type="workflow:architect",
-  model="opus",
-  max_turns=18,
-  run_in_background=true,
-  description="Functional completeness review",
-  prompt=f"""
-  # Validation Focus: FUNCTIONAL COMPLETENESS
-
-  You are reviewing the integrated codebase against the **original scope**. Your
-  job is to confirm — line by line — that every promised piece of functionality
-  has been delivered. Anything less than 100% delivery is a FAIL.
-
-  ## Original Scope
-  ```json
-  {scope}
-  ```
-
-  ## Per-component plans
-  Each component in `per_component_plans` lists files, interfaces produced/
-  consumed, and acceptance criteria. Read each plan and verify the
-  corresponding code on `main` (or the integration branch).
-
-  ## Required output
-
-  Return a markdown checklist with **one line per requirement**, where each
-  line is exactly one of:
-
-  - [PASS] <requirement> — <evidence: file:line, test name, or PR>
-  - [FAIL] <requirement> — <what's missing or wrong>
-
-  Group lines by component / acceptance criterion. End with a single line:
-  `VERDICT: PASS` or `VERDICT: FAIL`.
-
-  Zero-tolerance: ANY [FAIL] line forces VERDICT: FAIL — even cosmetic gaps
-  like missing telemetry, undocumented edge cases, or partial UI states.
-
-  Do NOT propose fixes. Just report findings.
-  """
-)
-Agent(
-  subagent_type="workflow:security-deep",
-  model="opus",
-  max_turns=15,
-  run_in_background=true,
-  description="Security review",
-  prompt=f"""
-  # Validation Focus: SECURITY
-
-  Review the integrated codebase for security issues, with priority on
-  anything introduced or touched by this workflow.
-
-  ## Scope context
-  ```json
-  {scope}
-  ```
-
-  ## Coverage checklist (each must be checked, not just the headline ones)
-
-  - OWASP Top 10 (A01–A10, current revision)
-  - AuthN / AuthZ on every new endpoint or surface
-  - Input validation at every boundary (HTTP, queue, file, env)
-  - Output escaping in templates
-  - Secrets handling (env, vault, config files, logs)
-  - Crypto choices (algorithms, key sizes, randomness sources)
-  - SSRF / open-redirect / path-traversal in any user-influenced path
-  - Multi-tenant isolation (if applicable)
-  - Audit logging on state-changing operations
-  - Dependency CVEs introduced by package additions
-
-  ## Required output
-
-  Same checklist format as the functional architect:
-  `[PASS]` / `[FAIL]` lines + final `VERDICT:`. Zero-tolerance.
-
-  No fix proposals. Just findings.
-  """
-)
-Agent(
-  subagent_type="workflow:reviewer-deep",
-  model="opus",
-  max_turns=18,
-  run_in_background=true,
-  description="Code-quality review",
-  prompt=f"""
-  # Validation Focus: CODE QUALITY
-
-  ## Scope context
-  ```json
-  {scope}
-  ```
-
-  ## Coverage checklist
-
-  - SOLID adherence in changed/added classes
-  - DRY: identify duplicated logic ≥ 5 lines across two or more files
-  - Naming conventions match the project's (per CLAUDE.md / framework norms)
-  - Cyclomatic complexity < 10 per function in changed code
-  - Error handling: no swallowed exceptions, no `@`-suppression in PHP, no
-    bare `except:` in Python
-  - Test coverage for changed lines (read the coverage report if available)
-  - Public API surface is documented (or self-documenting via names + types)
-  - No dead code, no commented-out blocks, no `TODO` without an issue link
-  - No hardcoded configurable values (model IDs, URLs, prices, retry counts —
-    see CLAUDE.md "No Hardcoded Configurable Values")
-
-  ## Required output
-
-  `[PASS]` / `[FAIL]` lines + final `VERDICT:`. Zero-tolerance.
+  subagent_type="workflow:security-deep", model="opus", max_turns=15,
+  run_in_background=true, description="security lens",
+  prompt=f"""# Review lens: SECURITY (finding pass — report everything)
+  Scope: {scope}
+  Report EVERY candidate finding, including ones you are uncertain about or
+  consider low-severity. Do NOT filter for importance or confidence — a separate
+  verification step does that. For each, emit an [ISSUE-N] block with confidence
+  and severity. Coverage is the goal; a finding that later gets refuted is fine,
+  a silently-dropped real bug is not. Do not propose fixes; do not emit a verdict.
   """
 )
 ```
 
-## Aggregation
+Use `workflow:reviewer-deep` for code/quality lenses, `workflow:security-deep`
+for security lenses, `workflow:quality-gate` for the build/lint/test lens. Run
+≥2 reviewers on the same lens when the change is large — independent reviewers on
+one lens still surface different findings.
 
-Wait for all three. Build the failure list:
+## Step 3 — Loop-until-dry (exhaust the finder tail)
 
 ```python
-results = [a.output(block=True) for a in [arch_func, arch_sec, arch_qual]]
-failures = []
-for r in results:
-    failures.extend(line for line in r.splitlines() if line.startswith('[FAIL]'))
-verdict_pass = all(r.strip().endswith('VERDICT: PASS') for r in results)
+K = 2                  # consecutive dry rounds required to consider finding exhausted
+seen = {}              # dedup key (file:line:claim, normalized) -> finding
+dry = 0
+round = 0
+while dry < K:
+    round += 1
+    roster = build_roster(change_profile, remaining_quota())   # Steps 1–2
+    raw = spawn_roster_parallel(roster)                        # all findings, all lenses
+    fresh = [f for f in flatten(raw) if dedup_key(f) not in seen]
+    if not fresh:
+        dry += 1                 # this round added nothing new
+        continue
+    dry = 0
+    for f in fresh: seen[dedup_key(f)] = f
+    # carry `fresh` into Step 4 (verify) — accumulate confirmed across the cycle
 ```
 
-If `verdict_pass`: mark the gate `passed`, log all `[PASS]` evidence to
-`state.gates.post_merge_review.evidence`, advance to `completion_guard`.
+Dedup on a normalized key (file + line-ish + claim), not exact text — two lenses
+phrasing the same bug differently must collapse to one finding.
 
-If NOT pass: enter the **fix-and-retry loop** below.
+## Step 4 — Adversarially verify every fresh finding
 
-## Fix-and-retry loop (zero-tolerance)
+For each fresh finding, spawn **V independent skeptics** (V ≥ 3) that try to
+**refute** it. Give them distinct lenses where the finding can fail in different
+ways: *correctness* (is the claim true?), *reachability & impact* (can it
+actually be triggered, and does it matter?), *reproduction* (write/trace the
+exact input that exhibits it). Each skeptic **defaults to `refuted` unless it can
+prove the finding real and reachable**.
 
 ```python
-MAX_REVIEW_ITERATIONS = 5   # configurable per mode
-
-for iteration in range(MAX_REVIEW_ITERATIONS):
-    if verdict_pass:
-        break
-
-    # 1. Spawn an executor with the aggregated failure list. Tell it to fix
-    #    EVERY [FAIL] item — partial fixes are not acceptable.
-    Agent(
-      subagent_type="workflow:executor",
-      model="sonnet",
-      max_turns=20,
-      run_in_background=False,   # we need its output to feed the next loop
-      prompt=f"""
-      # Post-merge review fixes
-
-      The integrated codebase failed multi-architect review. Fix every item
-      below. After fixing, run the project's lint + test commands to make
-      sure nothing regressed.
-
-      Do NOT defer items, do NOT mark items as "won't fix" — argue back to
-      the supervisor only if a finding is technically wrong (and quote the
-      counter-evidence).
-
-      ## Findings
-      {chr(10).join(failures)}
-
-      ## After fixing
-      Report the commits / files touched per finding so the architects can
-      verify on the next pass.
-      """
-    )
-
-    # 2. Re-run all three architects in parallel (same prompts as above).
-    # 3. Re-aggregate.
+def verify(finding):
+    lenses = ["correctness", "reachability_and_impact", "reproduction"]
+    votes = spawn_parallel([
+        Agent(subagent_type="workflow:reviewer-deep", model="opus", max_turns=8,
+              run_in_background=true,
+              prompt=f"""Try to REFUTE this finding. Default to refuted=true unless
+              you can prove it is real AND reachable in the changed code.
+              Finding: {finding}. Lens: {lens}.
+              Return exactly one line: REFUTED or CONFIRMED, then one sentence of evidence.""")
+        for lens in lenses
+    ])
+    confirmed = sum(1 for v in votes if v == "CONFIRMED") >= (len(votes)//2 + 1)  # majority
+    return confirmed
 ```
 
-If after `MAX_REVIEW_ITERATIONS` the verdict is still FAIL, **do not auto-pass**
-the gate. Pause and ask the user for guidance — surfacing the still-failing
-items is far better than silently moving to `completion_guard` with known gaps.
+Scale V up (5) for CRITICAL-severity or `auth`/`billing`/`production`-tagged
+findings; never below 3. A finding survives only on a **majority** of CONFIRMED
+votes. This is what kills plausible-but-wrong findings so the gate's
+zero-tolerance doesn't cry wolf.
 
-## Rate-limit awareness
+## Step 5 — Route confirmed findings (zero tolerance, fixed point)
 
-Each parallel architect spawn is a quota burst. Before spawning the next
-iteration of architects, run the shared rate-limit check from
-`skills/shared/rate-limit-handling.md` — if any architect output triggered a
-marker, pause the workflow and let the cron resume the loop.
+If the cycle produced **zero** confirmed findings across a full dry loop → the
+gate **PASSES**. Record evidence (Step 7) and advance.
 
-## State updates
+If **any** finding is confirmed → the gate **BLOCKS**:
 
-After this skill exits, the state should look like:
+1. Emit the confirmed findings as a numbered `[ISSUE-N]` list (the format and
+   the RESOLVED/NOT-RESOLVED/REGRESSED re-verification protocol live in
+   `skills/phases/review/SKILL.md`).
+2. Spawn `workflow:executor` to fix **every** confirmed item — no deferrals, no
+   "won't fix" (it may only push back with counter-evidence that a finding is
+   technically wrong; route that back through Step 4 as a fresh refutation).
+3. After the executor reports its Fix-Report, **re-run the entire gate from
+   Step 1** — fixes can regress or introduce new issues, so the whole
+   find→verify loop repeats. Reset `seen`/`dry`; keep the all-time confirmed log
+   for the audit trail.
 
-```json
-"phase": {
-  "current": "completion_guard",      // advanced when verdict==PASS
-  "completed": [..., "post_merge_review"],
-  "remaining": ["completion_guard"]
-},
-"gates": {
-  "post_merge_review": {
-    "status": "passed",
-    "iteration": 2,
-    "verdicts": {
-      "functional": "PASS",
-      "security": "PASS",
-      "quality": "PASS"
-    },
-    "evidence_path": "<state-root>/active/<repo-key>/<id>.review.md"
-  }
-}
+The gate is a fixed point: it passes only when a complete find→verify cycle
+yields zero confirmed findings, K dry rounds in a row, with no fix needed.
+
+```python
+MAX_FIX_CYCLES = 6   # config: max_code_review_iterations / max_security_iterations
+for cycle in range(MAX_FIX_CYCLES):
+    confirmed = run_find_verify_until_dry()    # Steps 1–4
+    if not confirmed:
+        gate_pass(); break
+    route_to_executor_fix(confirmed)           # Step 5.2
+# else: do NOT auto-pass — pause and surface the still-confirmed items to the user
 ```
 
-Write the full architect outputs (all three, all iterations) to
-`<id>.review.md` next to the org file so the user can audit the entire chain
-of reviews after the workflow completes.
+If `MAX_FIX_CYCLES` is exhausted with findings still confirmed, **do not
+auto-pass**. Pause and ask the user — surfacing known-confirmed gaps beats
+silently advancing to `completion_guard`.
 
-## Why this is mandatory in thorough
+## Step 6 — Authoritative gate status (do not trust the scrape)
 
-Single-pass review misses cross-cutting concerns: a change can be
-functionally complete (architect 1 happy), securely written (architect 2
-happy), and still fail code quality (architect 3 unhappy) — and vice versa.
-Three orthogonal lenses catch what one cannot. Zero-tolerance forces the
-team to deliver the originally promised scope, not "most of it."
+The supervisor writes the gate result **explicitly** — it is the source of
+truth. The `subagent-stop-track.js` hook scrapes verdict words from transcripts
+as a best-effort secondary signal only (it frequently yields `unknown`); never
+let it decide this gate.
 
-For modes where the cost is too high (turbo, eco), use the standard
-single-architect `completion_guard` instead.
+```python
+update_state(lambda s: {
+  **s,
+  "gates": {**s["gates"], GATE: {
+     "status": "passed" if passed else "in_progress",
+     "iteration": cycle + 1,
+     "confirmed_count": len(all_time_confirmed),
+     "lenses_run": roster_lens_names,
+     "evidence_path": f"{ACTIVE_DIR}/{wid}.review.md",
+  }},
+})
+```
+
+## Step 7 — Evidence
+
+Write the full audit trail — every lens's findings, every verification vote, and
+every fix cycle — to `<ACTIVE_DIR>/<id>.review.md` (next to the org file) so the
+user can audit the entire chain. Log confirmed-finding evidence into
+`state.gates.<gate>.evidence`.
+
+## Quota awareness
+
+Each roster round and verification fan-out is a quota burst. Before each new
+round/cycle, run the shared check in `skills/shared/rate-limit-handling.md`. On a
+marker, pause the workflow and let the scheduled resume continue the loop —
+loop-until-dry is naturally resumable: a resumed session re-enters at the current
+fix cycle and re-runs the find→verify loop from a clean `seen` set.
+
+## Why fan-out + adversarial verify (not a single deep reviewer)
+
+A single reviewer trades recall for precision: told "only high-severity," it
+investigates thoroughly then *declines to report* what it judges below the bar —
+real bugs get silently dropped. Splitting the job fixes both halves: the finding
+lenses optimize for **coverage** (report everything), and independent skeptics
+optimize for **precision** (refute the noise). Zero-tolerance then applies to the
+*survivors* — confirmed, reachable findings — so the gate is both exhaustive and
+trustworthy. Scaling N and V to the change (and to quota) buys more of both
+without ever lowering the bar.

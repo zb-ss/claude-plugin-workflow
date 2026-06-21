@@ -1,6 +1,6 @@
 # Workflow Orchestrator
 
-Start an automated development workflow with configurable execution modes and planning styles.
+Start a long-running autonomous workflow (swarm or epic). Native Claude prompting handles small tasks — this skill is for work that warrants a full autonomous execution pipeline.
 
 ## AGENTIC MODE ACTIVE
 
@@ -14,10 +14,10 @@ This workflow runs in **fully autonomous agentic mode**. Do NOT ask for permissi
 
 The Write, Read, Glob, and Edit tools do NOT expand `~`. You MUST run `echo $HOME` first and use the absolute path in ALL tool calls.
 
-- ❌ `Write(file_path="~/.claude-workflows/...")` → **WILL FAIL**
-- ❌ `Glob(pattern="~/.claude-workflows/*")` → **WILL FAIL**
-- ❌ `Read(file_path="~/.claude-workflows/...")` → **WILL FAIL**
-- ✅ `Write(file_path="<HOME>/.claude-workflows/active/<repo-key>/...")` → WORKS
+- `Write(file_path="~/.claude-workflows/...")` → **WILL FAIL**
+- `Glob(pattern="~/.claude-workflows/*")` → **WILL FAIL**
+- `Read(file_path="~/.claude-workflows/...")` → **WILL FAIL**
+- `Write(file_path="<HOME>/.claude-workflows/active/<repo-key>/...")` → WORKS
 
 **Wherever this document references `~/.claude/...` paths, you MUST substitute the actual absolute home path.**
 
@@ -74,31 +74,17 @@ Only pause for:
 
 ## Usage
 ```
-/workflow:start <type> <description> [--mode=<mode>] [--style=<style>] [--format=<format>]
+/workflow:start <description> [--format=<format>]
 ```
 
-## Available Workflow Types
-- `feature` - Full feature development (plan → implement → review → security → test)
-- `bugfix` - Bug investigation and fix pipeline
-- `refactor` - Code refactoring with safety checks
-- `epic` - Multi-component project orchestration (worktree isolation, PR per component, dependency-ordered integration)
+## Workflow Types
 
-## Execution Modes
+There are two execution paths — the architect phase decides which one to use:
 
-| Mode | Description | Primary Model | Review Depth |
-|------|-------------|---------------|--------------|
-| `standard` | Balanced approach (default) | sonnet | 1 code + 1 security |
-| `turbo` | Maximum speed | haiku | Advisory only |
-| `eco` | Token-efficient | haiku | 1 code review |
-| `thorough` | Maximum quality | opus (reviews) | Multi-gate chain |
-| `swarm` | Maximum parallelism | opus (validation) | 3-architect competitive |
+- **swarm** — single-worktree parallel execution. Used when the task is a self-contained feature, fix, or refactor (default for most tasks).
+- **epic** — multi-worktree orchestration with one worktree + PR per component, dependency-ordered integration. Used when the description implies multi-component scope (e.g., "build from scratch", "full application with X, Y, Z", three or more distinct modules).
 
-## Planning Styles
-
-| Style | State Storage | Use Case |
-|-------|---------------|----------|
-| `full` | State file (default) | Complex features, audit trail, user-editable |
-| `light` | JSON file | Quick fixes, simple tasks, minimal overhead |
+The architect selects the execution path. Do not ask the user to choose — infer from scope.
 
 ## State File Formats
 
@@ -111,13 +97,10 @@ Only pause for:
 
 ## Examples
 ```
-/workflow:start feature Add user authentication with JWT tokens
-/workflow:start bugfix Fix race condition in payment --mode=thorough
-/workflow:start refactor Extract validation logic --mode=eco --style=light
-/workflow:start feature swarm: Build complete notification system with email, SMS, push
-/workflow:start feature Implement user management --mode=swarm
-/workflow:start feature Add API endpoint --format=md
-/workflow:start epic Build a complete REST API with auth, CRUD, and real-time notifications
+/workflow:start Add user authentication with JWT tokens
+/workflow:start Fix race condition in payment processing
+/workflow:start Build a complete REST API with auth, CRUD, and real-time notifications
+/workflow:start Add API endpoint --format=md
 ```
 
 ## Input
@@ -139,12 +122,12 @@ You are the **supervisor agent** for this workflow. You coordinate the entire pr
 
 ### Fresh Context Launch (Optional)
 
-For long-running modes (swarm, thorough) or when the user's session already has significant context, launch the entire workflow as a subagent to get a fresh context window.
+For long workflows or when the user's session already has significant context, launch the entire workflow as a subagent to get a fresh context window.
 
 **When to launch as subagent:**
 - `--fresh` or `--isolated` flag is present: always
-- swarm or thorough mode: by default (these are most likely to hit limits)
-- eco or turbo mode: run inline (short workflows, unlikely to hit limits)
+- epic workflows: by default (most likely to hit context limits)
+- swarm workflows: run inline unless context is already heavy
 
 **Launch pattern:**
 ```python
@@ -179,7 +162,7 @@ The parent session only launches and relays results. For interactive control (pa
 
 **Step 0b:** Create workflow directories using Write tool with absolute paths:
 ```
-active/.gitkeep, completed/.gitkeep, context/.gitkeep, memory/.gitkeep → under $HOME_PATH/.claude-workflows/
+active/.gitkeep, completed/.gitkeep, context/.gitkeep → under $HOME_PATH/.claude-workflows/
 $HOME_PATH/.claude-workflows/plans/.gitkeep
 ```
 If creation fails, STOP and tell user to run `/workflow:setup`.
@@ -192,78 +175,60 @@ directory by invoking the plugin helper:
 ```bash
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
 ACTIVE_DIR=$(node "$PLUGIN_ROOT/lib/active-dir-cli.js")
-echo "$ACTIVE_DIR"
+REPO_KEY=$(node "$PLUGIN_ROOT/lib/repo-key-cli.js")
+REPO_ROOT=$(node -e "console.log(require('$PLUGIN_ROOT/lib/repo-key').getRepoRoot())")
+echo "$ACTIVE_DIR | $REPO_KEY | $REPO_ROOT"
 ```
 
-Store the output as `$ACTIVE_DIR` and use it as the parent directory for ALL
-state files created in this workflow. The helper auto-creates the directory
-and honors `CLAUDE_WORKFLOW_STATE_DIR` and `CLAUDE_WORKFLOW_REPO_KEY` env vars.
+Store all three:
+- `$ACTIVE_DIR` — the per-repo bucket; parent directory for ALL state files in
+  this workflow. **Never** write a `.state.json` to the flat `active/` root —
+  the hooks reject it and unscoped files leak into every repo's session.
+- `$REPO_KEY` and `$REPO_ROOT` — stamped into the state object at Step 5b so the
+  workflow is self-describing and matchable across machines and symlinked
+  checkouts. The helper auto-creates the directory and honors
+  `CLAUDE_WORKFLOW_STATE_DIR` / `CLAUDE_WORKFLOW_REPO_KEY`.
 
-If the helper cannot be found at the standard location, fall back to:
-```bash
-ACTIVE_DIR="$HOME_PATH/.claude-workflows/active/$(cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" && basename "$PWD")-$(printf %s "$(git remote get-url origin 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || pwd)" | { command -v sha256sum >/dev/null && sha256sum || shasum -a 256; } | cut -c1-12)"
-mkdir -p "$ACTIVE_DIR"
-```
-But prefer the helper — it is the source of truth.
+If the helper cannot be found, fix `$CLAUDE_PLUGIN_ROOT` and retry. **Do NOT
+hand-derive the key in bash** — a bash hash without `realpath` normalization
+diverges from the resolver and produces a second key for the same repo (the
+symlink/cross-machine mismatch). The Node resolver is the single source of truth.
 
 #### Step 1: Parse input
 
 1. **Parse input**:
-   - First word = workflow type (feature, bugfix, refactor, epic)
-   - Look for `--mode=<mode>` flag (if present, skip mode auto-detection)
-   - Look for `--style=<style>` flag (default: `full`)
    - Look for `--format=<format>` flag (default: `org`, options: `org`, `md`)
-   - Rest = description
-   - If type is missing or unknown: spawn `workflow:task-analyzer` to auto-detect both type AND mode (see Step 2)
+   - Everything else = description
+   - The architect phase determines whether this is a swarm or epic workflow based on scope (see "Workflow Types" above — infer from description, do not ask the user)
 
-#### Step 2: Auto-detect type and mode
+#### Epic Workflow Special Handling
 
-   **Step 2a: Check for explicit keyword prefixes**
-   ```
-   thorough:, careful:, production: → thorough mode
-   quick:, fast:, prototype: → turbo mode
-   eco:, simple:, minor: → eco mode
-   epic: → epic type (with thorough mode, mandatory)
-   ```
-
-   **Step 2b: If no prefix (or type not specified), analyze task**
-
-   Spawn `workflow:task-analyzer` (haiku) with task description. Returns `recommended_type` (feature/bugfix/refactor/epic), `recommended_mode`, `confidence`, and `reasoning`.
-
-   The task-analyzer detects epic type when the description implies multi-component scope (e.g., "build from scratch", "full application with X, Y, Z", 3+ distinct modules).
-
-   **Step 2c: Present recommendation to user** — show type (if auto-detected), mode, confidence, reasoning, and offer `[Enter] Accept | [--type=X] [--mode=X] Override`.
-
-   **Step 2d: Apply selected mode** — use recommendation if accepted, user override if specified. Log decision in workflow state.
-
-#### Epic Type Special Handling
-
-When type is `epic`:
-- **Mode**: Always `thorough` (mandatory — cannot override with `--mode`)
+When the architect selects the **epic** execution path:
 - **Tests**: Always enabled (mandatory — skip test optionality question)
 - **Branch**: Managed automatically (epic/{component_id} per component — skip branch question)
-- **Template**: Use `templates/epic-development.<format>` instead of `templates/feature-development.<format>`
+- **Template**: Use `templates/epic-development.<format>`
 - **Initial phase**: `architecture` (not `planning`)
 - **Phase order**: architecture → component_execution → integration → **post_merge_review** → completion_guard
 
-The `post_merge_review` phase runs the zero-tolerance multi-architect review
-defined in `skills/phases/post-merge-review/SKILL.md` — three opus architects
-(functional / security / quality) in parallel, comparing every delivered file
-against the original `workflow.description` and per-component plans. Any FAIL
-loops back into a fix-and-re-review cycle until 100% PASS.
+The `post_merge_review` phase invokes the fan-out review engine defined in
+`skills/phases/post-merge-review/SKILL.md` — an N-lens roster (functional
+completeness, security, code-quality, plus extended lenses scaled to the change
+profile) runs in parallel, adversarially verifies every finding with ≥3
+independent skeptics, routes confirmed issues to an executor, and loops until a
+complete dry cycle yields zero confirmed findings.
 
-For non-epic workflows running in `thorough` mode, `post_merge_review` is
-**also** inserted (between `quality_gate` and `completion_guard`). Standard /
-turbo / eco modes skip it.
+For swarm workflows, `post_merge_review` is **not** inserted by default (it is part of the epic phase sequence only).
 
 The JSON state sidecar uses an extended schema for epic workflows:
 ```json
 {
   "$schema": "1.0.0",
   "workflow_id": "<id>",
+  "repo_key": "<REPO_KEY>",
+  "repo_root": "<REPO_ROOT>",
   "org_file": "<path>",
   "workflow": { "type": "epic", "description": "<desc>", "branch": "main" },
-  "mode": { "current": "thorough", "original": "thorough" },
+  "mode": { "current": "epic", "original": "epic" },
   "config": {
     "tests_enabled": true,
     "max_parallel_components": 4,
@@ -273,7 +238,7 @@ The JSON state sidecar uses an extended schema for epic workflows:
   "phase": {
     "current": "architecture",
     "completed": [],
-    "remaining": ["component_execution", "integration", "post_merge_review", "completion_guard"],
+    "remaining": ["component_execution", "integration", "post_merge_review", "e2e_validation", "completion_guard"],
     "rate_limit": { "paused_at": null, "resumes_at": null, "cron_job_id": null, "reason": null, "workflow_phase": null }
   },
   "gates": {
@@ -281,6 +246,7 @@ The JSON state sidecar uses an extended schema for epic workflows:
     "component_execution": { "status": "pending", "iteration": 0 },
     "integration": { "status": "pending", "iteration": 0 },
     "post_merge_review": { "status": "pending", "iteration": 0, "verdicts": { "functional": null, "security": null, "quality": null } },
+    "e2e_validation": { "status": "pending", "iteration": 0 },
     "completion_guard": { "status": "pending", "iteration": 0 }
   },
   "architecture": { "components": [], "dependency_order": [], "interfaces": {} },
@@ -291,28 +257,23 @@ The JSON state sidecar uses an extended schema for epic workflows:
 }
 ```
 
-#### Step 2.5: Test optionality
+#### Step 2: Test optionality
 
-After mode is selected, determine test preference:
+Determine test preference:
 
-- **eco/turbo/standard mode**: Use `AskUserQuestion` to ask "Enable test writing?" Default: No
-- **thorough mode**: Tests are mandatory. Inform the user: "Thorough mode requires tests — test writing enabled." Do NOT ask.
-- **swarm mode**: Use `AskUserQuestion` to ask "Enable test writing?" Default: Yes
+- **swarm workflow**: Use `AskUserQuestion` to ask "Enable test writing?" Default: Yes
+- **epic workflow**: Tests are always enabled (mandatory — do NOT ask)
 
 Store the result as `tests_enabled` (boolean) for JSON state creation.
 
-3. **Load mode configuration**: Read `modes/<mode>.org` from the workflow plugin directory. Extract agent routing and settings.
-
-4. **Ask about branch**: Suggest `feature/<short-description>` or `fix/<short-description>`, or use current branch.
+3. **Ask about branch**: Suggest `feature/<short-description>` or `fix/<short-description>`, or use current branch.
 
 5. **Create workflow state** (CRITICAL - use Write tool with ABSOLUTE paths):
    - Generate ID: `YYYYMMDD-<random>` (e.g., `20260204-a1b2c3`)
    - Use the home directory path from Step 0a (e.g., `/home/user`)
    - Use `$ACTIVE_DIR` from Step 0d as the parent for the org and state files
-
-   **If style=full**:
-   - Read template from plugin: `templates/<type>-development.<format>` (use `.org` or `.md` per format flag)
-   - Replace placeholders: `{{WORKFLOW_ID}}`, `{{TITLE}}` (first 50 chars), `{{DESCRIPTION}}`, `{{DATE}}`, `{{TIMESTAMP}}`, `{{BRANCH}}`, `{{BASE_BRANCH}}`, `{{MODE}}`, `{{STATE_FILE}}` (Step 5b path), `{{TESTS_ENABLED}}`
+   - Read template from plugin: `templates/epic-development.<format>` for epic workflows, `templates/swarm-development.<format>` for swarm workflows (use `.org` or `.md` per format flag)
+   - Replace placeholders: `{{WORKFLOW_ID}}`, `{{TITLE}}` (first 50 chars), `{{DESCRIPTION}}`, `{{DATE}}`, `{{TIMESTAMP}}`, `{{BRANCH}}`, `{{BASE_BRANCH}}`, `{{STATE_FILE}}` (Step 5b path), `{{TESTS_ENABLED}}`
    - Write to ABSOLUTE path: `$ACTIVE_DIR/<id>.<format>` — VERIFY by reading back
 
    **Step 5b: Create JSON state sidecar** (CRITICAL — enables hook enforcement):
@@ -323,15 +284,17 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
    {
      "$schema": "1.0.0",
      "workflow_id": "<id>",
+     "repo_key": "<REPO_KEY>",
+     "repo_root": "<REPO_ROOT>",
      "org_file": "<ACTIVE_DIR>/<id>.<format>",
-     "workflow": { "type": "<feature|bugfix|refactor>", "description": "<desc>", "branch": "<branch>" },
-     "mode": { "current": "<mode>", "original": "<mode>" },
+     "workflow": { "type": "<swarm|epic>", "description": "<desc>", "branch": "<branch>" },
      "config": { "tests_enabled": <bool>, "max_code_review_iterations": <n>, "max_security_iterations": <n> },
-     "phase": { "current": "planning", "completed": [], "remaining": ["implementation","code_review","security_review","tests","quality_gate","completion_guard"] },
+     "phase": { "current": "planning", "completed": [], "remaining": ["implementation","code_review","security_review","tests","quality_gate","e2e_validation","completion_guard"] },
      "gates": {
        "planning": {"status":"pending","iteration":0}, "implementation": {"status":"pending","iteration":0},
        "code_review": {"status":"pending","iteration":0}, "security_review": {"status":"pending","iteration":0},
        "tests": {"status":"pending","iteration":0}, "quality_gate": {"status":"pending","iteration":0},
+       "e2e_validation": {"status":"pending","iteration":0},
        "completion_guard": {"status":"pending","iteration":0}
      },
      "agent_log": [], "updated_at": "<ISO timestamp>"
@@ -340,40 +303,35 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
 
    If `tests_enabled === false`: set `gates.tests.status = "skipped"`, `reason = "tests_enabled=false"`, remove from `phase.remaining`.
 
+   The `e2e_validation` gate is created `pending`. Its skip-or-run decision is
+   made later, at the **E2E Validation phase** (after implementation, when a real
+   diff exists) — see that phase below.
+
    **Step 5c: Bind session to workflow** (enables multi-workflow sessions):
 
    Glob for `$TMPDIR_PATH/workflow-session-marker-*.json`, read the most recent to get `session_id`. Write `$TMPDIR_PATH/workflow-binding-{session_id}.json` with `{session_id, workflow_path, workflow_id, bound_at}` — verify by reading back. If no marker found, skip (hooks fall back to most recent workflow).
 
-   **If style=light**: Write `$HOME_PATH/.claude-workflows/state.json`, use TodoWrite for step tracking.
+6. **Run Codebase Analysis** (unless context is fresh):
+   Check if `<HOME>/.claude-workflows/context/<project-slug>.md` exists and is under 7 days old. If not, spawn `codebase-analyzer` agent.
 
-6. **Run Codebase Analysis** (unless eco mode or context is fresh):
-   Check if `<HOME>/.claude-workflows/context/<project-slug>.md` exists and is under 7 days old. If not, spawn `codebase-analyzer` agent. In eco mode, skip and use existing context if available.
+7. **Confirm with user**: show workflow ID + state location, execution path (swarm/epic), context file status (fresh/generated/skipped), ask "Ready to begin Step 1: Planning?"
 
-7. **Load Project Memory** (lightweight, always run):
-   Read `<HOME>/.claude-workflows/memory/<project-slug>.md` if it exists. Key learnings (~1-2k tokens): past decisions, codebase patterns, resolved issues, project conventions.
+### Agent Routing
 
-8. **Confirm with user**: show workflow ID + state location, mode, context file status (fresh/generated/skipped), ask "Ready to begin Step 1: Planning?"
+#### Swarm Workflow Agent Routing
 
-### Agent Routing by Mode
-
-Use the correct agent based on the mode:
-
-| Phase | standard | turbo | eco | thorough | swarm |
-|-------|----------|-------|-----|----------|-------|
-| **Mode Detection** | workflow:task-analyzer | workflow:task-analyzer | workflow:task-analyzer | workflow:task-analyzer | workflow:task-analyzer |
-| **Codebase Analysis** | workflow:codebase-analyzer | workflow:codebase-analyzer | skip | workflow:codebase-analyzer | workflow:codebase-analyzer |
-| **Orchestration** | - | - | - | - | workflow:supervisor |
-| Planning | Plan | workflow:architect-lite | workflow:architect-lite | workflow:architect | workflow:architect (opus) |
-| **Decomposition** | - | - | - | - | workflow:supervisor |
-| Implementation | workflow:executor | workflow:executor-lite | workflow:executor-lite | workflow:executor | workflow:executor ×4 (parallel) |
-| Code Review | workflow:reviewer | workflow:reviewer-lite | workflow:reviewer-lite | workflow:reviewer-deep | workflow:reviewer-deep ×3 |
-| Security | workflow:security | workflow:security-lite | workflow:security-lite | workflow:security-deep | workflow:security-deep (parallel) |
-| Quality Review | - | - | - | - | workflow:reviewer-deep (parallel) |
-| **Quality Gate** | workflow:quality-gate | workflow:quality-gate | workflow:quality-gate | workflow:quality-gate | workflow:quality-gate |
-| **Completion Guard** | workflow:completion-guard | workflow:completion-guard | workflow:completion-guard | workflow:completion-guard (opus) | workflow:completion-guard (opus) |
-| Testing | workflow:test-writer | - | - | workflow:test-writer | workflow:test-writer (parallel) |
-| Performance | - | - | - | workflow:perf-reviewer | workflow:perf-reviewer |
-| Documentation | - | - | - | workflow:doc-writer | workflow:doc-writer |
+| Phase | Agent | Notes |
+|-------|-------|-------|
+| Codebase Analysis | workflow:codebase-analyzer | Skip if context is fresh |
+| Orchestration | workflow:supervisor | |
+| Planning / Decomposition | workflow:architect (opus) | |
+| Implementation | workflow:executor ×4 | Parallel |
+| Code Review | workflow:reviewer-deep ×3 | All must pass |
+| Security | workflow:security-deep | Parallel |
+| Quality Review | workflow:reviewer-deep | Parallel |
+| Quality Gate | workflow:quality-gate | |
+| Completion Guard | workflow:completion-guard (opus) | |
+| Testing | workflow:test-writer | Parallel, if enabled |
 
 #### Epic Workflow Routing
 
@@ -382,7 +340,7 @@ Epic workflows use a different phase sequence:
 | Phase | Agent | Model |
 |-------|-------|-------|
 | Architecture | workflow:architect | opus |
-| Component execution | (full sub-workflow per component — see epic-orchestration skill) | thorough mode |
+| Component execution | (full sub-workflow per component — see epic-orchestration skill) | opus |
 | Integration | workflow:epic-integrator | sonnet |
 | Integration review | workflow:reviewer-deep + workflow:security-deep | opus |
 | Completion guard | workflow:completion-guard | opus |
@@ -391,7 +349,7 @@ The epic orchestrator loads `skills/phases/epic-orchestration` for the full exec
 
 ### Model Selection
 
-Always specify `model=` when spawning agents. Suffix maps to model: `-lite` → haiku, (standard) → sonnet, `-deep` → opus.
+Always specify `model=` when spawning agents. Suffix maps to model: (no suffix) → sonnet, `-deep` → opus.
 
 ### Codebase Context Injection
 
@@ -436,12 +394,12 @@ Agent(
 
 ### Parallel Execution
 
-Use parallel Agent calls where phases are independent. Parallelize: code review + security scan (turbo/standard), perf + doc advisory checks (thorough), independent file implementations. Do NOT parallelize: implementation before review, security before code review in thorough mode (may depend on fixes), dependent file changes.
+Use parallel Agent calls where phases are independent. Parallelize: code review + security scan, independent file implementations. Do NOT parallelize: implementation before review, security before code review (may depend on fixes), dependent file changes.
 
 Background pattern:
 ```python
-agent1 = Agent(subagent_type="workflow:reviewer", run_in_background=true, ...)
-agent2 = Agent(subagent_type="workflow:security", run_in_background=true, ...)
+agent1 = Agent(subagent_type="workflow:reviewer-deep", run_in_background=true, ...)
+agent2 = Agent(subagent_type="workflow:security-deep", run_in_background=true, ...)
 result1 = TaskOutput(task_id=agent1.id)
 result2 = TaskOutput(task_id=agent2.id)
 ```
@@ -450,27 +408,47 @@ result2 = TaskOutput(task_id=agent2.id)
 
 If agent output signals exhaustion (empty, truncated, or contains "context limit"): assess completed objectives in state file (`[x]` vs `[ ]`), spawn a NEW agent with remaining objectives + 2-3 sentence summary + context file path. Track continuation count in state. Max continuations from mode config `MAX_CONTINUATIONS` (default: 3); if exhausted, break into sub-steps or pause. See `resources/context-resilience.md` for spawn template.
 
-### Review Gates by Mode
-
-| Mode | Code Review | Security | Quality Gate | Completion |
-|------|------------|----------|-------------|------------|
-| eco | blocking, iterate until PASS | blocking, iterate until PASS | mandatory (build+lint) | mandatory |
-| turbo | blocking, iterate until PASS | blocking, iterate until PASS | mandatory (abbreviated) | mandatory |
-| standard | blocking, iterate until PASS | blocking, iterate until PASS | mandatory (full) | mandatory |
-| thorough | blocking, iterate until PASS (opus) | blocking, iterate until PASS (opus) | mandatory (full) | mandatory (opus) |
-| swarm | 3-architect parallel (all must pass) | included in architects | mandatory | mandatory (opus) |
+### Review Gates
 
 **Zero tolerance:** ALL gates must PASS. No exceptions, no partial passes, no scope reduction. Iterate until done - do not stop because iteration count is high.
 Review agents know the verdict format and rules via their loaded `phases/review` skill.
 
-#### Swarm Mode Validation
+All workflows use blocking gates: code review → security review → quality gate → e2e validation (FE-facing only) → completion guard. All must pass before proceeding.
 
-In swarm mode, the supervisor agent orchestrates 3-architect parallel validation:
-1. Architect 1: Functional completeness (opus)
-2. Architect 2: Security (security-deep/opus)
-3. Architect 3: Code quality (reviewer-deep/opus)
+#### Swarm Validation
 
-All three must PASS. Max 3 retry cycles. See `agents/supervisor.md` for full orchestration details.
+The supervisor agent invokes the fan-out review engine
+(`skills/phases/post-merge-review/SKILL.md`), which spawns an N-lens roster in
+parallel, adversarially verifies every finding (≥3 skeptics, majority vote),
+routes confirmed issues to the executor, and re-runs the full find→verify loop
+until a complete dry cycle yields zero confirmed findings. See
+`agents/supervisor.md` for full orchestration details.
+
+#### E2E Validation Gate (FE-facing changes)
+
+After the quality gate and before completion, run the **E2E validation gate** —
+but only when the change is front-end-facing:
+
+1. Detect FE-facing changes on the actual diff:
+   ```bash
+   node "$PLUGIN_ROOT/lib/fe-detect-cli.js" --git "$BASE_BRANCH"
+   ```
+   (true when the diff touches routes / components / templates / styles / assets /
+   FE build config).
+2. If `fe_facing` is **false**: set `gates.e2e_validation.status = "skipped"`,
+   `reason = "no FE-facing changes"`, remove it from `phase.remaining`, advance.
+3. If `fe_facing` is **true**: run the E2E flow as a blocking gate — start (or
+   reuse) the dev server, then spawn `workflow:e2e-explorer` →
+   `workflow:e2e-generator` → `workflow:e2e-reviewer`. They drive the browser via
+   the **tool-agnostic driver** (`resources/e2e/browser-driver.md`: Playwright MCP
+   → Chrome DevTools MCP → tpmcp-ux_capture → local Playwright with
+   `ignoreHTTPSErrors`). The `e2e-reviewer` run-and-fix loop must reach zero
+   `[ISSUE-N]` findings; `workflow:e2e-reviewer` passing sets
+   `gates.e2e_validation = passed` (via `AGENT_GATE_MAP`).
+
+Because `e2e_validation` is in the phase order and `state.gates`, the
+`stop-guard` / `task-completed-gate` hooks block completion until it is `passed`
+or `skipped` — an FE-facing workflow cannot finish without it.
 
 ### Phase Dispatch Pattern
 
@@ -534,7 +512,7 @@ The mode config values (MAX_CODE_REVIEW_ITERATIONS, MAX_SECURITY_ITERATIONS) are
 
 **Quality Gate → Completion Guard flow:**
 1. Spawn quality-gate agent (knows its pipeline via skill)
-2. If CHANGES_MADE in output: spawn reviewer-lite for targeted review of changed files
+2. If CHANGES_MADE in output: spawn reviewer-deep for targeted review of changed files
 3. Spawn completion-guard agent (independently re-runs tests, verifies each requirement)
 4. If REJECTED: fix → re-run quality-gate → re-run completion-guard
 5. Iterate until APPROVED (no hard cap on retries)
@@ -554,43 +532,15 @@ If user types anything during the workflow:
 4. **Log intervention** in state
 5. **Confirm** before resuming: "Understood. Should I continue with Step X?"
 
-### Light Style (JSON State)
-
-When `--style=light` is used:
-
-1. Use `<HOME>/.claude-workflows/state.json` instead of org files
-2. Use TodoWrite tool for step tracking
-3. Skip org file creation
-4. State structure:
-
-```json
-{
-  "active_workflow": {
-    "id": "20240115-abc123",
-    "type": "bugfix",
-    "description": "Fix login validation",
-    "mode": "eco",
-    "style": "light",
-    "current_step": "implementation",
-    "started_at": "2024-01-15T14:30:00Z",
-    "steps": {
-      "planning": { "status": "completed", "agent": "architect-lite" },
-      "implementation": { "status": "in_progress", "agent": "executor-lite" }
-    }
-  }
-}
-```
-
 ### Completion
 
 When all gates pass:
 1. Update state: fill Completion Summary, set COMPLETED_AT, calculate TOTAL_DURATION
-2. Generate summary for user (mode, files changed, review iterations, warnings)
-3. Save learnings to `<HOME>/.claude-workflows/memory/<project-slug>.md` (completion-guard agent handles this via its skill)
-4. **Offer live testing** if the completion guard detected web-facing file changes — surface the `/workflow:test-live` suggestion with pre-filled URL if detectable
-5. Ask about commit (suggest message based on work done)
-6. Clean up session temp files from `$TMPDIR_PATH` (workflow-session-marker, workflow-binding, workflow-stop, workflow-deny, workflow-complete files) — use the session_id from Step 5c; skip if none found
-7. Archive: update JSON state to `completed`, move org/md + state.json from `active/` to `completed/`
+2. Generate summary for user (execution path, files changed, review iterations, warnings)
+3. FE-facing changes were already verified by the mandatory `e2e_validation` gate (above). Optionally offer ad-hoc interactive testing via `/workflow:test-live` with a pre-filled URL if one is detectable.
+4. Ask about commit (suggest message based on work done)
+5. Clean up session temp files from `$TMPDIR_PATH` (workflow-session-marker, workflow-binding, workflow-stop, workflow-deny, workflow-complete files) — use the session_id from Step 5c; skip if none found
+6. Archive: update JSON state to `completed`, move org/md + state.json from `$ACTIVE_DIR` to the matching `completed/<repo-key>/` bucket (resolve via `node "$PLUGIN_ROOT/lib/repo-key-cli.js"` — keep the same `<repo-key>`, never the flat `completed/` root)
 
 ### Error Handling
 
@@ -605,14 +555,10 @@ If a subagent fails or returns unexpected results:
 
 ### State File Locations
 
-- Mode configs: `modes/` in plugin directory
 - Templates: `templates/` in plugin directory (both `.org` and `.md` formats)
 - **Active state files**: `<HOME>/.claude-workflows/active/<repo-key>/<id>.org` or `<id>.md` (resolve `<repo-key>` via `$ACTIVE_DIR` from Step 0d)
-- JSON state (light style): `<HOME>/.claude-workflows/state.json`
 - Completed: `<HOME>/.claude-workflows/completed/<repo-key>/`
 - Codebase context: `<HOME>/.claude-workflows/context/`
-- **Project memory**: `<HOME>/.claude-workflows/memory/`
-- Learned skills: `<HOME>/.claude/skills/learned/`
 - Hook logs: `<HOME>/.claude-workflows/hook.log`
 
 **Note:** `<HOME>` = absolute home path from `echo $HOME`. Never use `~` in tool calls.
@@ -630,4 +576,4 @@ See `resources/subagent-prompts.md` for subagent prompt templates.
 
 ---
 
-Begin by parsing the input, determining mode and style, and asking about branch strategy.
+Begin by parsing the input and asking about branch strategy.

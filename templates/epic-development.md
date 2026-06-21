@@ -3,7 +3,7 @@
 **Workflow ID:** {{WORKFLOW_ID}}
 **Type:** epic
 **Status:** active
-**Mode:** thorough
+**Mode:** epic
 **Created:** {{DATE}}
 **Base Branch:** {{BASE_BRANCH}}
 **State File:** {{STATE_FILE}}
