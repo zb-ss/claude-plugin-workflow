@@ -144,11 +144,11 @@ describe('Existing Functionality Preserved', () => {
   });
 
   describe('PHASE_ORDER - Existing Phases', () => {
-    it('should have 8 phases', () => {
-      assert.strictEqual(PHASE_ORDER.length, 8);
+    it('should have 9 phases', () => {
+      assert.strictEqual(PHASE_ORDER.length, 9);
     });
 
-    it('should maintain correct ordering (e2e_validation gates before completion)', () => {
+    it('should maintain correct ordering (e2e + scrub gates before completion)', () => {
       const expected = [
         'planning',
         'implementation',
@@ -157,6 +157,7 @@ describe('Existing Functionality Preserved', () => {
         'tests',
         'quality_gate',
         'e2e_validation',
+        'scrub_gate',
         'completion_guard',
       ];
       assert.deepStrictEqual(PHASE_ORDER, expected);

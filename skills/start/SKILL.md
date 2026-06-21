@@ -79,12 +79,23 @@ Only pause for:
 
 ## Workflow Types
 
-There are two execution paths — the architect phase decides which one to use:
+There are two execution paths — the architect phase decides **deterministically**
+from its own decomposition (it never asks the user):
 
-- **swarm** — single-worktree parallel execution. Used when the task is a self-contained feature, fix, or refactor (default for most tasks).
-- **epic** — multi-worktree orchestration with one worktree + PR per component, dependency-ordered integration. Used when the description implies multi-component scope (e.g., "build from scratch", "full application with X, Y, Z", three or more distinct modules).
+- **swarm** — single-worktree parallel execution (executor batches in one tree, one PR).
+- **epic** — multi-worktree orchestration: one worktree + PR per component, dependency-ordered integration.
 
-The architect selects the execution path. Do not ask the user to choose — infer from scope.
+**Decision rule (over the architect's decomposition).** Run the component
+decomposition first — even for candidate-swarm tasks — producing file scopes, a
+dependency DAG, `dependency_order` waves, and per-component complexity (see
+`skills/phases/epic-orchestration/SKILL.md`). Then choose **epic** if ANY hold:
+component count ≥ 3 · the dependency DAG has more than one wave · ≥ 2 components
+with disjoint file scopes that map cleanly to separate PRs. Otherwise **swarm**
+(one component, or several with shared/overlapping scope and a single wave). The
+architect returns `execution_path: "swarm" | "epic"` plus a one-line `reasoning`,
+persisted to `state.architecture.execution_path`; the supervisor routes on it
+without re-asking. The scrub gate adapts: epic scrubs before *each* component PR
+and the integration PR; swarm scrubs once before its commit/PR.
 
 ## State File Formats
 
@@ -199,7 +210,7 @@ symlink/cross-machine mismatch). The Node resolver is the single source of truth
 1. **Parse input**:
    - Look for `--format=<format>` flag (default: `org`, options: `org`, `md`)
    - Everything else = description
-   - The architect phase determines whether this is a swarm or epic workflow based on scope (see "Workflow Types" above — infer from description, do not ask the user)
+   - The architect phase runs the component decomposition and applies the deterministic **Decision rule** (see "Workflow Types" above) to set `execution_path: swarm|epic` + `reasoning` in `state.architecture`; do not ask the user
 
 #### Epic Workflow Special Handling
 
@@ -238,7 +249,7 @@ The JSON state sidecar uses an extended schema for epic workflows:
   "phase": {
     "current": "architecture",
     "completed": [],
-    "remaining": ["component_execution", "integration", "post_merge_review", "e2e_validation", "completion_guard"],
+    "remaining": ["component_execution", "integration", "post_merge_review", "e2e_validation", "scrub_gate", "completion_guard"],
     "rate_limit": { "paused_at": null, "resumes_at": null, "cron_job_id": null, "reason": null, "workflow_phase": null }
   },
   "gates": {
@@ -247,6 +258,7 @@ The JSON state sidecar uses an extended schema for epic workflows:
     "integration": { "status": "pending", "iteration": 0 },
     "post_merge_review": { "status": "pending", "iteration": 0, "verdicts": { "functional": null, "security": null, "quality": null } },
     "e2e_validation": { "status": "pending", "iteration": 0 },
+    "scrub_gate": { "status": "pending", "iteration": 0 },
     "completion_guard": { "status": "pending", "iteration": 0 }
   },
   "architecture": { "components": [], "dependency_order": [], "interfaces": {} },
@@ -289,12 +301,13 @@ Store the result as `tests_enabled` (boolean) for JSON state creation.
      "org_file": "<ACTIVE_DIR>/<id>.<format>",
      "workflow": { "type": "<swarm|epic>", "description": "<desc>", "branch": "<branch>" },
      "config": { "tests_enabled": <bool>, "max_code_review_iterations": <n>, "max_security_iterations": <n> },
-     "phase": { "current": "planning", "completed": [], "remaining": ["implementation","code_review","security_review","tests","quality_gate","e2e_validation","completion_guard"] },
+     "phase": { "current": "planning", "completed": [], "remaining": ["implementation","code_review","security_review","tests","quality_gate","e2e_validation","scrub_gate","completion_guard"] },
      "gates": {
        "planning": {"status":"pending","iteration":0}, "implementation": {"status":"pending","iteration":0},
        "code_review": {"status":"pending","iteration":0}, "security_review": {"status":"pending","iteration":0},
        "tests": {"status":"pending","iteration":0}, "quality_gate": {"status":"pending","iteration":0},
        "e2e_validation": {"status":"pending","iteration":0},
+       "scrub_gate": {"status":"pending","iteration":0},
        "completion_guard": {"status":"pending","iteration":0}
      },
      "agent_log": [], "updated_at": "<ISO timestamp>"
@@ -449,6 +462,35 @@ but only when the change is front-end-facing:
 Because `e2e_validation` is in the phase order and `state.gates`, the
 `stop-guard` / `task-completed-gate` hooks block completion until it is `passed`
 or `skipped` — an FE-facing workflow cannot finish without it.
+
+#### Scrub Gate (before any public-repo write)
+
+After the E2E gate and before completion, the **scrub gate** runs before any
+commit/branch/PR/push crosses into a non-private repo:
+
+1. Resolve the target (push) repo's visibility:
+   ```bash
+   gh repo view <target_repo> --json visibility,isPrivate
+   ```
+2. If the target is **PRIVATE**: set `gates.scrub_gate.status = "skipped"`,
+   `reason = "target repo is private"`, remove it from `phase.remaining`, advance.
+3. If the target is **PUBLIC or INTERNAL**: scan the crossing surface before pushing:
+   ```bash
+   node "$PLUGIN_ROOT/lib/scrub-cli.js" --git "$BASE_BRANCH" --denylist "$SCRUB_DENYLIST"
+   ```
+   (branch name + commit messages + diff + PR title/body + files, for internal
+   markers — customer/project names, internal hostnames/flags, real IPs, secrets,
+   AI-context files; the denylist lives in the **private control repo**). If
+   markers are found, **do not push** — genericize/redact and re-run; set
+   `gates.scrub_gate = passed` only on a clean scan. Forward-hygiene only — never
+   history-rewrite.
+
+Enforced **twice**: the `scrub_gate` state phase (which `stop-guard` /
+`task-completed-gate` block on) **and** an unbypassable `PreToolUse` hook
+(`hooks/scrub-guard.js`) that blocks any `git push` / `gh pr create` / GitHub-MCP
+write to a non-private repo whose surface carries markers — so even a background
+agent cannot leak. In **epic** mode the scrub runs before *each* component PR and
+the integration PR; in **swarm**, once before the commit/PR.
 
 ### Phase Dispatch Pattern
 

@@ -62,11 +62,25 @@ Agent(
       ["parser"],
       ["type_checker"],
       ["codegen"]
-    ]
+    ],
+    "execution_path": "epic",
+    "reasoning": "4 components, multi-wave DAG, disjoint file scopes → separate PRs",
+    "confidence": 0.85
   }
   ```
-  
+
+  Also emit `confidence` (0–1): how well-specified and unambiguous the task is.
+  Persist to `state.architecture.confidence`. In autonomous runs, a value below
+  the configured `confidence_threshold` makes the driver **park** the task
+  (`blocked` label + a comment asking for clarification) rather than guess.
+
   The dependency_order is a list of waves — each wave contains components that can run in parallel.
+
+  **Decision rule (emitted for EVERY task — the architect decomposes first, then
+  the supervisor routes on this field without asking the user):** set
+  `execution_path: "epic"` if ANY of — component count ≥ 3, the DAG has > 1 wave,
+  or ≥ 2 components with disjoint file scopes mapping to separate PRs; otherwise
+  `"swarm"` (one component, or several with shared scope in a single wave).
   """
 )
 ```
@@ -74,7 +88,7 @@ Agent(
 After the architect completes:
 1. Parse the component list from the output
 2. Write CONTRACTS.md to the project root (if architect hasn't already)
-3. Update the epic state file with components, dependency_order, and interfaces
+3. Update the state file with components, dependency_order, interfaces, and `execution_path`/`reasoning` (under `state.architecture`); the supervisor routes swarm vs epic on `execution_path`
 4. Mark architecture gate as passed
 
 ## Phase 2: Component Execution
@@ -144,6 +158,10 @@ Agent(
   4. Security check → 5. Run tests → 6. Verify completeness
 
   ## Create PR when done
+  ## SCRUB GATE: the push/PR below crosses into {target_repo}. If that repo is
+  ## not private, every `git push` / `gh pr create` is auto-intercepted by the
+  ## scrub-guard PreToolUse hook (blocks on internal markers). If it blocks,
+  ## genericize/redact the flagged content and retry — never history-rewrite.
   cd {absolute_worktree_path}
   git add -A && git commit -m "feat({component_id}): {component_name}"
   git push -u origin epic/{component_id}

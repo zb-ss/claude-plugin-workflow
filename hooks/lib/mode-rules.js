@@ -54,6 +54,7 @@ const PHASE_ORDER = [
   'tests',
   'quality_gate',
   'e2e_validation',   // mandatory for FE-facing changes; marked `skipped` otherwise
+  'scrub_gate',       // mandatory before any public-repo write; `skipped` if target is private
   'completion_guard',
 ];
 
@@ -79,6 +80,7 @@ const EPIC_PHASE_ORDER = [
   'component_execution',
   'integration',
   'e2e_validation',   // mandatory for FE-facing changes; marked `skipped` otherwise
+  'scrub_gate',       // mandatory before any public-repo write; `skipped` if target is private
   'completion_guard',
 ];
 
