@@ -26,6 +26,14 @@ results filled in.
    `skills/queue/SKILL.md` (queue + labels), `skills/auto/SKILL.md` (the driver +
    `/schedule`), `resources/autonomy-config.md` (posture, spend cap, permissions).
 
+> **No setup needed for the quality gates.** Every task automatically runs the full
+> quality pipeline — **capability preflight** (loads the project's convention skills,
+> verifies tooling), risk-scaled **fan-out review**, **quality gate** (baseline +
+> coverage-on-changed-lines + run-rarely-run-code + mutation-lite), **spec-conformance**
+> (each acceptance criterion verified against evidence), **E2E**, and the **scrub gate**.
+> Writing clear **Acceptance Criteria** on each task is what makes the spec-conformance
+> gate effective — that's the one quality lever the user controls per task.
+
 ## 1. Create the private control repo
 
 1. **Ask the user** for the GitHub owner/org and a repo name (default:

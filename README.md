@@ -15,6 +15,7 @@ Long-running autonomous development workflows with parallel agent execution, zer
 - **Repo-scoped state isolation** — State files live in `~/.claude-workflows/active/<repo-key>/`; workflows from different repos never collide
 - **Hardened review system** — Zero-issue PASS, structured `[ISSUE-N]` tracking, fix-by-ID protocol, opus-tier reviewers
 - **Quality and security gates** — `quality-gate` + `completion-guard` run independently after every review pass
+- **Outcome-quality gates** — Capability preflight (loads the right convention skills + verifies tooling), spec-conformance (every acceptance criterion verified against evidence), risk-scaled review depth, coverage-on-changed-lines + mutation-lite, Context7 version-grounding, and per-repo lessons memory that compounds quality across runs
 - **Status line** — Live API usage limits, context window, and session cost in your status bar
 - **E2E testing** — Automated Playwright test generation via browser exploration
 - **Autonomous autopilot** — A private GitHub-issues queue + a scheduled driver run tasks unattended across many repos, surviving usage-limit windows; manage it all from GitHub (even your phone)
@@ -72,9 +73,12 @@ Both styles use opus-tier agents for planning, code review, and security review.
 **Swarm:**
 ```
 Codebase Analysis -> Planning (architect/opus)
-  -> Implementation Batches (up to 4 parallel executors/batch)
-  -> Fan-Out Review Gate (N lenses in parallel: core correctness/security/code-quality + extended lenses; loop-until-dry; adversarial verification ≥3 skeptics per finding; zero-tolerance — confirmed finding blocks and re-runs entire gate)
-  -> QUALITY GATE (build, type, lint, test, regression check)
+  -> CAPABILITY PREFLIGHT (detect stack, load convention skills, verify tooling/MCP — park if a hard req is missing)
+  -> Implementation Batches (up to 4 parallel executors/batch; grounded in mined conventions + Context7 version docs + per-repo lessons)
+  -> Fan-Out Review Gate (risk-scaled depth: N lenses in parallel; loop-until-dry; adversarial verification ≥3 skeptics per finding; zero-tolerance — confirmed finding blocks and re-runs entire gate)
+  -> QUALITY GATE (green baseline, build/type/lint/test, coverage on changed lines, run-rarely-run-code, mutation-lite)
+  -> SPEC CONFORMANCE (each acceptance criterion verified against evidence — unmet routes back to implementation)
+  -> E2E VALIDATION (mandatory for FE-facing changes) -> SCRUB GATE (blocks internal-info leak before any public-repo push)
   -> COMPLETION GUARD (independent test re-run, requirement verification)
   -> COMPLETE (suggests /workflow:test-live if web files changed)
 ```
@@ -82,11 +86,14 @@ Codebase Analysis -> Planning (architect/opus)
 **Epic:**
 ```
 Architecture (decompose into components + dependency DAG)
+  -> CAPABILITY PREFLIGHT (stack/tooling check before any worktree is created)
   -> Component Execution (parallel worktrees, each runs full swarm pipeline above)
     -> Wave 1: independent components (parallel, max 4 worktrees)
     -> Wave 2: components depending on wave 1
     -> ... (rate limit? pause -> auto-resume at exact reset time)
   -> Integration (merge PRs in dependency order, resolve conflicts, full test suite)
+  -> SPEC CONFORMANCE (merged result vs the epic's acceptance criteria)
+  -> E2E VALIDATION -> SCRUB GATE
   -> COMPLETION GUARD
   -> COMPLETE
 ```
