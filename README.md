@@ -14,6 +14,8 @@ Long-running autonomous development workflows with parallel agent execution, zer
 - **Quality and security gates** — `quality-gate` + `completion-guard` run independently after every review pass
 - **Status line** — Live API usage limits, context window, and session cost in your status bar
 - **E2E testing** — Automated Playwright test generation via browser exploration
+- **Autonomous autopilot** — A private GitHub-issues queue + a scheduled driver run tasks unattended across many repos, surviving usage-limit windows; manage it all from GitHub (even your phone)
+- **Scrub gate** — An unbypassable pre-push check blocks internal/secret information from leaking into public repos
 
 ## Installation
 
@@ -23,6 +25,8 @@ Long-running autonomous development workflows with parallel agent execution, zer
 ```
 
 After installation, restart CC and run `/workflow:setup` to configure permissions.
+
+**To run fully autonomously** (queue-driven, unattended across repos), point your coding agent at [`SETUP.md`](SETUP.md): *"Set up the autopilot system by following SETUP.md."* It provisions the private control repo, queue, scrub denylist, and config, then hands you the few manual steps to finish (restart, schedule).
 
 ## Quick Start
 
