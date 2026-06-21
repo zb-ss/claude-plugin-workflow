@@ -386,20 +386,20 @@ describe('nextLabel — invalid transitions', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildGhArgs — list', () => {
-  it('returns correct argv for list', () => {
+  it('returns correct argv for list (no default label — filtered in JS to dodge search lag)', () => {
     const args = buildGhArgs('list', { repo: 'owner/queue' });
     assert.deepEqual(args, [
       'issue', 'list',
       '--repo', 'owner/queue',
-      '--label', 'queued',
       '--state', 'open',
       '--json', 'number,title,body,labels',
     ]);
   });
 
-  it('accepts a custom label override', () => {
+  it('includes --label only when one is explicitly provided', () => {
     const args = buildGhArgs('list', { repo: 'owner/queue', label: 'in-progress' });
-    assert.ok(args.includes('in-progress'));
+    assert.ok(args.includes('--label') && args.includes('in-progress'));
+    assert.ok(!buildGhArgs('list', { repo: 'owner/queue' }).includes('--label'));
   });
 });
 
