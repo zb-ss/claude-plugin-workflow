@@ -4,32 +4,23 @@ Canonical reference for preventing and recovering from context window exhaustion
 
 ## max_turns Defaults
 
-Each agent gets a `max_turns` budget based on the execution mode. These values represent the maximum number of agentic turns (API round-trips) before the Task tool stops the agent.
+Each agent gets a `max_turns` budget. These values represent the maximum number of agentic turns (API round-trips) before the Agent tool stops the agent.
 
-| Agent | eco | turbo | standard | thorough | swarm |
-|---|---|---|---|---|---|
-| executor-lite | 15 | 15 | — | — | — |
-| executor | — | — | 25 | 30 | 25 |
-| reviewer-lite | 8 | 8 | — | — | — |
-| reviewer | — | — | 12 | — | — |
-| reviewer-deep | — | — | — | 15 | 15 |
-| security-lite | 8 | 8 | — | — | — |
-| security | — | — | 10 | — | — |
-| security-deep | — | — | — | 12 | 12 |
-| codebase-analyzer | 15 | 15 | 20 | 25 | 20 |
-| architect-lite | 10 | 8 | — | — | — |
-| architect | — | — | 15 | 20 | 20 |
-| quality-gate | 15 | 12 | 20 | 25 | 20 |
-| completion-guard | 10 | 8 | 12 | 15 | 12 |
-| test-writer | — | — | 20 | 25 | 20 |
-| perf-lite | 8 | 8 | — | — | — |
-| perf-reviewer | — | — | 10 | — | — |
-| doc-writer | 8 | 8 | 8 | 8 | 8 |
-| explorer | 10 | 10 | 10 | 10 | 10 |
+| Agent | swarm | epic |
+|---|---|---|
+| executor | 25 | 25 |
+| reviewer-deep | 15 | 15 |
+| security-deep | 12 | 12 |
+| codebase-analyzer | 20 | 20 |
+| architect | 20 | 20 |
+| quality-gate | 20 | 20 |
+| completion-guard | 12 | 15 |
+| test-writer | 20 | 20 |
+| explorer | 10 | 10 |
+| epic-integrator | — | 30 |
+| supervisor | 50 | 50 |
 
 **Override:** Add +50% for known-complex tasks (many files, large codebase, multiple dependencies).
-
-**Mode config properties:** Each mode's `.org` file stores these as `MAX_TURNS_*` properties. Read them at runtime and pass to the `max_turns` parameter of the Task tool.
 
 ---
 
@@ -150,7 +141,7 @@ Mark the continuation in the state file:
 
 ## Fresh Context Launch
 
-For long-running modes (swarm, thorough), the entire workflow can be launched as a subagent to get a fresh context window. This prevents the orchestrator from inheriting a partially-consumed context from the user's chat session.
+Both swarm and epic workflows launch as subagents by default to get a fresh context window. This prevents the orchestrator from inheriting a partially-consumed context from the user's chat session.
 
 ```python
 # Parent session launches workflow in fresh context
@@ -171,5 +162,4 @@ Task(
 
 **When to use:**
 - `--fresh` or `--isolated` flag: always spawn as subagent
-- swarm/thorough modes: spawn by default (these are most likely to hit limits)
-- eco/turbo modes: run inline (short workflows unlikely to hit limits)
+- swarm/epic modes: spawn by default (long-running, most likely to hit limits)

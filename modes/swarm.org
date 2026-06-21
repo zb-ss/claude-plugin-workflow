@@ -1,18 +1,24 @@
-#+TITLE: Swarm Mode Configuration
-#+DESCRIPTION: Maximum parallelism with orchestrator-only execution and 3-architect validation
+#+TITLE: Swarm Execution Configuration
+#+DESCRIPTION: Single-worktree orchestrator-only parallel execution with fan-out review validation
 #+MODE: swarm
-#+VERSION: 1.0.0
+#+VERSION: 2.0.0
 
-* Swarm Mode
+* Swarm Execution
 
-Swarm mode enables aggressive parallel execution with competitive 3-architect validation.
+Swarm is the default execution style for a single, self-contained piece of work
+(a feature, fix, or refactor that lives in one worktree). The orchestrator
+decomposes the work into parallel units, delegates them to executors, and gates
+the result through the fan-out review engine. Epic execution (multi-worktree,
+one PR per component) is used instead when the architect finds independent
+multi-component scope.
 
 ** Core Principles
 
-1. *Orchestrator-Only*: Main agent NEVER writes code - only delegates
-2. *Aggressive Parallelism*: Decompose into smallest parallel units
-3. *Competitive Validation*: 3 architects review different aspects simultaneously
-4. *Zero Tolerance*: All validation gates must pass
+1. *Orchestrator-Only*: the main agent NEVER writes code — it only delegates.
+2. *Aggressive Parallelism*: decompose into the smallest independent parallel units.
+3. *Fan-Out Validation*: review runs as a scalable roster of independent lenses,
+   not a single pass (see =skills/phases/post-merge-review/SKILL.md=).
+4. *Zero Tolerance*: every validation gate must pass on verified findings.
 
 ** Agent Routing
 
@@ -26,150 +32,75 @@ Swarm mode enables aggressive parallel execution with competitive 3-architect va
 | Planning            | workflow:architect          | opus   | no       |
 | Decomposition       | workflow:supervisor         | sonnet | no       |
 | Implementation      | workflow:executor (multiple)| sonnet | YES (4)  |
-| Code Review         | workflow:reviewer-deep      | opus   | YES (3)  |
-| Security Review     | workflow:security-deep      | opus   | YES (3)  |
-| Quality Review      | workflow:reviewer-deep      | opus   | YES (3)  |
-| Quality Gate        | workflow:reviewer           | sonnet | no       |
-| Completion Guard    | workflow:reviewer-deep      | opus   | no       |
+| Code Review         | workflow:reviewer-deep      | opus   | YES (N)  |
+| Security Review     | workflow:security-deep      | opus   | YES (N)  |
+| Quality Gate        | workflow:quality-gate       | sonnet | no       |
+| Completion Guard    | workflow:completion-guard   | opus   | no       |
 
 *NEVER use built-in agents without the =workflow:= prefix - they may use bash for file ops*
 
 ** Parallel Execution Strategy
 
 *** Implementation Phase
-- Maximum 4 parallel executors per batch
-- Group by file independence
-- Interface/stub batch first, then implementations
+- Up to 4 parallel executors per batch, grouped by file independence.
+- Interface/stub batch first, then implementations, then tests.
 
 #+begin_src
-Batch 1 (parallel):
-├── executor-1: interfaces/types
-├── executor-2: core service A
-├── executor-3: core service B
-└── executor-4: controller stubs
-
-Batch 2 (parallel - depends on batch 1):
-├── executor-1: service implementations
-├── executor-2: repository implementations
-├── executor-3: controller implementations
-└── executor-4: middleware/helpers
-
-Batch 3 (parallel - depends on batch 2):
-├── executor-1: unit tests A
-├── executor-2: unit tests B
-├── executor-3: integration tests
-└── executor-4: e2e tests
+Batch 1 (parallel):  interfaces/types · core service A · core service B · controller stubs
+Batch 2 (parallel, depends on 1):  service impls · repository impls · controller impls · middleware
+Batch 3 (parallel, depends on 2):  unit tests A · unit tests B · integration tests · e2e tests
 #+end_src
 
-*** 3-Architect Validation
+*** Fan-Out Review Validation
 
-ALL three must approve before proceeding:
+Review is not a fixed set of three architects. The supervisor invokes the
+**fan-out review engine** (=skills/phases/post-merge-review/SKILL.md=), which:
 
-#+begin_src
-┌─────────────────────────────────────────────────────────┐
-│              3-ARCHITECT VALIDATION                     │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │ ARCHITECT 1 │  │ ARCHITECT 2 │  │ ARCHITECT 3 │     │
-│  │ Functional  │  │  Security   │  │   Quality   │     │
-│  │ Completeness│  │   Review    │  │   Patterns  │     │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘     │
-│         │                │                │             │
-│         ▼                ▼                ▼             │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │              AGGREGATOR                          │   │
-│  │  ALL must PASS → Continue                       │   │
-│  │  ANY FAIL → Aggregate issues → Fix → Retry      │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-#+end_src
+1. Spawns a roster of independent review *lenses* (core: correctness, security,
+   code-quality; extended lenses added by change profile + remaining quota).
+2. Has each lens report *every* candidate finding (coverage; no self-filtering,
+   no per-lens verdict) in the =[ISSUE-N]= format.
+3. Loops until dry (K consecutive rounds with nothing new), then adversarially
+   verifies each fresh finding with ≥3 independent skeptics (majority-to-confirm).
+4. Routes any confirmed finding to an executor fix and re-runs the whole gate (a
+   fixed point), passing only on a clean, fully-verified cycle.
 
-** Validation Focuses
+The number of lenses (N) and verifiers (V) scale with the change and with quota;
+the zero-tolerance bar does not.
 
-*** Architect 1: Functional Completeness
-- All requirements implemented
-- Edge cases handled
-- Error states covered
-- User flows complete
-- API contracts satisfied
+** Retry / Fix Cycle
 
-*** Architect 2: Security
-- OWASP Top 10 compliance
-- Authentication/authorization
-- Input validation
-- SQL injection prevention
-- XSS prevention
-- CSRF protection
-- Sensitive data handling
-
-*** Architect 3: Code Quality
-- SOLID principles
-- DRY compliance
-- Naming conventions
-- Complexity metrics
-- Test coverage
-- Documentation
-- Maintainability
-
-** Retry Strategy
-
-#+begin_src
-MAX_VALIDATION_RETRIES = 3
-
-while validation_failed and retries < MAX_VALIDATION_RETRIES:
-    1. Aggregate all failures from 3 architects
-    2. Spawn executor to fix issues
-    3. Re-run 3-architect validation
-    4. retries++
-
-if still_failing:
-    pause_for_user_intervention()
-#+end_src
+Handled by the fan-out engine's fixed-point loop: confirmed findings → executor
+fix → entire gate re-runs. If =MAX_FIX_CYCLES= (=max_code_review_iterations=) is
+exhausted with findings still confirmed, the engine pauses and surfaces them to
+the user — it never auto-passes.
 
 ** Rate-Limit Handling
 
-Swarm supervisors follow the same rate-limit protocol as every other workflow
-type. See =skills/shared/rate-limit-handling.md= for the full protocol.
+Swarm supervisors follow the same protocol as every workflow. See
+=skills/shared/rate-limit-handling.md=. After every parallel batch (executors,
+review lenses, or verifiers), run =detectRateLimit()= on each agent's output. If
+any reports a marker:
 
-After every parallel batch (executors or architects), the supervisor runs
-=detectRateLimit()= on each agent's output. If any agent reports a marker:
-
-1. Capture partial results from agents that *did* return successfully — the
-   pause should not throw away work already done.
-2. Call =applyRateLimitPause(state, { reason, resumesAt, workflowPhase })= with
-   =workflowPhase= set to the swarm phase the supervisor was in
-   (=implementation=, =validation=, =quality_gate=).
+1. Capture partial results from agents that *did* return — don't discard work.
+2. =applyRateLimitPause(state, { reason, resumesAt, workflowPhase })= with the
+   current phase (=implementation=, =validation=, =quality_gate=).
 3. Schedule =CronCreate= with =buildResumePrompt(workflow_id)= and
-   =buildCronExpression(resumesAt)=.
+   =buildCronExpression(resumesAt, { timezone: 'utc' })=.
 4. Print =buildPauseReport(...)= and exit the supervisor turn.
 
-On =/workflow:resume=, the resume skill clears the pause and re-enters swarm
-mode at the recorded phase, picking up only the work units that did NOT
-complete before the pause.
+On =/workflow:resume=, the resume skill clears the pause and re-enters at the
+recorded phase, picking up only the units that did not complete.
 
-** Comparison with Other Modes
+** Swarm vs Epic
 
-| Feature                    | standard | thorough | swarm     |
-|----------------------------+----------+----------+-----------|
-| Orchestrator-only          | no       | no       | YES       |
-| Parallel implementation    | limited  | limited  | aggressive |
-| Parallel executors/batch   | 1        | 2        | 4         |
-| Validation architects      | 1        | 1        | 3         |
-| Model tier (validation)    | sonnet   | opus     | opus      |
-| Auto-decomposition         | no       | no       | YES       |
-| Task batching              | no       | partial  | YES       |
-
-** Token Efficiency
-
-Swarm uses MORE tokens than other modes but:
-- Parallel execution = faster wall-clock time
-- 3-architect validation = higher quality
-- Aggressive decomposition = better parallelization
-- Orchestrator-only = cleaner separation of concerns
-
-Estimated token multiplier: 1.5-2x vs standard mode
+| Feature                   | swarm                  | epic                          |
+|---------------------------+------------------------+-------------------------------|
+| Worktrees                 | single                 | one per component             |
+| Decomposition             | parallel units in-tree | components + dependency waves |
+| PRs                       | one                    | one per component + integration |
+| Review                    | fan-out engine         | fan-out engine (per component + post-merge) |
+| Used when                 | self-contained change  | independent multi-component scope |
 
 ** State Tracking
 
@@ -178,80 +109,40 @@ Estimated token multiplier: 1.5-2x vs standard mode
 ** Orchestrator Session: <id>
 ** Decomposition
 *** Batch 1: Interfaces
-    - [ ] Task 1.1: UserService interface
-    - [ ] Task 1.2: UserRepository interface
+    - [ ] Task 1.1 / 1.2 ...
 *** Batch 2: Implementations
-    - [ ] Task 2.1: UserService impl
-    - [ ] Task 2.2: UserRepository impl
-** Validation
-*** Architect 1: Functional
-    - Status: PENDING
-    - Verdict: -
-*** Architect 2: Security
-    - Status: PENDING
-    - Verdict: -
-*** Architect 3: Quality
-    - Status: PENDING
-    - Verdict: -
+    - [ ] Task 2.1 / 2.2 ...
+** Validation (fan-out review engine)
+*** Lenses run: <list>
+    - Confirmed findings: <count>
+    - Fix cycle: <n>
 ** Quality Gate: PENDING
 ** Completion Guard: PENDING
 #+end_src
 
-** Trigger Keywords
-
-Auto-select swarm mode with:
-- ~swarm:~ prefix
-- ~parallel:~ prefix
-- ~multiagent:~ prefix
-- ~max-quality:~ prefix
-
-Or explicitly: ~--mode=swarm~
-
 ** Best For
 
-- Large feature implementations
-- Critical production code
-- Multi-file refactors
-- When quality > speed > cost
-- Complex architectural changes
+- Large feature implementations and multi-file refactors
+- Critical production code where verified quality matters
+- Any self-contained change that benefits from parallel execution
+
+For independent multi-component scope (e.g. "build a full application with X, Y,
+Z"), the architect selects epic execution instead.
 
 ** Agent Teams Enhancement (Experimental)
 
-When =CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1= is set, swarm mode can leverage
-Claude Code's native Agent Teams feature for enhanced agent coordination.
+When =CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1= is set, swarm can use Claude Code's
+native Agent Teams for peer-to-peer coordination instead of the =Task= tool.
 
-*** Comparison
+| Workflow concept   | Agent Teams equivalent   |
+|--------------------+--------------------------|
+| Supervisor         | Lead agent (delegate)    |
+| Executor           | Teammate                 |
+| Review lens / verifier | Parallel teammates   |
+| Aggregator         | Shared task completion   |
 
-| Feature                | Without Agent Teams      | With Agent Teams             |
-|------------------------+--------------------------+------------------------------|
-| Agent communication    | Task tool (parent→child) | Peer-to-peer messaging       |
-| Task coordination      | Supervisor manages all   | Shared task list             |
-| Delegation             | Background Task calls    | Native delegate mode         |
-| Plan review            | Manual aggregation       | Built-in plan approval       |
-
-*** How Our Concepts Map
-
-| Workflow Plugin        | Agent Teams Equivalent   |
-|------------------------+--------------------------|
-| Supervisor             | Lead agent (delegate)    |
-| Executor               | Teammate                 |
-| 3-architect validation | Parallel teammates       |
-| Aggregator             | Shared task completion   |
-
-*** Fallback
-
-If Agent Teams is not available (env var not set or feature not supported),
-swarm mode falls back to the standard =Task= tool approach automatically.
-No code changes needed - the supervisor prompt handles both paths.
-
-*** Setup
-
-Add to your shell profile (~/.bashrc or ~/.zshrc):
-#+begin_src bash
-export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-#+end_src
-
-Or run =/workflow:setup= which will guide you through the configuration.
+If Agent Teams is unavailable, swarm falls back to the =Task= tool approach
+automatically — no changes needed.
 
 * Settings
 :PROPERTIES:

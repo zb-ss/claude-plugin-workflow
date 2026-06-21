@@ -339,31 +339,39 @@ git worktree remove .claude/worktrees/epic-{component_id}
 git branch -d epic/{component_id}  # or leave for reference
 ```
 
-## Phase 4: Post-Merge Multi-Architect Review (mandatory in thorough)
+## Phase 4: Post-Merge Review (mandatory in thorough)
 
 After Phase 3 closes with all components merged and integration tests green,
-the supervisor MUST run the post-merge multi-architect review. See
-`skills/phases/post-merge-review/SKILL.md` for the full protocol.
+the supervisor MUST invoke the fan-out review engine. The full protocol is
+defined in `skills/phases/post-merge-review/SKILL.md`; follow it verbatim.
 
 In summary:
 
-1. Spawn three opus architects in parallel: `workflow:architect` (functional),
-   `workflow:security-deep` (security), `workflow:reviewer-deep` (quality).
-2. Each architect compares the integrated codebase against
+1. Build an N-lens roster (core lenses: functional-completeness, security,
+   code-quality; add extended lenses — performance, data-integrity, API-contract,
+   etc. — scaled to the change profile and remaining quota).
+2. Spawn the full roster in parallel (`run_in_background=true`, opus tier);
+   each lens reports **every** candidate finding against
    `state.workflow.description` + `state.architecture.components` +
-   `state.components` (per-component plans) and returns a `[PASS]/[FAIL]`
-   checklist with a final `VERDICT:` line.
-3. Aggregate. If any architect returns `VERDICT: FAIL`, run an executor to
-   fix every `[FAIL]` line and re-spawn all three architects. Loop up to
-   `MAX_REVIEW_ITERATIONS` (default 5).
-4. On 100% PASS: write all architect outputs to `<id>.review.md`, mark
-   `gates.post_merge_review.status = "passed"`, advance to `completion_guard`.
-5. On exhausted iterations: pause and surface the still-failing items to the
-   user — do not auto-pass.
+   `state.components` (per-component plans). Lenses do not emit a verdict.
+3. Loop-until-dry: keep spawning fresh roster rounds until K=2 consecutive
+   rounds surface no new findings (dedup on file+line+claim).
+4. Adversarially verify every fresh finding with ≥3 independent skeptics
+   (correctness, reachability, reproduction); a finding is confirmed only on a
+   majority of CONFIRMED votes.
+5. Route confirmed findings to `workflow:executor` for fixes; after each
+   Fix-Report, **re-run the entire engine from Step 1** (fixed point). Reset
+   seen/dry; keep the all-time confirmed log for the audit trail.
+6. The gate passes only when a complete find→verify cycle yields zero confirmed
+   findings, K dry rounds in a row. On `MAX_FIX_CYCLES` exhaustion: pause and
+   surface the still-confirmed items to the user — do not auto-pass.
+7. Write the full audit trail to `<id>.review.md`; mark
+   `gates.post_merge_review.status = "passed"`; advance to `completion_guard`.
 
-This phase is **zero-tolerance**: a single missing acceptance criterion, even
-cosmetic, fails the gate. The trade-off is honest: epic-level investments
-deserve the scrutiny.
+This phase is **zero-tolerance**: a single confirmed finding blocks the gate.
+The fan-out engine's adversarial verification ensures the gate is both
+exhaustive and trustworthy — it does not cry wolf on noise, but it does not
+let real gaps through.
 
 ## State Update Pattern
 

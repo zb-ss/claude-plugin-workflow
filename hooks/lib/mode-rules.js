@@ -9,34 +9,15 @@
  * preferred: the default model for this mode
  */
 const MODEL_CONSTRAINTS = {
-  eco: {
-    forbidden: ['opus'],
-    preferred: 'haiku',
-    description: 'Budget-conscious, haiku only',
-  },
-  turbo: {
-    forbidden: ['opus'],
-    preferred: 'haiku',
-    description: 'Speed-first, no opus',
-  },
-  standard: {
-    forbidden: [],
-    preferred: 'sonnet',
-    description: 'Balanced, sonnet default',
-  },
-  thorough: {
-    forbidden: [],
-    preferred: 'sonnet',
-    description: 'Quality-first, opus for reviews',
-  },
   swarm: {
     forbidden: [],
     preferred: 'sonnet',
-    description: 'Parallel execution, opus for validation',
+    description: 'Single-worktree parallel execution, opus for review/validation',
   },
   epic: {
     forbidden: [],
     preferred: 'sonnet',
+    description: 'Multi-worktree per-component execution, opus for review/validation',
   },
 };
 
@@ -46,23 +27,13 @@ const MODEL_CONSTRAINTS = {
  */
 const AGENT_GATE_MAP = {
   'workflow:architect': 'planning',
-  'workflow:architect-lite': 'planning',
   'workflow:executor': 'implementation',
-  'workflow:executor-lite': 'implementation',
-  'workflow:reviewer': 'code_review',
-  'workflow:reviewer-lite': 'code_review',
   'workflow:reviewer-deep': 'code_review',
-  'workflow:security': 'security_review',
-  'workflow:security-lite': 'security_review',
   'workflow:security-deep': 'security_review',
   'workflow:test-writer': 'tests',
   'workflow:quality-gate': 'quality_gate',
   'workflow:completion-guard': 'completion_guard',
-  'workflow:perf-reviewer': 'performance',
-  'workflow:perf-lite': 'performance',
-  'workflow:doc-writer': 'documentation',
   'workflow:codebase-analyzer': 'codebase_analysis',
-  'workflow:task-analyzer': 'task_analysis',
   'workflow:supervisor': 'orchestration',
   'workflow:e2e-explorer': 'e2e_exploration',
   'workflow:e2e-generator': 'e2e_generation',
@@ -82,6 +53,7 @@ const PHASE_ORDER = [
   'security_review',
   'tests',
   'quality_gate',
+  'e2e_validation',   // mandatory for FE-facing changes; marked `skipped` otherwise
   'completion_guard',
 ];
 
@@ -106,6 +78,7 @@ const EPIC_PHASE_ORDER = [
   'architecture',
   'component_execution',
   'integration',
+  'e2e_validation',   // mandatory for FE-facing changes; marked `skipped` otherwise
   'completion_guard',
 ];
 

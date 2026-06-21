@@ -150,6 +150,15 @@ describe('buildCronExpression()', () => {
     assert.equal(day, '28');
     assert.equal(mon, '4');
   });
+
+  it('defaults to UTC when no timezone option is given (DST-safe)', () => {
+    // No opts → must compute UTC components, identical to explicit utc mode.
+    assert.equal(
+      buildCronExpression('2026-04-28T15:30:00Z'),
+      buildCronExpression('2026-04-28T15:30:00Z', { timezone: 'utc' }),
+    );
+    assert.equal(buildCronExpression('2026-04-28T15:30:00Z'), '31 15 28 4 *');
+  });
 });
 
 describe('buildPauseReport()', () => {

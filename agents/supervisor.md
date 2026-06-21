@@ -79,12 +79,10 @@ Batch 2 (parallel - after batch 1):
 
 | Agent Type | Subagent Type |
 |------------|---------------|
-| executor-lite | `workflow:executor-lite` |
 | executor | `workflow:executor` |
-| reviewer | `workflow:reviewer` |
 | reviewer-deep | `workflow:reviewer-deep` |
-| security | `workflow:security` |
 | security-deep | `workflow:security-deep` |
+| quality-gate | `workflow:quality-gate` |
 
 **ALWAYS use `workflow:` prefixed agents** for all tasks except the built-in `Plan` agent.
 
@@ -139,56 +137,29 @@ for agent in agents:
 
 ## Validation Orchestration
 
-For ultrawork mode, spawn 3 parallel architects:
+Invoke the fan-out review engine (`skills/phases/post-merge-review/SKILL.md`):
 
 ```python
-# 3-architect validation (parallel)
-architects = [
-    Agent(
-        subagent_type="workflow:architect",
-        max_turns=15,  # From mode config MAX_TURNS_ARCHITECT
-        run_in_background=true,
-        prompt="""
-        ## VALIDATION FOCUS: Functional Completeness
-
-        Review the implementation against requirements.
-        Check: All features implemented, edge cases handled, requirements met.
-
-        {implementation_summary}
-        """
-    ),
-    Agent(
-        subagent_type="workflow:security-deep",
-        max_turns=12,  # From mode config MAX_TURNS_SECURITY
-        run_in_background=true,
-        prompt="""
-        ## VALIDATION FOCUS: Security
-
-        Review for security vulnerabilities.
-        Check: OWASP top 10, injection, auth issues, data exposure.
-
-        {implementation_summary}
-        """
-    ),
-    Agent(
-        subagent_type="workflow:reviewer-deep",
-        max_turns=15,  # From mode config MAX_TURNS_REVIEWER
-        run_in_background=true,
-        prompt="""
-        ## VALIDATION FOCUS: Code Quality
-
-        Review for code quality and patterns.
-        Check: SOLID, DRY, naming, complexity, maintainability.
-
-        {implementation_summary}
-        """
-    )
-]
-
-# ALL must pass
-results = [a.output(block=true) for a in architects]
-if any(r.verdict == "FAIL" for r in results):
-    aggregate_failures_and_fix()
+# Fan-out review engine — follow SKILL.md verbatim
+# 1. Build N-lens roster (core: functional-completeness, security, code-quality;
+#    add extended lenses based on change profile and remaining quota).
+# 2. Spawn full roster in parallel (run_in_background=true, opus tier).
+#    Each lens reports EVERY candidate finding — no self-filtering, no verdict.
+# 3. Loop-until-dry: K=2 consecutive dry rounds required.
+# 4. Adversarially verify every fresh finding: ≥3 skeptics, majority CONFIRMED.
+# 5. Route confirmed findings to workflow:executor; re-run engine after each
+#    Fix-Report (fixed point). Gate passes only on a fully dry verified cycle.
+# 6. On MAX_FIX_CYCLES exhaustion: pause and surface to user — do not auto-pass.
+#
+# The engine's gate status is authoritative; write it explicitly to state
+# (do not rely on transcript scraping).
+invoke_fan_out_review_engine(
+    gate="post_merge_review",
+    scope={"description": state.workflow.description,
+           "components": state.architecture.components,
+           "per_component_plans": state.components},
+    state_path=WORKFLOW_STATE_FILE,
+)
 ```
 
 ## Progress Tracking
@@ -203,7 +174,7 @@ TodoWrite([
     {"content": "Batch 1: UserRepository interface", "status": "pending"},
     {"content": "Batch 2: Implementations", "status": "pending"},
     {"content": "Batch 3: Tests", "status": "pending"},
-    {"content": "Validation: 3-architect review", "status": "pending"},
+    {"content": "Validation: fan-out review engine", "status": "pending"},
 ])
 
 # Update as agents complete
@@ -239,8 +210,8 @@ if agent_failed:
 
 After **every** agent spawn or tool call, scan the result for rate-limit
 markers and pause the workflow if any are found. This is mandatory for every
-mode (standard, thorough, swarm, eco, turbo) and every workflow type (feature,
-bugfix, refactor, epic, translate).
+workflow, whether it runs in swarm (single-worktree) or epic (multi-worktree)
+execution.
 
 The shared protocol — detection markers, state shape, scheduling helpers,
 and resume behaviour — is defined in
@@ -332,7 +303,7 @@ if context_limit_detected(agent_output):
 
 ## max_turns Quick Reference
 
-Default values for standard mode (see `resources/context-resilience.md` for all modes):
+Default values (see `resources/context-resilience.md` for swarm/epic specifics):
 
 | Agent | max_turns |
 |---|---|
@@ -387,7 +358,7 @@ Report progress in structured format:
 │ Pending:                                        │
 │ ○ Unit tests (batch 3)                          │
 │ ○ Integration tests (batch 3)                   │
-│ ○ 3-architect validation                        │
+│ ○ Fan-out review engine                         │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -395,7 +366,7 @@ Report progress in structured format:
 
 Workflow is complete ONLY when:
 1. All decomposed tasks have passing agents
-2. All 3 validation architects approve
+2. Fan-out review engine passes (zero confirmed findings, full dry cycle)
 3. Quality gate passes
 4. Completion guard approves
 5. No pending TODOs remain
@@ -432,7 +403,6 @@ This ensures learnings are auto-loaded by Claude Code for ALL future sessions.
 ║  Duration: <total-time>                                        ║
 ║  Files Changed: <count>                                        ║
 ║                                                                 ║
-║  Workflow moved to: ~/.claude-workflows/completed/             ║
-║  Learnings saved to: ~/.claude-workflows/memory/<project>.md   ║
+║  Workflow moved to: ~/.claude-workflows/completed/<repo-key>/  ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```

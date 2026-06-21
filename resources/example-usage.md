@@ -1,85 +1,107 @@
 # Workflow Orchestrator - Usage Examples
 
+## Execution Styles
+
+The plugin supports two long-running autonomous workflow styles:
+
+- **Swarm** — single git worktree, parallel executor batches (up to 4), N-lens fan-out review gate (core lenses: correctness/security/code-quality + extended lenses scaled to change profile; loop-until-dry; adversarial verification ≥3 skeptics per finding; zero-tolerance routing). Use for large single-feature implementations.
+- **Epic** — multi-worktree, one per component, full quality pipeline per component, dependency-ordered integration. Use for multi-component projects or greenfield apps.
+
 ## Basic Usage
 
 ```bash
-# Feature development
-/workflow feature Add user authentication with JWT tokens and refresh token support
+# Swarm mode — parallel executors within one worktree
+/workflow:start swarm: "Build notification system with email and push channels"
 
-# Bug fix
-/workflow bugfix Fix the race condition in the payment processing queue
+# Epic mode — decompose into components, each gets its own worktree + PR
+/workflow:start epic "Build a REST API with auth, products, and orders"
 
-# Refactoring
-/workflow refactor Extract the validation logic from UserController into a dedicated service
+# E2E test generation
+/workflow:test-e2e http://localhost:8080 --framework=laravel --auth=form
 
-# Security hardening
-/workflow security Audit and harden the API endpoints for the admin panel
+# Interactive live browser testing
+/workflow:test-live http://localhost:8080 --user=admin@test.com --pass=secret
 ```
 
-## What Happens
+## Swarm Workflow Walkthrough
 
-### Feature Workflow Example
+1. **You invoke:** `/workflow:start swarm: "Implement dark mode support"`
 
-1. **You invoke:** `/workflow feature Add dark mode support`
+2. **Codebase Analysis:**
+   - `workflow:codebase-analyzer` explores the repo
+   - Saves conventions to `~/.claude-workflows/context/<repo-key>.md`
 
-2. **Planning Phase:**
-   - Supervisor spawns `Plan` agent
-   - Agent explores codebase, identifies theme system, components to modify
-   - Creates plan at `.claude-workflows/plans/<id>-plan.md`
-   - Supervisor validates plan has actionable steps
+3. **Planning:**
+   - `workflow:architect` (opus) creates a detailed plan
+   - Plan saved to `~/.claude-workflows/active/<repo-key>/<id>.org`
 
-3. **Implementation Phase:**
-   - Supervisor spawns `workflow:executor` agent
-   - Agent follows plan, modifies/creates files using native Write/Edit tools
-   - Reports changes made
+4. **Parallel Implementation (batches):**
+   - Up to 4 `workflow:executor` agents run simultaneously per batch
+   - Each handles an independent slice (types, service A, service B, etc.)
+   - Batches are dependency-ordered
 
-4. **Code Review Phase:**
-   - Supervisor spawns `workflow:reviewer` agent
-   - Agent checks implementation against plan
-   - If FAIL: Supervisor sends feedback to `workflow:executor`, loops
-   - If PASS: Proceeds
+5. **Fan-Out Review Gate:**
+   - N lenses run in parallel (core: functional-completeness, security, code-quality; extended lenses added by change profile)
+   - Each lens reports every candidate finding — no self-filtering, no per-lens verdict
+   - Loop-until-dry: rounds repeat until K consecutive rounds surface nothing new
+   - Adversarial verification: ≥3 independent skeptics try to refute each finding; majority-to-confirm
+   - Zero tolerance: any confirmed finding blocks, routes to executor fix, and the entire gate re-runs; gate passes only on a full dry loop with zero confirmed findings
 
-5. **Security Review Phase:**
-   - Supervisor spawns `workflow:security` agent
-   - Checks for XSS in theme switching, etc.
-   - If issues: Loop back to implementation
+6. **Quality Gate:**
+   - `workflow:quality-gate` runs build, type-check, lint, tests
 
-6. **Test Writing Phase:**
-   - Supervisor spawns `workflow:test-writer` agent
-   - Creates tests for dark mode functionality
-   - Verifies tests pass
+7. **Completion Guard:**
+   - `workflow:completion-guard` re-runs tests and verifies each requirement
 
-7. **Completion:**
-   - Supervisor updates state to "completed"
-   - Outputs detailed summary
-   - You review and test manually
+8. **Done:** state file updated, summary output, you review and commit manually.
 
-## Monitoring Progress
+## Epic Workflow Walkthrough
 
-Check the workflow state:
+1. **You invoke:** `/workflow:start epic "Build a compiler front-end"`
+
+2. **Architecture Phase:**
+   - `workflow:architect` decomposes project into components with a dependency DAG
+   - Components: e.g., lexer, parser, AST, type-checker, code-gen
+
+3. **Component Execution (waves, parallel worktrees):**
+   - Wave 1: independent components run in parallel (max 4 worktrees)
+   - Wave 2: components that depend on wave 1, and so on
+   - Each component runs the full swarm pipeline (analysis → plan → impl → fan-out review gate → QG → CG → PR)
+   - Rate limit hit? Workflow pauses and auto-resumes at exact reset time
+
+4. **Integration Phase:**
+   - `workflow:epic-integrator` merges PRs in dependency order
+   - Conflict resolution, full test suite run
+
+5. **Completion Guard:** final requirements verification.
+
+## State Files
+
+State is tracked per-repository in `~/.claude-workflows/active/<repo-key>/`.
+
 ```bash
-cat .claude/workflow-state.json | jq .
+# Check active workflows for this repo
+node ~/.claude/plugins/workflow/lib/active-dir-cli.js
+
+# Check status from within a workflow session
+/workflow:status
+
+# Resume an interrupted workflow
+/workflow:resume
 ```
 
 ## Interrupting a Workflow
 
-If you need to pause or cancel:
-- Simply stop Claude (Ctrl+C)
-- State is preserved in `.claude/workflow-state.json`
-- You can resume manually or start fresh
+- Stop Claude (Ctrl+C) — state is preserved in the org/md file
+- `/workflow:resume` to continue from where it left off
+- Edit the state file live to add notes or change objectives before the next step
 
-## Customization
+## Monitoring Progress
 
-### Adding a New Workflow Type
+The statusline shows live API usage, context window, and session cost:
 
-1. Edit `~/.claude/skills/workflow-orchestrator/SKILL.md`
-2. Add new workflow section with phases
-3. Update the command file to recognize the new type
+```
+Opus | 5h ██████████ 100% 2h30m | 7d █████░░░░░  52% 3d | + 29% $11.61/$40.00 | ctx ████░░░░░░  42% | $0.87
+```
 
-### Changing Max Review Iterations
-
-Edit the `MAX_REVIEWS` value in the skill file.
-
-### Custom Notifications
-
-Add a hook for the `Notification` event to integrate with Slack, Discord, etc.
+Enable with `/workflow:setup-statusline enable`. [Details](../docs/status-line.md)

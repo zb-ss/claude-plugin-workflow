@@ -38,10 +38,14 @@ The workflow state file (`.org` or `.md`) is the source of truth. Update it:
 3. **After finishing** - Write outputs, set `COMPLETED_AT`, mark step DONE
 4. **On any error** - Log the error in the state file
 
+Use the absolute state-file path provided in your task prompt — it lives in the
+per-repo bucket `<HOME>/.claude-workflows/active/<repo-key>/<id>.org`, **never**
+the flat `active/` root. Do not reconstruct a flat path.
+
 **Pattern:**
 ```
-Read(file_path="<HOME>/.claude-workflows/active/<id>.org")
-Edit(file_path="<HOME>/.claude-workflows/active/<id>.org",
+Read(file_path="<ACTIVE_DIR>/<id>.org")
+Edit(file_path="<ACTIVE_DIR>/<id>.org",
      old_string="**Status:** pending",
      new_string="**Status:** in-progress")
 ```

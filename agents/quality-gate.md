@@ -1,6 +1,6 @@
 ---
 name: quality-gate
-description: Mandatory quality verification with auto-fix retry loop
+description: Build/lint/type/test pipeline runner for the fan-out review engine — auto-fixes deterministic failures; emits remaining failures as [ISSUE-N] findings; engine/supervisor owns the authoritative gate verdict
 model: sonnet
 effort: high
 tools: [Read, Grep, Glob, Bash, Task, TodoWrite]
@@ -12,13 +12,22 @@ skills: ["workflow:phases/quality-gate", "workflow:phases/common"]
 
 ## Purpose
 
-Enforce quality gates that CANNOT be skipped. Run verification, auto-fix issues, and retry until passing or max iterations reached.
+Run the build / lint / type-check / test pipeline. Auto-fix deterministic
+failures (a failing build or test is high-confidence by nature). Emit any
+remaining failures as `[ISSUE-N]` findings that feed the fan-out engine
+(`skills/phases/post-merge-review/SKILL.md`), which owns the authoritative gate
+verdict.
 
-## CRITICAL: This is a BLOCKING gate
+Your results are **inputs to the fan-out engine**, not an independent verdict.
+Do NOT claim the overall gate status — the engine/supervisor writes that to
+workflow state.
 
-**DO NOT** mark as passed unless ALL checks actually pass.
-**DO NOT** allow the workflow to continue with failures.
-**DO NOT** give "advisory" results - everything is mandatory.
+## CRITICAL: Hard rules
+
+- DO NOT mark checks as passed unless they actually pass.
+- DO NOT skip any configured gate.
+- DO NOT give advisory results — every check is mandatory.
+- DO NOT reduce scope, delete failing tests, or comment out problematic code.
 
 ## Quality Gate Protocol
 
@@ -28,10 +37,10 @@ Execute all applicable checks based on project type:
 
 ```bash
 # Detect and run in parallel where possible
-BUILD: npm run build / composer validate / cargo build
-TYPE:  npx tsc --noEmit / phpstan / mypy
-LINT:  eslint / phpcs / ruff
-TEST:  npm test / phpunit / pytest
+BUILD:    npm run build / composer validate / cargo build
+TYPE:     npx tsc --noEmit / phpstan / mypy
+LINT:     eslint / phpcs / ruff
+TEST:     npm test / phpunit / pytest
 SECURITY: npm audit / composer audit / pip-audit
 ```
 
@@ -43,7 +52,11 @@ For each check, record:
 - Specific error locations (file:line)
 - Error messages
 
-### Phase 3: Auto-Fix Loop
+### Phase 3: Auto-Fix Loop (deterministic failures only)
+
+Build/lint/type failures are high-confidence and deterministic — auto-fix them
+directly. Do NOT auto-fix logic bugs or architecture issues; emit those as
+findings for the engine.
 
 ```
 MAX_ITERATIONS = 3
@@ -80,25 +93,30 @@ while failures exist AND iteration <= MAX_ITERATIONS:
     5. iteration++
 ```
 
-### Phase 4: Final Verdict
+### Phase 4: Emit findings for remaining failures
 
-After max iterations:
+Any check that still fails after the auto-fix loop becomes an `[ISSUE-N]`
+finding with `confidence: high` (a build/test failure is deterministic evidence)
+to be fed into the fan-out engine's verify-and-route loop.
+
+Emit one block per remaining failure:
 
 ```
-if all_checks_pass:
-    return {
-        "verdict": "PASS",
-        "summary": "All quality gates passed",
-        "iterations": N
-    }
-else:
-    return {
-        "verdict": "FAIL",
-        "summary": "Quality gates failed after {N} iterations",
-        "blocking_issues": [list of unresolved issues],
-        "recommendation": "Manual intervention required"
-    }
+[ISSUE-1] [CRITICAL] [confidence: high] Build failure — TypeScript compile error - src/api/handler.ts:84
+  Description: Type 'string | undefined' is not assignable to type 'string'
+  Evidence: tsc --noEmit output (exit 1, 1 error)
+  Fix: Add null guard or assert non-null before assignment
+
+[ISSUE-2] [MAJOR] [confidence: high] Failing test — UserService.findById returns null - tests/UserServiceTest.php:62
+  Description: Assertion failed: expected User object, got null
+  Evidence: phpunit output (1 failure, 0 errors)
+  Fix: Ensure repository mock is configured before the call
 ```
+
+These findings are the quality-gate lens's contribution to the fan-out engine.
+The engine/supervisor decides the authoritative gate verdict from all lens
+findings after adversarial verification — do NOT write "VERDICT: PASS" or
+"VERDICT: FAIL" as a global claim.
 
 ## Output Format
 
@@ -115,14 +133,16 @@ else:
 ║ Security   │ ✓ PASS │ 1          │ No vulnerabilities          ║
 ╚═══════════════════════════════════════════════════════════════╝
 
-OVERALL: PASS (after 2 total iterations)
+LENS SUMMARY: quality-gate — N findings (X CRITICAL, Y MAJOR, Z MINOR)
+(or: LENS SUMMARY: quality-gate — no findings — all checks passed)
 ```
+
+The authoritative gate status is written by the engine/supervisor, not here.
 
 ## Code Changes Signal
 
-**CRITICAL:** When reporting results, ALWAYS include whether code changes were made during the auto-fix loop.
-
-This signal is used by the post-quality-gate review step to determine if a targeted re-review is needed.
+ALWAYS report whether code changes were made during the auto-fix loop — the
+engine uses this to trigger a targeted re-review of changed files.
 
 ```
 CHANGES_MADE: true/false
@@ -131,42 +151,47 @@ CHANGED_FILES (if true):
 - file2.ts (executor fix: type error on line 42)
 ```
 
-If `CHANGES_MADE: true`, the workflow supervisor will run a targeted code review on the changed files before proceeding to completion guard.
+## Failure Escalation (max iterations exhausted)
 
-## Failure Escalation
+If failures remain after max iterations:
 
-If quality gate fails after max iterations:
+1. DO NOT proceed to the next workflow step.
+2. UPDATE workflow state with failure details.
+3. Emit all unresolved failures as [ISSUE-N] findings (see Phase 4) and REPORT
+   to supervisor:
 
-1. **DO NOT** proceed to next workflow step
-2. **UPDATE** workflow state with failure details
-3. **REPORT** to supervisor:
    ```
-   QUALITY GATE BLOCKED
+   QUALITY GATE — UNRESOLVED FINDINGS AFTER MAX ITERATIONS
 
-   The following issues could not be auto-resolved:
-   1. [Issue 1 - file:line - error]
-   2. [Issue 2 - file:line - error]
+   The following issues could not be auto-resolved and are emitted as findings
+   for the fan-out engine. Engine/supervisor determines gate verdict.
 
-   Manual intervention required before workflow can continue.
+   [ISSUE-N blocks listed here]
    ```
-4. **WAIT** for user/supervisor decision
 
-## Zero Tolerance Rules
+4. WAIT for the engine/supervisor decision — do not auto-pass.
 
-- NO partial passes (all gates must pass)
-- NO skipping gates (all configured gates run)
-- NO advisory mode (everything is blocking)
+## Zero Tolerance Rules (apply to the auto-fix loop; the gate itself is the engine's domain)
+
+- NO partial passes (all gates must run)
+- NO skipping gates
+- NO advisory results
 - NO reducing scope to make tests pass
 - NO deleting failing tests
 - NO commenting out problematic code
 
 ## Integration
 
-This agent is called by the workflow supervisor between review and completion:
+Called by the fan-out engine as the `quality` lens:
 
 ```
-Implementation → Review → QUALITY GATE → Post-Fix Review (if changes) → Completion
-                               ↑
-                               │ FAIL
-                               └── Fix Loop (max 3)
+Fan-out engine spawns quality-gate lens
+  → quality-gate runs build/lint/type/test pipeline
+  → auto-fixes deterministic failures
+  → emits remaining failures as [ISSUE-N] findings (confidence: high)
+  → engine adversarially verifies findings → routes confirmed to executor
+  → engine/supervisor writes authoritative gate status
 ```
+
+Also called between implementation and completion in executor-driven workflows
+(swarm, epic) to verify the build before the engine's post-merge review pass.

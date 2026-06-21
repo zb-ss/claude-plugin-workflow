@@ -1,12 +1,12 @@
 # Swarm Mode
 
-Swarm mode enables aggressive parallel execution with competitive 3-architect validation. Use it for large features, multi-service implementations, and when quality matters more than cost.
+Swarm mode enables aggressive parallel execution with a scalable N-lens fan-out review gate. Use it for large features, multi-service implementations, and when quality matters more than cost.
 
 ## Key Features
 
 - **Orchestrator-only** - Main agent NEVER writes code, only delegates to supervisor
 - **Aggressive parallelism** - Up to 4 executors per batch
-- **3-architect validation** - Functional, Security, Quality (all must pass)
+- **Fan-out review gate** - Scalable roster of N independent review lenses with adversarial verification and zero-tolerance routing
 - **Task decomposition** - Automatic batching of independent tasks
 
 ## Pipeline
@@ -44,15 +44,24 @@ TASK DECOMPOSITION
 +-----------------------------------------------------+
      | ALL COMPLETE
 +-----------------------------------------------------+
-| 3-ARCHITECT VALIDATION (parallel)                   |
+| FAN-OUT REVIEW GATE                                 |
 |                                                     |
-| architect-1: Functional completeness (opus)         |
-| architect-2: Security review (security-deep)        |
-| architect-3: Code quality (reviewer-deep)           |
+| Round 1…N (loop-until-dry, K consecutive empty):   |
+|   lens: functional-completeness (opus)              |
+|   lens: security (security-deep)                    |
+|   lens: code-quality (reviewer-deep)                |
+|   + extended lenses scaled to change profile        |
 |                                                     |
-| ALL THREE MUST PASS                                 |
+| Each lens reports EVERY finding (no self-filter).   |
+|                                                     |
+| Adversarial verification: ≥3 independent skeptics   |
+| try to REFUTE each finding; majority-to-confirm.    |
+|                                                     |
+| Confirmed finding → executor fix → ENTIRE GATE      |
+| RE-RUNS (fixed point). Gate passes only on a full   |
+| dry loop with zero confirmed findings.              |
 +-----------------------------------------------------+
-     | ALL PASS (or retry max 3)
+     | ZERO CONFIRMED FINDINGS (or retry max cycles)
 QUALITY GATE
      | PASS
 COMPLETION GUARD (opus)
@@ -60,17 +69,32 @@ COMPLETION GUARD (opus)
 COMPLETE
 ```
 
-## 3-Architect Validation
+## Fan-Out Review Gate
 
-Three independent architect agents review the implementation in parallel:
+The review gate runs a scalable roster of independent lenses in parallel, then adversarially verifies every finding before routing.
 
-| Architect | Focus | Agent |
-|-----------|-------|-------|
-| Architect 1 | Functional completeness | architect (opus) |
-| Architect 2 | Security (OWASP, auth) | security-deep (opus) |
-| Architect 3 | Code quality (SOLID, patterns) | reviewer-deep (opus) |
+### How it works
 
-All three must PASS. If any fails, issues are sent back for fixing with max 3 retry cycles.
+1. **Find** — a roster of N lenses spawns in parallel; every lens reports *every* candidate finding (coverage, no self-filtering) with a `confidence` and `severity` per finding.
+2. **Loop-until-dry** — rounds keep running until K consecutive rounds surface nothing new. Different lenses and re-runs catch the tail that a single pass drops.
+3. **Adversarially verify** — each fresh finding is challenged by ≥3 independent skeptics that try to *refute* it (default: refuted). A finding is confirmed only on a majority of CONFIRMED votes. This eliminates plausible-but-wrong findings before zero-tolerance applies.
+4. **Route (zero tolerance)** — any confirmed finding blocks, routes to an executor fix, and the **entire gate re-runs** from step 1. The gate passes only on a full dry loop with zero confirmed findings.
+
+### Core lenses (always included)
+
+| Lens | Focus | Agent |
+|------|-------|-------|
+| functional-completeness | Requirements coverage, correctness | architect (opus) |
+| security | OWASP, auth, injection, secrets | security-deep (opus) |
+| code-quality | SOLID, patterns, error-handling | reviewer-deep (opus) |
+
+### Extended lenses (added by change profile)
+
+Additional lenses — performance, concurrency, data-integrity, API-contract, observability, accessibility, resilience — are added when the change profile warrants and quota allows. The roster scales with the change; the verdict bar does not.
+
+### Verdict bar
+
+The gate passes only when a complete find→verify cycle yields zero confirmed findings with K consecutive dry rounds. Scrutiny scales up with change size and criticality; it never scales down.
 
 ## Agent Teams (Experimental)
 

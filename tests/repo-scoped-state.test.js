@@ -1,13 +1,16 @@
 /**
- * Tests for repo-scoped findActiveStates() / countOtherRepoStates() in
- * hooks/lib/state.js. The active dir layout is:
+ * Tests for repo-scoped findActiveStates() / findLegacyStates() /
+ * countOtherRepoStates() in hooks/lib/state.js. The active dir layout is:
  *
- *   <state-root>/active/                 ← legacy flat-layout files
+ *   <state-root>/active/                 ← unscoped legacy flat-layout files
  *   <state-root>/active/<repo-key>/      ← per-repo bucket
  *
- * findActiveStates({ scope: 'current' }) returns the current repo's bucket
- * + legacy flat files. countOtherRepoStates() returns the total number of
- * state files in *other* repo buckets.
+ * Workflow identity is self-describing: state objects carry a `repo_key`.
+ * findActiveStates({ scope: 'current' }) returns ONLY workflows whose key
+ * matches the current repo (bucket dir name or embedded repo_key) — it never
+ * returns unscoped legacy files, which would otherwise bleed into every repo's
+ * session. findLegacyStates() returns those unscoped files for a migrate notice.
+ * countOtherRepoStates() returns the number of state files in *other* buckets.
  */
 
 'use strict';
@@ -77,14 +80,27 @@ describe('findActiveStates({ scope: "current" })', () => {
     assert.equal(found[0].scope, 'current');
   });
 
-  it('also returns legacy flat-layout files (scope tag = "legacy")', () => {
+  it('excludes unscoped legacy flat-layout files (no repo_key)', () => {
     const base = path.join(stateRoot, 'active');
     writeStateFile(path.join(base, 'repo-current', 'a.state.json'), makeState('a'));
     writeStateFile(path.join(base, 'legacy-1.state.json'), makeState('legacy-1'));
 
     const found = state.findActiveStates({ scope: 'current' });
-    const byScope = Object.fromEntries(found.map(e => [e.state.workflow_id, e.scope]));
-    assert.deepEqual(byScope, { 'a': 'current', 'legacy-1': 'legacy' });
+    const ids = found.map(e => e.state.workflow_id).sort();
+    assert.deepEqual(ids, ['a']); // legacy-1 is NOT surfaced as a current workflow
+  });
+
+  it('classifies a STAMPED flat-layout file by its repo_key, not its location', () => {
+    const base = path.join(stateRoot, 'active');
+    // Mislocated at the flat root but self-identifying as the current repo.
+    writeStateFile(path.join(base, 'mis.state.json'), makeState('mis', { repo_key: 'repo-current' }));
+    // Self-identifying as a different repo → excluded from "current".
+    writeStateFile(path.join(base, 'elsewhere.state.json'), makeState('elsewhere', { repo_key: 'repo-other-z' }));
+
+    const found = state.findActiveStates({ scope: 'current' });
+    const ids = found.map(e => e.state.workflow_id).sort();
+    assert.deepEqual(ids, ['mis']);
+    assert.equal(found[0].scope, 'current');
   });
 
   it('ignores reserved subdirs starting with "_"', () => {
@@ -104,7 +120,7 @@ describe('findActiveStates({ scope: "current" })', () => {
 });
 
 describe('findActiveStates({ scope: "all" })', () => {
-  it('returns workflows from every repo bucket plus legacy', () => {
+  it('returns workflows from every repo bucket but NOT unscoped legacy', () => {
     const base = path.join(stateRoot, 'active');
     writeStateFile(path.join(base, 'repo-current', 'a.state.json'), makeState('a'));
     writeStateFile(path.join(base, 'repo-other-x', 'b.state.json'), makeState('b'));
@@ -112,11 +128,51 @@ describe('findActiveStates({ scope: "all" })', () => {
 
     const found = state.findActiveStates({ scope: 'all' });
     const ids = found.map(e => e.state.workflow_id).sort();
-    assert.deepEqual(ids, ['a', 'b', 'legacy']);
+    assert.deepEqual(ids, ['a', 'b']); // unscoped legacy excluded
     const scopes = Object.fromEntries(found.map(e => [e.state.workflow_id, e.scope]));
     assert.equal(scopes.a, 'current');
     assert.equal(scopes.b, 'other:repo-other-x');
-    assert.equal(scopes.legacy, 'legacy');
+  });
+});
+
+describe('findLegacyStates()', () => {
+  it('returns only unscoped flat-layout files (no repo_key)', () => {
+    const base = path.join(stateRoot, 'active');
+    writeStateFile(path.join(base, 'repo-current', 'a.state.json'), makeState('a'));
+    writeStateFile(path.join(base, 'legacy-1.state.json'), makeState('legacy-1'));
+    writeStateFile(path.join(base, 'stamped.state.json'), makeState('stamped', { repo_key: 'repo-current' }));
+
+    const legacy = state.findLegacyStates();
+    const ids = legacy.map(e => e.state.workflow_id).sort();
+    assert.deepEqual(ids, ['legacy-1']); // bucket file and stamped flat file excluded
+  });
+
+  it('returns [] when there are no unscoped flat-layout files', () => {
+    const base = path.join(stateRoot, 'active');
+    writeStateFile(path.join(base, 'repo-current', 'a.state.json'), makeState('a'));
+    assert.deepEqual(state.findLegacyStates(), []);
+  });
+});
+
+describe('cross-repo isolation (resume safety)', () => {
+  it('a workflow created in repo A is invisible to a session in repo B', () => {
+    const base = path.join(stateRoot, 'active');
+    // Workflow lives in repo A's bucket, stamped with repo A's key.
+    writeStateFile(
+      path.join(base, 'repo-A', 'feat.state.json'),
+      makeState('feat', { repo_key: 'repo-A' }),
+    );
+
+    // Session B: switch the current repo key for the duration of this test.
+    const saved = process.env.CLAUDE_WORKFLOW_REPO_KEY;
+    process.env.CLAUDE_WORKFLOW_REPO_KEY = 'repo-B';
+    try {
+      const found = state.findActiveStates({ scope: 'current' });
+      assert.deepEqual(found, []); // repo A's workflow does not leak into repo B
+      assert.deepEqual(state.findLegacyStates(), []); // and is not mistaken for legacy
+    } finally {
+      process.env.CLAUDE_WORKFLOW_REPO_KEY = saved;
+    }
   });
 });
 

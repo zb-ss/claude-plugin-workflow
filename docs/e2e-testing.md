@@ -13,8 +13,8 @@ Generate end-to-end Playwright test suites automatically by exploring your runni
 # With framework and auth
 /workflow:test-e2e http://localhost:8080 --framework=symfony --auth=form
 
-# Deep exploration in thorough mode
-/workflow:test-e2e http://localhost:3000 --mode=thorough --depth=5
+# Deep exploration
+/workflow:test-e2e http://localhost:3000 --depth=5
 
 # Just generate config files, skip test generation
 /workflow:test-e2e http://localhost:8080 --config-only
@@ -30,7 +30,6 @@ Generate end-to-end Playwright test suites automatically by exploring your runni
 | `--framework` | auto-detect | `symfony`, `laravel`, `vue`, `react`, `next`, `generic` |
 | `--auth` | `none` | `none`, `form`, `token`, `cookie` |
 | `--depth` | `3` | BFS exploration depth limit |
-| `--mode` | `standard` | `eco`, `turbo`, `standard`, `thorough` |
 | `--output` | framework-dependent | Test output directory |
 | `--config-only` | `false` | Only generate config, skip exploration and tests |
 | `--format` | `org` | State file format: `org` or `md` |
@@ -41,8 +40,8 @@ Generate end-to-end Playwright test suites automatically by exploring your runni
 Setup --> Exploration --> Generation --> Validation --> Quality Gate --> Completion
   |          |               |              |              |              |
   |    e2e-explorer    e2e-generator   e2e-reviewer   quality-gate  completion-guard
-  |    (Playwright     (app map ->     (run tests,    (lint, type   (final check)
-  |     MCP tools)      test specs)    check quality)  check)
+  |    (driver-        (app map ->     (run tests,    (lint, type   (final check)
+  |     agnostic)       test specs)    check quality)  check)
   v
  Install deps,
  detect framework,
@@ -57,14 +56,14 @@ Handled inline by the supervisor:
 - Install `@playwright/test` and chromium browser
 - Generate `playwright.config.ts` from template with framework-specific webserver config
 - Create output directory and update `.gitignore`
-- Verify Playwright MCP tools are accessible
+- Select browser driver per `resources/e2e/browser-driver.md` (see below)
 - Configure auth fixtures (if `--auth` specified)
 
 ### Phase 1: Exploration
 
-The `e2e-explorer` agent crawls the application using Playwright MCP:
+The `e2e-explorer` agent crawls the application using the selected browser driver:
 
-- BFS traversal using `browser_navigate` and `browser_snapshot`
+- BFS traversal via navigate and accessibility snapshot actions
 - Records all interactive elements (links, buttons, forms, inputs)
 - Tracks which pages require authentication
 - Detects SPA routing vs full navigation
@@ -81,13 +80,12 @@ The `e2e-generator` agent creates test files from the app map:
 
 ### Phase 3: Validation
 
-The `e2e-reviewer` agent runs and reviews tests in a loop:
+The `e2e-reviewer` agent runs and reviews tests in a loop (max 3 iterations):
 
 - Executes tests with `npx playwright test`
 - Checks selector quality, anti-patterns, test isolation, and assertions
 - Runs flakiness check (3 runs, compares results)
 - Issues tracked with `[ISSUE-N]` IDs, sent back to generator for fixes
-- Auto-escalates to opus on final iteration (thorough mode)
 
 ### Phase 4-5: Quality Gate & Completion Guard
 
@@ -111,7 +109,7 @@ All generated tests enforce accessibility-first selectors:
 
 ### Form (`--auth=form`)
 
-Discovers the login form via `browser_snapshot`, generates `global-setup.ts` that authenticates before tests and saves session state. Test credentials are read from `E2E_USER` and `E2E_PASS` environment variables (never hardcoded).
+Discovers the login form via an accessibility snapshot (using the selected driver), generates `global-setup.ts` that authenticates before tests and saves session state. Test credentials are read from `E2E_USER` and `E2E_PASS` environment variables (never hardcoded).
 
 ### Token (`--auth=token`)
 
@@ -121,24 +119,20 @@ Generates a fixture that injects an authorization header from the `E2E_TOKEN` en
 
 Generates a fixture that sets a session cookie from the `E2E_SESSION_COOKIE` env var.
 
-## Agent Routing by Mode
+## Browser Driver Selection
 
-| Phase | eco | turbo | standard | thorough |
-|-------|-----|-------|----------|----------|
-| Exploration | haiku | haiku | sonnet | sonnet |
-| Generation | haiku | haiku | sonnet | sonnet |
-| Validation | haiku | haiku | sonnet | opus |
-| Quality Gate | haiku | haiku | sonnet | sonnet |
-| Completion | haiku | haiku | sonnet | opus |
+E2E agents select a driver at runtime per `resources/e2e/browser-driver.md`. No single MCP is hard-required. The selection order is:
 
-### Max Review Iterations
+1. **Playwright MCP** — `mcp__playwright__browser_*` tools
+2. **Chrome DevTools MCP** — `mcp__chrome-devtools__*` tools
+3. **tpmcp UX-capture MCP** — `mcp__tpmcp-ux_capture__*` tools
+4. **Local Playwright fallback** — standalone Node script with `ignoreHTTPSErrors: true` (used when no MCP is present or self-signed TLS blocks the MCP)
 
-| Mode | Validation | Quality Gate |
-|------|------------|--------------|
-| eco | 1 | 1 |
-| turbo | 2 | 1 |
-| standard | 3 | 2 |
-| thorough | 3 | 3 |
+The selected driver is reported in the setup summary (e.g. `DRIVER: chrome-devtools`). Generated test specs are always Playwright (`@playwright/test` / `npx playwright test`) — only the live exploration is driver-agnostic, so `@playwright/test` is still installed as a dev dependency.
+
+## Mandatory Gate in FE-Facing Workflows
+
+Beyond this standalone command, `e2e_validation` is a **mandatory gate** in swarm and epic dev workflows whenever the change is FE-facing. FE-facing detection is performed by `lib/fe-detect-cli.js` — it triggers when the change set touches routes, components, templates, styles, assets, or FE config files. On a non-FE change the gate status is set to `skipped`. The gate is enforced by the `stop-guard` and `task-completed-gate` hooks via the phase order, so an FE-facing workflow cannot reach completion without passing `e2e_validation`.
 
 ## Framework Detection
 
@@ -190,7 +184,10 @@ npx playwright show-report       # HTML report
 
 ## Requirements
 
-- Playwright MCP server configured in Claude Code settings:
+- Target web application running and accessible
+- Node.js (included with Claude Code)
+- `@playwright/test` dev dependency (auto-installed during setup) — required to run generated specs
+- At least one browser driver available (Playwright MCP, Chrome DevTools MCP, tpmcp UX-capture MCP, or local Playwright). Playwright MCP is optional but recommended for the richest action mapping:
   ```json
   {
     "mcpServers": {
@@ -201,5 +198,3 @@ npx playwright show-report       # HTML report
     }
   }
   ```
-- Target web application running and accessible
-- Node.js (included with Claude Code)

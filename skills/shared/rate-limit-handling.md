@@ -1,14 +1,17 @@
 ---
-description: Shared rate-limit pause/resume protocol used by every workflow supervisor (epic, swarm, feature, bugfix, refactor, translate)
+description: Shared quota-window pause/resume protocol used by every workflow supervisor (swarm or epic)
 disable-model-invocation: true
 ---
 
-# Rate-Limit Handling Protocol
+# Quota-Window / Rate-Limit Handling Protocol
 
-This protocol applies to **every workflow type**. When an Anthropic API call,
-agent task, or tool invocation hits a rate limit, capacity error, or 429-class
-response, supervisors MUST pause the workflow rather than burn retries against
-an exhausted quota.
+This protocol applies to **every workflow** (swarm and epic). When an agent task
+or tool invocation hits a usage limit — a transient API rate limit / 429 / 529,
+or a subscription **quota window** (the 5-hour or weekly Claude usage limit) —
+supervisors MUST pause the workflow rather than burn retries against an exhausted
+quota. Pausing to the exact reset instant (read from the statusline cache) and
+auto-resuming is what keeps a long-running workflow autonomous across a 5-hour or
+weekly cutoff.
 
 The detection markers, state shape, and scheduling helpers live in
 `hooks/lib/rate-limit.js`. Treat that module as the source of truth — do not
@@ -77,6 +80,12 @@ PROMPT=$(node -e "console.log(require('$PLUGIN_ROOT/hooks/lib/rate-limit').build
 
 Then invoke the `CronCreate` tool: `cron=$CRON, prompt=$PROMPT, recurring=false`.
 
+**Schedule in UTC.** `buildCronExpression` returns the expression in **UTC** — a
+reset is an absolute instant, and a local-time cron drifts across DST/timezone.
+Pass `CronCreate`'s UTC / timezone option so it fires the expression in UTC. Only
+if your scheduler interprets cron in local time, build it with
+`buildCronExpression('$RESETS_AT', { timezone: 'local' })` instead.
+
 Store the returned cron job ID in `state.phase.rate_limit.cron_job_id` (re-run
 step 2's snippet with `cronJobId` set).
 
@@ -94,24 +103,28 @@ The cron will fire `/workflow:resume <id>` when the limit clears.
 ### 5. On resume
 
 The shared resume skill (`/workflow:resume`) checks `state.phase.rate_limit`
-**regardless of workflow type**. If `paused_at` is set and `resumes_at` has
+**regardless of execution style**. If `paused_at` is set and `resumes_at` has
 passed, it:
 
 1. Calls `clearRateLimitPause(state)` and writes back the state.
-2. Logs `"Rate limit cleared. Resuming <type> workflow."`.
-3. Returns control to the workflow-type-specific resume branch
-   (epic component-execution, swarm validation, feature implementation, etc.).
+2. Logs `"Usage limit cleared. Resuming workflow."`.
+3. Re-enters at the **last completed gate boundary** — `workflow_phase` records
+   where the supervisor was, and resume restarts that phase. The finest durable
+   checkpoint is per-gate (`state.gates.<gate>.{status,iteration}`), so a gate
+   that was mid-flight when the limit hit **re-runs whole** (acceptable — the
+   gates are idempotent fixed points; sub-gate checkpointing is a later
+   refinement). Control then passes to the swarm or epic resume branch.
 
 If `resumes_at` is still in the future the resume skill offers the user three
 choices: wait (re-schedule cron), cancel pause and try anyway, or exit.
 
 ## Why one protocol for all workflows?
 
-Before this refactor, only the epic workflow handled rate limits. Swarm /
-feature / bugfix supervisors would hit a 429, silently fail, and lose hours
-of work waiting for a human to notice. With the shared protocol, every
-supervisor pauses cleanly and self-resumes — autonomy is preserved across
-quota windows.
+Before this refactor, only the epic workflow handled rate limits. A swarm
+supervisor would hit a limit, silently fail, and lose hours of work waiting for a
+human to notice. With the shared protocol, every supervisor pauses cleanly and
+self-resumes at the reset instant — autonomy is preserved across 5-hour and
+weekly quota windows.
 
 ## Don't re-implement
 

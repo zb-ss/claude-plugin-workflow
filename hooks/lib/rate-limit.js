@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Shared rate-limit handling for workflow supervisors.
+ * Shared quota-window / rate-limit handling for workflow supervisors.
  *
  * Detection markers, state-shape helpers, and scheduling primitives that any
- * supervisor (epic, swarm, feature, bugfix, refactor, translate) can call when
- * an Anthropic / API rate limit interrupts work. Replaces the previously
- * epic-only logic in skills/phases/epic-orchestration/SKILL.md.
+ * supervisor (swarm or epic) can call when work is interrupted by a usage limit
+ * — a transient API 429 *or* a subscription quota window (the 5-hour or weekly
+ * Claude usage limit). The reset instant is read from the statusline cache, so
+ * resume is scheduled to the exact reset time (no polling).
  *
  * The shape of `state.phase.rate_limit` is:
  *   {
@@ -55,6 +56,8 @@ const RATE_LIMIT_MARKERS = [
   'usage limit reached',
   'claude usage limit',
   '5-hour limit',
+  'weekly limit',
+  '7-day limit',
   'session limit',
   'daily limit reached',
   'try again later',
@@ -185,13 +188,17 @@ function buildResumePrompt(workflowId) {
 }
 
 /**
- * Convert an ISO timestamp into a one-shot cron expression suitable for
- * CronCreate: "min hour day month *". CronCreate runs the prompt at that
- * minute on that date. Returns null on bad input.
+ * Convert an ISO reset timestamp into a one-shot cron expression for CronCreate:
+ * "min hour day month *". Defaults to **UTC** — a reset is an absolute instant
+ * that must fire at the same moment regardless of the host's local timezone or
+ * DST, so the supervisor MUST also schedule the cron in UTC (pass the
+ * scheduler's UTC/timezone option). Computing local wall-clock components was a
+ * latent DST/TZ misfire. Pass `{ timezone: 'local' }` only if the scheduler is
+ * known to interpret the expression in local time. Returns null on bad input.
  */
 function buildCronExpression(resumesAtIso, opts) {
   if (!resumesAtIso) return null;
-  const tz = (opts && opts.timezone) || 'local';
+  const tz = (opts && opts.timezone) || 'utc';
   let d;
   try { d = new Date(resumesAtIso); } catch { return null; }
   if (Number.isNaN(d.getTime())) return null;
