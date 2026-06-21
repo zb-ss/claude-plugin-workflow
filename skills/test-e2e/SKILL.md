@@ -148,7 +148,7 @@ Follow these steps in order:
 echo $HOME
 ```
 
-Store the result (e.g., `/home/zashboy`). Use this for ALL file paths.
+Store the result (e.g., `/home/user`). Use this for ALL file paths.
 
 #### Step 0b: Create directories
 

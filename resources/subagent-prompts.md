@@ -26,10 +26,10 @@ RIGHT: Write(/home/user/.claude-workflows/active/state.org) → SUCCESS
 ```bash
 # Step 1: Get HOME path
 echo $HOME
-# Output: /home/zashboy
+# Output: /home/user
 
 # Step 2: Use absolute path in Write tool
-Write(/home/zashboy/.claude-workflows/active/<repo-key>/state.org)
+Write(/home/user/.claude-workflows/active/<repo-key>/state.org)
 ```
 
 This applies to ALL file operations in `~/.claude/` directories.
