@@ -335,27 +335,32 @@ After running `/workflow:setup` and confirming the queue is configured, register
 the recurring routine once:
 
 ```
-/schedule create
-  name: workflow-auto-driver
-  prompt: /workflow:auto --once
-  cron: "*/30 * * * *"   # every 30 minutes; adjust to taste
-  timezone: UTC
-  recurring: true
+/schedule every hour, run /workflow:auto --once
 ```
 
-Tune the cadence to your task throughput. A 30-minute cadence means at most a
-30-minute lag before a newly queued task is picked up. A 5-minute cadence is
-fine for active sprints; a 60-minute cadence suits low-volume queues.
+`/schedule` uses **natural-language** scheduling (not a cron flag) and creates a
+**cloud routine** on Anthropic infra that survives session/laptop shutdown — this
+is the durable outer loop. **Routines have a 1-hour minimum interval**, so hourly
+is the floor; choose a longer cadence for low-volume queues. (For sub-hour
+cadence you must keep a session open and use `/loop` or the `CronCreate` fallback
+below instead.) Manage with `/schedule list`, `/schedule update <name>`,
+`/schedule run <name>` (fire immediately), or the web UI at claude.ai/code/routines.
+Recurring routines draw down subscription quota; a wake during an exhausted quota
+window is **rejected with no built-in retry**, but the next cadence wake resumes
+the in-flight task from its last checkpoint (enable usage credits to run through
+exhaustion).
 
 ### SPIKE CAVEAT — verify before relying on this
 
 Before treating `/schedule` as production infrastructure, confirm three things
 on your subscription tier:
 
-1. **A routine CAN fire a plugin slash command** (`/workflow:auto`) — not all
-   scheduling implementations pass the invocation through the plugin command
-   router. Test with a no-op: `/schedule create prompt: "/workflow:auto --once"
-   cron: "* * * * *" recurring: false` and verify a wake actually runs.
+1. **A routine CAN fire a plugin slash command** (`/workflow:auto`) — the cloud
+   routine environment must actually have the `workflow` plugin available, not
+   just the target repo's committed `.claude/`. Test immediately after creating
+   the routine: `/schedule run <name>` and confirm the wake really invokes the
+   driver (e.g. it comments on or transitions a `queued` control-repo issue). If
+   the plugin command isn't resolvable in the routine env, use the fallback below.
 
 2. **Routines survive quota resets** — the whole point is that the outer loop
    outlives any individual session. If your tier kills scheduled routines on
