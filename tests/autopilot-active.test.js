@@ -28,6 +28,8 @@ before(() => {
   writeState('repo-a-1111', 'w1.state.json', { repo_key: 'repo-a-1111', queue_issue_number: 5, updated_at: '2026-06-21T10:00:00Z' });
   writeState('repo-b-2222', 'w2.state.json', { repo_key: 'repo-b-2222', queue_issue_number: 7, updated_at: '2026-06-21T12:00:00Z' });
   writeState('repo-c-3333', 'manual.state.json', { repo_key: 'repo-c-3333', updated_at: '2026-06-21T13:00:00Z' }); // no queue_issue_number
+  // A task parked awaiting a human (blocked) — must NOT count as in-flight.
+  writeState('repo-e-5555', 'parked.state.json', { repo_key: 'repo-e-5555', queue_issue_number: 9, parked: 'blocked:low_confidence', updated_at: '2026-06-21T14:00:00Z' });
 });
 
 after(() => {
@@ -46,6 +48,12 @@ describe('findAutopilotStates (cross-bucket)', () => {
   it('ignores manual (non-autopilot) workflows — no queue_issue_number', () => {
     const found = findAutopilotStates(base);
     assert.ok(!found.some(s => s.repo_key === 'repo-c-3333'));
+  });
+
+  it('excludes parked (blocked, human-gated) tasks so they release the slot', () => {
+    const found = findAutopilotStates(base);
+    assert.ok(!found.some(s => s.state.queue_issue_number === 9));
+    assert.ok(!found.some(s => s.repo_key === 'repo-e-5555'));
   });
 
   it('returns [] for a missing/empty active base', () => {
