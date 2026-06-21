@@ -31,6 +31,57 @@ workflow state.
 
 ## Quality Gate Protocol
 
+### Phase 0: Verification Hardening
+
+These steps make passing un-fakeable. Apply before Phase 1.
+
+**0a. Green baseline** — run the full test suite against the base/before-change
+state first. Record pass/fail counts. A pre-existing failure is not attributed
+to the current change; a new failure (count increases vs baseline) is
+unambiguous. Skip if the base branch is not accessible — note it explicitly.
+
+```bash
+REPO_KEY=$(node "$PLUGIN_ROOT/lib/repo-key-cli.js")
+BASE_BRANCH="${BASE_BRANCH:-main}"
+git stash          # or checkout base ref
+npm test / phpunit / pytest   # record baseline result
+git stash pop      # restore change
+```
+
+**0b. Coverage on changed lines** — after running tests on the changed code,
+identify which lines are new:
+
+```bash
+CHANGED=$(node "$PLUGIN_ROOT/lib/changed-lines-cli.js" --git "$BASE_BRANCH")
+# Returns: [{file, added_ranges:[[start,end]]}]
+```
+
+Pass those ranges to the project's coverage tool (Istanbul `--lines`, PHPUnit
+`--coverage-filter`, pytest-cov `--cov-report`) and require coverage of every
+added line. Block (emit a CRITICAL finding) on any added line that remains
+uncovered after the test run.
+
+**0c. Actually run rarely-run code** — for any NEW migration / CLI / cron /
+fixture / cleanup script introduced in this change:
+- Execute it once, even with `--dry-run` or a smoke-load:
+  ```bash
+  node -e "require('./path/to/script')"   # JS smoke-load
+  php -r "require __DIR__ . '/path/to/script.php';"
+  php artisan migrate --pretend
+  ```
+- If it cannot be run (no DB access, isolated sandbox), state that explicitly
+  in findings — do NOT omit it or mark it green.
+- Structural review (parse/lint) is necessary but not sufficient; runtime
+  errors (unresolved requires, missing columns, wrong method signatures) only
+  appear on execution.
+
+**0d. Mutation-lite (weak-test detection)** — *gate behind `priority: high` or
+risky tasks only; skip for low-risk changes (cost is non-trivial)*. Pick one
+changed line, introduce a trivial mutation (flip `===` to `!==`, negate a
+return), re-run tests. If nothing fails, the tests do not cover that path →
+emit a MAJOR finding: "Tests do not detect mutation at `file:line` — coverage
+exists but assertions are weak."
+
 ### Phase 1: Run Verification
 
 Execute all applicable checks based on project type:

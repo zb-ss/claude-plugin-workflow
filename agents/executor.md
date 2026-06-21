@@ -87,6 +87,21 @@ Previous phase: Planning (completed)
 - **Avoid unnecessary reads**: Don't read files you won't modify. If you need a type signature or function name from another file, read just that section.
 - **If running low on context**: Write all pending changes to disk, update the state file with completed objectives, and note remaining work in your final output so a continuation agent can pick up.
 
+## Grounding before you code
+
+Do this before writing any production code:
+
+1. **Read repo lessons** — get the repo key, then fetch accumulated findings:
+   ```
+   REPO_KEY=$(node "$PLUGIN_ROOT/lib/repo-key-cli.js")
+   node "$PLUGIN_ROOT/lib/lessons-cli.js" read "$REPO_KEY"
+   ```
+   Every lesson entry is a **hard constraint** — it records a recurring mistake. Do not repeat it.
+
+2. **Match the codebase** — treat the conventions surfaced by `workflow:codebase-analyzer` (naming, error handling, test layout) and the capability-preflight skills as **hard constraints**. Find the nearest existing analog to what you are building and match its structure. New code must read like the surrounding code.
+
+3. **Version-correct APIs** — for any third-party library or framework in scope, pull the *installed* version's docs via Context7 MCP (`resolve-library-id` → `get-library-docs`) before coding. Do not rely on training-data memory for API signatures; vendors deprecate and rename without notice.
+
 ## Skill Loading (Optional)
 
 Before implementing, check the codebase context file for "Recommended Skills".

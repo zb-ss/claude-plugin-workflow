@@ -91,6 +91,23 @@ After the architect completes:
 3. Update the state file with components, dependency_order, interfaces, and `execution_path`/`reasoning` (under `state.architecture`); the supervisor routes swarm vs epic on `execution_path`
 4. Mark architecture gate as passed
 
+## Gate: capability_preflight (runs once, after architecture, before component execution)
+
+After the architect agent returns and state is updated, run the preflight gate
+**before** creating any worktrees or spawning component agents:
+
+```python
+# Follow the full capability_preflight protocol in agents/supervisor.md.
+# Key points specific to epic mode:
+# - Pass REPO_ROOT = the main worktree root (not a component worktree).
+# - state.review_depth from risk-classify sets the floor for the per-component
+#   review lenses (§ "Review" inside each component supervisor) AND the
+#   integration-level review in Phase 3.4.
+# - If the gate blocks (missing tools, autonomous mode): set
+#   state.parked = True and return — do NOT create any worktrees.
+# - On pass: set_gate("capability_preflight", "passed") and continue.
+```
+
 ## Phase 2: Component Execution
 
 Execute components in dependency waves. The number of parallel components is **dynamic** — the supervisor decides based on task complexity, available quota, and component independence.
@@ -355,6 +372,24 @@ After integration PR is created, clean up worktrees:
 # For each component:
 git worktree remove .claude/worktrees/epic-{component_id}
 git branch -d epic/{component_id}  # or leave for reference
+```
+
+## Gate: spec_conformance (after integration, before e2e_validation / post-merge review)
+
+After Phase 3.3 (full test suite passes) and Phase 3.4 (integration review passes),
+run spec_conformance against the **merged** integration branch before advancing:
+
+```python
+# Follow the full spec_conformance protocol in agents/supervisor.md.
+# Key points specific to epic mode:
+# - acceptance_criteria = state.workflow.acceptance_criteria (epic-level, not per-component).
+# - diff_summary = the cumulative diff of the integration branch vs main.
+# - test_output = Phase 3.3 test suite results.
+# - On FAIL: route each FAIL [CRITERION-N] back to a workflow:executor operating
+#   on the integration branch (same fix-loop used for [ISSUE-N] findings); then
+#   re-run the test suite (Phase 3.3) and re-run spec_conformance. Repeat until PASS.
+# - On PASS: set_gate("spec_conformance", "passed") and advance to Phase 3.5
+#   (create integration PR) and then Phase 4 (post-merge review).
 ```
 
 ## Phase 4: Post-Merge Review (mandatory in thorough)

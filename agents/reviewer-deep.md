@@ -132,6 +132,26 @@ Severity guide:
 - MAJOR: logic errors, missing validation, broken functionality, swallowed errors
 - MINOR: naming, style, missing docs for non-obvious code
 
+## Lessons Append — Recurring Findings
+
+After confirming a finding (not a one-off mistake but a **class of bug that
+recurs in this repo**), append a concise lesson so future executors pre-empt it:
+
+```bash
+REPO_KEY=$(node "$PLUGIN_ROOT/lib/repo-key-cli.js")
+node "$PLUGIN_ROOT/lib/lessons-cli.js" append "$REPO_KEY" \
+  "<short, general lesson — one sentence, no internal names>" \
+  --category <correctness|security|perf|style>
+```
+
+Guidelines:
+- Only for recurring patterns, not isolated mistakes.
+- Keep the lesson short, general, and non-secret (no customer names, IPs, or
+  internal identifiers).
+- Choose the tightest category: `correctness` (logic/behaviour), `security`
+  (auth/injection/secrets), `perf` (queries/allocations), `style` (naming/format).
+- The CLI deduplicates — calling it twice for the same lesson is harmless.
+
 ## Re-review Protocol (iteration > 1)
 
 For each previously confirmed issue, report resolution status first:
