@@ -393,13 +393,23 @@ proceed. Instead:
 
 1. Transition the issue to `blocked` via `lib/queue-cli.js transition $ISSUE_NUMBER in-progress blocked`.
 2. Comment on the issue: `"Workflow paused: architect confidence $CONF below threshold $THRESHOLD. Manual review required before resuming."`.
-3. **Do not guess.** Do not lower the threshold automatically. Wait for a human
+3. **Mark the state parked so it releases the in-flight slot:** set
+   `state.parked = "blocked:low_confidence"` and save. `autopilot-active-cli`
+   excludes parked states, so the **next queued task proceeds on the following
+   wake** instead of the driver stalling forever on this human-gated one. (A
+   rate-limited pause is deliberately NOT parked — it keeps the slot and
+   auto-resumes after the reset.)
+4. **Do not guess.** Do not lower the threshold automatically. Wait for a human
    to review the plan, adjust the task description, and move the issue back to
-   `queued`.
+   `queued`. When re-queued, Step 2c clears `state.parked` and resumes (or starts
+   fresh if the plan changed).
 
 The driver checks this after Step 2c's burst returns (the burst itself may have
 already parked and transitioned the issue). Re-check the issue state before
-acting to avoid a double-transition.
+acting to avoid a double-transition. Apply the **same `state.parked` marker** to
+the other human-gated parks below (spend cap, unparseable task body, burst error)
+— every `blocked` transition must release the slot, or one stuck task freezes the
+whole queue.
 
 ### Per-task spend cap
 
