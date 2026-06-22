@@ -8,7 +8,7 @@ This workflow runs in **fully autonomous agentic mode**. Do NOT ask for permissi
 
 > **REQUIRED:** The project MUST have `Bash(*)` in its permissions allow list.
 > Without this, bash commands will prompt for permission and break autonomous execution.
-> Run `/workflow:setup` or copy settings: `cp ~/.claude/plugins/workflow/resources/recommended-settings.json .claude/settings.local.json`
+> Run `/workflow:setup` or copy settings: `cp $CLAUDE_PLUGIN_ROOT/resources/recommended-settings.json .claude/settings.local.json`
 
 ### CRITICAL: Never Use `~` in Tool Calls
 
@@ -150,7 +150,7 @@ Agent(
     run_in_background=true,
     prompt=f"""
     You are running a workflow. Follow the instructions in:
-    <HOME>/.claude/plugins/workflow/skills/start/SKILL.md
+    $CLAUDE_PLUGIN_ROOT/skills/start/SKILL.md
 
     User's task: {original_task}
     Arguments: {workflow_args}

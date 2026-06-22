@@ -40,7 +40,7 @@ Write(file_path="/home/user/.claude-workflows/active/.gitkeep", content="")
 
 **Alternative:** Run the initialization script (works with tilde expansion):
 ```bash
-node ~/.claude/plugins/workflow/lib/init-directories.js
+node $CLAUDE_PLUGIN_ROOT/lib/init-directories.js
 ```
 
 ### Step 2: Check Current Settings

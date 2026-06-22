@@ -21,10 +21,10 @@ For optimal autonomous workflow execution, copy the recommended settings to your
 
 ```bash
 # For shared settings (committed to git)
-cp ~/.claude/plugins/workflow/resources/recommended-settings.json .claude/settings.json
+cp $CLAUDE_PLUGIN_ROOT/resources/recommended-settings.json .claude/settings.json
 
 # For personal settings (git-ignored)
-cp ~/.claude/plugins/workflow/resources/recommended-settings.json .claude/settings.local.json
+cp $CLAUDE_PLUGIN_ROOT/resources/recommended-settings.json .claude/settings.local.json
 ```
 
 Or manually add to your `.claude/settings.json`:

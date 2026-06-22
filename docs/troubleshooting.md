@@ -25,7 +25,7 @@ If you're getting permission prompts **for writing state files** (org files, sta
 1. Run `/workflow:setup` to verify directory structure
 2. Check that `~/.claude-workflows/active/<repo-key>/` exists and is writable (the repo-scoped bucket is created automatically on first workflow start)
 3. The plugin uses Write tool (not bash) to create files — ensure path-scoped `Write(~/.claude-workflows/**)` is in your allow list
-4. To find the active directory for the current repo: `node ~/.claude/plugins/workflow/lib/active-dir-cli.js`
+4. To find the active directory for the current repo: `node $CLAUDE_PLUGIN_ROOT/lib/active-dir-cli.js`
 
 ## Switching Between Org and Markdown
 

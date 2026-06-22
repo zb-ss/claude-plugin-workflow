@@ -152,7 +152,7 @@ Task(
     run_in_background=true,
     prompt="""
     You are running a workflow. Follow the instructions in:
-    <HOME>/.claude/plugins/workflow/skills/start/SKILL.md
+    $CLAUDE_PLUGIN_ROOT/skills/start/SKILL.md
 
     User's task: {original_task}
     Arguments: {workflow_args}
