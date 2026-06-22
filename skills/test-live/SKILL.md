@@ -26,7 +26,7 @@ Test a running web application interactively using Playwright MCP browser automa
 
 ```
 /workflow:test-live http://localhost:8080
-/workflow:test-live http://localhost:3000 --user=admin@example.com --pass=secret123
+/workflow:test-live http://localhost:3000                                    # authenticated runs read login from ./.creds
 /workflow:test-live https://staging.myapp.com --instructions="Test the checkout flow with a $50 item"
 ```
 
@@ -41,11 +41,16 @@ $ARGUMENTS
 
 Extract from arguments:
 - **URL** (required): First argument or value after the command
-- **--user**: Login username/email (optional)
-- **--pass**: Login password (optional)  
+- **--user** / **--pass**: optional **override** credentials — prefer the gitignored `./.creds` file (see **Credentials** below) over passing secrets on the command line
 - **--instructions**: Specific test scenarios (optional, rest of text after flags)
 
 If URL is missing, ask the user for it.
+
+**Credentials.** For authenticated testing, read the login from the project's
+`./.creds` file first (gitignored — test creds live there; never commit it or echo
+its contents into logs/commits/PRs). Only fall back to `--user`/`--pass`, or ask the
+user, if `./.creds` is missing or lacks the needed account. **Never print the
+password** or pass it inline where it would be logged.
 
 ### Step 2: Validate URL
 
@@ -117,13 +122,11 @@ prompt_parts = [
     f"## Task\nTest the web application at {url}\n",
 ]
 
-if user and password:
-    prompt_parts.append(f"""## Authentication
-Login with these credentials:
-- Username/Email: {user}
-- Password: {password}
-
-Authenticate first, then proceed with testing.
+if auth_required:  # ./.creds present, or --user/--pass override provided
+    prompt_parts.append("""## Authentication
+Read the login credentials from the project's ./.creds file (do NOT print them),
+authenticate first, then proceed with testing. If ./.creds is absent and override
+credentials were provided, use those — without echoing the password.
 """)
 
 if instructions:
