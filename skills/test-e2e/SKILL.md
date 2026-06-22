@@ -444,10 +444,10 @@ If auth strategy is specified:
   - `{{AUTH_STATE_FILE}}` -> `<output_dir>/.auth/state.json`
 - Write `global-setup.ts` to the output directory
 - Read and write `auth-fixture.ts.template` to the output directory
-- Ask user for test credentials (E2E_USER, E2E_PASS env vars)
+- **Read credentials from the project's `./.creds` file first** (it's gitignored — test creds usually live there; never commit it or echo its contents into logs/commits/PRs). Only ask the user if `.creds` is missing or lacks the needed account. Expose them as `E2E_USER` / `E2E_PASS` env vars — never hardcode credentials in test files.
 
 **For `--auth=token`:**
-- Ask user for the token env var name (default: `E2E_TOKEN`)
+- **Read the token from `./.creds` first**; only ask the user if it's absent. Token env var name default: `E2E_TOKEN`.
 - Generate a simple fixture that adds the token to request headers
 
 **For `--auth=cookie`:**
@@ -839,7 +839,7 @@ When all phases pass:
 | Explorer finds no pages | Report, ask user to check URL and try again |
 | Tests won't compile | Send back to generator with errors |
 | All tests fail on first run | Check if app is running, then fix tests |
-| Auth setup fails | Ask user for credentials, retry |
+| Auth setup fails | Re-check `./.creds`; if absent or insufficient, ask the user, then retry |
 
 ### State File Updates
 
