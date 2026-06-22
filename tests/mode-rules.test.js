@@ -92,26 +92,33 @@ describe('E2E Workflow Integration', () => {
 });
 
 describe('Existing Functionality Preserved', () => {
-  describe('AGENT_GATE_MAP - Existing Agents', () => {
-    it('should preserve architect mappings', () => {
+  describe('AGENT_GATE_MAP - Surviving Agents', () => {
+    it('should preserve architect mapping', () => {
       assert.strictEqual(AGENT_GATE_MAP['workflow:architect'], 'planning');
-      assert.strictEqual(AGENT_GATE_MAP['workflow:architect-lite'], 'planning');
     });
 
-    it('should preserve executor mappings', () => {
+    it('should not contain deleted lite/standard agents', () => {
+      assert.strictEqual(AGENT_GATE_MAP['workflow:architect-lite'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:executor-lite'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:reviewer'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:reviewer-lite'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:security'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:security-lite'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:perf-lite'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:perf-reviewer'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:doc-writer'], undefined);
+      assert.strictEqual(AGENT_GATE_MAP['workflow:task-analyzer'], undefined);
+    });
+
+    it('should preserve executor mapping', () => {
       assert.strictEqual(AGENT_GATE_MAP['workflow:executor'], 'implementation');
-      assert.strictEqual(AGENT_GATE_MAP['workflow:executor-lite'], 'implementation');
     });
 
-    it('should preserve reviewer mappings', () => {
-      assert.strictEqual(AGENT_GATE_MAP['workflow:reviewer'], 'code_review');
-      assert.strictEqual(AGENT_GATE_MAP['workflow:reviewer-lite'], 'code_review');
+    it('should preserve reviewer-deep mapping', () => {
       assert.strictEqual(AGENT_GATE_MAP['workflow:reviewer-deep'], 'code_review');
     });
 
-    it('should preserve security mappings', () => {
-      assert.strictEqual(AGENT_GATE_MAP['workflow:security'], 'security_review');
-      assert.strictEqual(AGENT_GATE_MAP['workflow:security-lite'], 'security_review');
+    it('should preserve security-deep mapping', () => {
       assert.strictEqual(AGENT_GATE_MAP['workflow:security-deep'], 'security_review');
     });
 
@@ -127,18 +134,8 @@ describe('Existing Functionality Preserved', () => {
       assert.strictEqual(AGENT_GATE_MAP['workflow:completion-guard'], 'completion_guard');
     });
 
-    it('should preserve performance mappings', () => {
-      assert.strictEqual(AGENT_GATE_MAP['workflow:perf-reviewer'], 'performance');
-      assert.strictEqual(AGENT_GATE_MAP['workflow:perf-lite'], 'performance');
-    });
-
-    it('should preserve doc-writer mapping', () => {
-      assert.strictEqual(AGENT_GATE_MAP['workflow:doc-writer'], 'documentation');
-    });
-
-    it('should preserve analyzer mappings', () => {
+    it('should preserve codebase-analyzer mapping', () => {
       assert.strictEqual(AGENT_GATE_MAP['workflow:codebase-analyzer'], 'codebase_analysis');
-      assert.strictEqual(AGENT_GATE_MAP['workflow:task-analyzer'], 'task_analysis');
     });
 
     it('should preserve supervisor mapping', () => {
@@ -147,18 +144,22 @@ describe('Existing Functionality Preserved', () => {
   });
 
   describe('PHASE_ORDER - Existing Phases', () => {
-    it('should have 7 phases', () => {
-      assert.strictEqual(PHASE_ORDER.length, 7);
+    it('should have 11 phases', () => {
+      assert.strictEqual(PHASE_ORDER.length, 11);
     });
 
-    it('should maintain correct ordering', () => {
+    it('should maintain correct ordering (capability + spec + e2e + scrub gates)', () => {
       const expected = [
         'planning',
+        'capability_preflight',
         'implementation',
         'code_review',
         'security_review',
         'tests',
         'quality_gate',
+        'spec_conformance',
+        'e2e_validation',
+        'scrub_gate',
         'completion_guard',
       ];
       assert.deepStrictEqual(PHASE_ORDER, expected);
@@ -166,63 +167,53 @@ describe('Existing Functionality Preserved', () => {
   });
 
   describe('MODEL_CONSTRAINTS', () => {
-    it('should have all 5 modes defined', () => {
-      const modes = ['eco', 'turbo', 'standard', 'thorough', 'swarm'];
+    it('should have exactly 2 modes defined (swarm, epic)', () => {
+      const modes = ['swarm', 'epic'];
       modes.forEach(mode => {
         assert.ok(MODEL_CONSTRAINTS[mode], `Mode ${mode} should exist`);
       });
+      assert.strictEqual(Object.keys(MODEL_CONSTRAINTS).length, 2);
     });
 
-    it('should maintain eco mode constraints', () => {
-      assert.deepStrictEqual(MODEL_CONSTRAINTS.eco.forbidden, ['opus']);
-      assert.strictEqual(MODEL_CONSTRAINTS.eco.preferred, 'haiku');
-    });
-
-    it('should maintain turbo mode constraints', () => {
-      assert.deepStrictEqual(MODEL_CONSTRAINTS.turbo.forbidden, ['opus']);
-      assert.strictEqual(MODEL_CONSTRAINTS.turbo.preferred, 'haiku');
-    });
-
-    it('should maintain standard mode constraints', () => {
-      assert.deepStrictEqual(MODEL_CONSTRAINTS.standard.forbidden, []);
-      assert.strictEqual(MODEL_CONSTRAINTS.standard.preferred, 'sonnet');
-    });
-
-    it('should maintain thorough mode constraints', () => {
-      assert.deepStrictEqual(MODEL_CONSTRAINTS.thorough.forbidden, []);
-      assert.strictEqual(MODEL_CONSTRAINTS.thorough.preferred, 'sonnet');
+    it('should not contain removed modes', () => {
+      assert.strictEqual(MODEL_CONSTRAINTS.eco, undefined);
+      assert.strictEqual(MODEL_CONSTRAINTS.turbo, undefined);
+      assert.strictEqual(MODEL_CONSTRAINTS.standard, undefined);
+      assert.strictEqual(MODEL_CONSTRAINTS.thorough, undefined);
     });
 
     it('should maintain swarm mode constraints', () => {
       assert.deepStrictEqual(MODEL_CONSTRAINTS.swarm.forbidden, []);
       assert.strictEqual(MODEL_CONSTRAINTS.swarm.preferred, 'sonnet');
     });
+
+    it('should maintain epic mode constraints', () => {
+      assert.deepStrictEqual(MODEL_CONSTRAINTS.epic.forbidden, []);
+      assert.strictEqual(MODEL_CONSTRAINTS.epic.preferred, 'sonnet');
+    });
   });
 });
 
 describe('Function Tests', () => {
   describe('isModelForbidden', () => {
-    it('should return true when model is forbidden in eco mode', () => {
-      assert.strictEqual(isModelForbidden('eco', 'opus'), true);
+    it('should return false for swarm mode (no forbidden models)', () => {
+      assert.strictEqual(isModelForbidden('swarm', 'opus'), false);
+      assert.strictEqual(isModelForbidden('swarm', 'sonnet'), false);
     });
 
-    it('should return false when model is allowed in eco mode', () => {
-      assert.strictEqual(isModelForbidden('eco', 'haiku'), false);
-      assert.strictEqual(isModelForbidden('eco', 'sonnet'), false);
-    });
-
-    it('should return true when model is forbidden in turbo mode', () => {
-      assert.strictEqual(isModelForbidden('turbo', 'opus'), true);
-    });
-
-    it('should return false for standard mode (no forbidden models)', () => {
-      assert.strictEqual(isModelForbidden('standard', 'opus'), false);
-      assert.strictEqual(isModelForbidden('standard', 'sonnet'), false);
-      assert.strictEqual(isModelForbidden('standard', 'haiku'), false);
+    it('should return false for epic mode (no forbidden models)', () => {
+      assert.strictEqual(isModelForbidden('epic', 'opus'), false);
     });
 
     it('should return false for unknown mode', () => {
       assert.strictEqual(isModelForbidden('unknown', 'opus'), false);
+    });
+
+    it('should return false for removed modes (treated as unknown)', () => {
+      assert.strictEqual(isModelForbidden('eco', 'opus'), false);
+      assert.strictEqual(isModelForbidden('turbo', 'opus'), false);
+      assert.strictEqual(isModelForbidden('standard', 'opus'), false);
+      assert.strictEqual(isModelForbidden('thorough', 'opus'), false);
     });
   });
 
@@ -242,28 +233,23 @@ describe('Function Tests', () => {
   });
 
   describe('getPreferredModel', () => {
-    it('should return haiku for eco mode', () => {
-      assert.strictEqual(getPreferredModel('eco'), 'haiku');
-    });
-
-    it('should return haiku for turbo mode', () => {
-      assert.strictEqual(getPreferredModel('turbo'), 'haiku');
-    });
-
-    it('should return sonnet for standard mode', () => {
-      assert.strictEqual(getPreferredModel('standard'), 'sonnet');
-    });
-
-    it('should return sonnet for thorough mode', () => {
-      assert.strictEqual(getPreferredModel('thorough'), 'sonnet');
-    });
-
     it('should return sonnet for swarm mode', () => {
       assert.strictEqual(getPreferredModel('swarm'), 'sonnet');
     });
 
+    it('should return sonnet for epic mode', () => {
+      assert.strictEqual(getPreferredModel('epic'), 'sonnet');
+    });
+
     it('should return sonnet as default for unknown mode', () => {
       assert.strictEqual(getPreferredModel('unknown'), 'sonnet');
+    });
+
+    it('should return sonnet as default for removed modes', () => {
+      assert.strictEqual(getPreferredModel('eco'), 'sonnet');
+      assert.strictEqual(getPreferredModel('turbo'), 'sonnet');
+      assert.strictEqual(getPreferredModel('standard'), 'sonnet');
+      assert.strictEqual(getPreferredModel('thorough'), 'sonnet');
     });
   });
 });

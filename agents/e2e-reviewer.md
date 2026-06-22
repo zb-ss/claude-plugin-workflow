@@ -3,7 +3,6 @@ name: e2e-reviewer
 description: Reviews E2E Playwright tests for quality, flakiness, and best practices
 model: sonnet
 tools: ["Read", "Grep", "Glob", "Bash"]
-mcpServers: ["playwright"]
 skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
@@ -85,7 +84,7 @@ Analyze:
 - Root cause: selector issues? timing problems? app state issues?
 - Any warnings from Playwright
 
-### 3. Flakiness Check (if thorough mode or previous flakiness detected)
+### 3. Flakiness Check
 Run tests multiple times to detect intermittent failures:
 
 ```bash
@@ -231,7 +230,7 @@ Always include:
 - **Zero tolerance** for CRITICAL and MAJOR issues
 - Every issue must include file:line reference and suggested fix
 - Test execution results must be verified, not assumed
-- Flakiness detection is mandatory for thorough reviews
+- Flakiness detection is mandatory for every review
 - All verdicts must be backed by actual test runs, not just static analysis
 
 ## Context Efficiency

@@ -2,7 +2,7 @@
 name: test-e2e
 description: Run E2E Playwright testing workflow for web applications
 user_invocable: true
-usage: /workflow:test-e2e <url> [--framework=<framework>] [--auth=<strategy>] [--depth=<n>] [--mode=<mode>] [--output=<dir>] [--config-only] [--format=<format>]
+usage: /workflow:test-e2e <url> [--framework=<framework>] [--auth=<strategy>] [--depth=<n>] [--output=<dir>] [--config-only] [--format=<format>]
 arguments:
   - name: url
     required: true
@@ -16,9 +16,6 @@ arguments:
   - name: depth
     required: false
     description: "Exploration depth limit (default: 3)"
-  - name: mode
-    required: false
-    description: "Execution mode: standard, turbo, eco, thorough (default: standard)"
   - name: output
     required: false
     description: "Test output directory (default: tests/e2e or e2e)"
@@ -32,7 +29,24 @@ arguments:
 
 # E2E Playwright Testing Workflow
 
-Orchestrate end-to-end test generation for web applications using Playwright MCP browser automation.
+Orchestrate end-to-end test generation for web applications using browser automation.
+
+## Browser Driver Selection
+
+E2E agents select a browser driver at runtime per `resources/e2e/browser-driver.md`. The selection order is:
+
+1. **Playwright MCP** — tools prefixed `mcp__playwright__browser_*`
+2. **Chrome DevTools MCP** — tools prefixed `mcp__chrome-devtools__*`
+3. **tpmcp UX-capture MCP** — tools prefixed `mcp__tpmcp-ux_capture__*`
+4. **Local Playwright fallback** — standalone Node script with `ignoreHTTPSErrors: true` (used when no MCP is present or when self-signed TLS blocks the MCP)
+
+The workflow adapts to whatever driver is available. The Playwright MCP is no longer hard-required for live exploration.
+
+**Generated test specs are always Playwright** (`@playwright/test`, run via `npx playwright test`) — that is the artifact format. `@playwright/test` as a dev dependency is still installed so specs can be executed, but the live MCP browser is not mandatory.
+
+## Mandatory Gate in FE-Facing Workflows
+
+Beyond this standalone `/workflow:test-e2e` command, `e2e_validation` is a **mandatory gate** in swarm and epic dev workflows whenever the change is **FE-facing**. FE-facing detection is performed by `lib/fe-detect-cli.js` and triggers when the change set touches routes, components, templates, styles, assets, or FE config files. On a non-FE change the gate status is set to `skipped`. The gate is enforced by the `stop-guard` and `task-completed-gate` hooks via the phase order, so an FE-facing workflow cannot reach completion without passing `e2e_validation`.
 
 ## AGENTIC MODE ACTIVE
 
@@ -97,8 +111,8 @@ Proceed autonomously through all phases. Only pause for:
 # Just generate config, no tests
 /workflow:test-e2e http://localhost:8080 --config-only
 
-# Thorough mode with deep exploration
-/workflow:test-e2e http://localhost:8080 --mode=thorough --depth=5
+# Deep exploration
+/workflow:test-e2e http://localhost:8080 --depth=5
 
 # Custom output directory
 /workflow:test-e2e http://localhost:4200 --output=e2e/specs --framework=vue
@@ -110,33 +124,13 @@ Proceed autonomously through all phases. Only pause for:
 Setup --> Exploration --> Generation --> Validation --> Quality Gate --> Completion
   |          |               |              |              |              |
   |    e2e-explorer    e2e-generator   e2e-reviewer   quality-gate  completion-guard
-  |    (Playwright     (app map ->     (run tests,    (lint, type   (final check)
-  |     MCP tools)      test specs)    check quality)  check)
+  |    (driver-        (app map ->     (run tests,    (lint, type   (final check)
+  |     agnostic)       test specs)    check quality)  check)
   v
  Install deps,
  detect framework,
  generate config
 ```
-
-## Agent Routing by Mode
-
-| Phase | standard | turbo | eco | thorough |
-|-------|----------|-------|-----|----------|
-| Setup | inline | inline | inline | inline |
-| Exploration | e2e-explorer (sonnet) | e2e-explorer (haiku) | e2e-explorer (haiku) | e2e-explorer (sonnet) |
-| Generation | e2e-generator (sonnet) | e2e-generator (haiku) | e2e-generator (haiku) | e2e-generator (sonnet) |
-| Validation | e2e-reviewer (sonnet) | e2e-reviewer (haiku) | e2e-reviewer (haiku) | e2e-reviewer (opus) |
-| Quality Gate | quality-gate (sonnet) | quality-gate (haiku) | quality-gate (haiku) | quality-gate (sonnet) |
-| Completion | completion-guard (sonnet) | completion-guard (haiku) | completion-guard (haiku) | completion-guard (opus) |
-
-### Max Review Iterations by Mode
-
-| Mode | Validation (e2e-reviewer) | Quality Gate |
-|------|---------------------------|--------------|
-| eco | 1 | 1 |
-| turbo | 2 | 1 |
-| standard | 3 | 2 |
-| thorough | 3 | 3 |
 
 ---
 
@@ -154,7 +148,7 @@ Follow these steps in order:
 echo $HOME
 ```
 
-Store the result (e.g., `/home/zashboy`). Use this for ALL file paths.
+Store the result (e.g., `/home/user`). Use this for ALL file paths.
 
 #### Step 0b: Create directories
 
@@ -171,7 +165,6 @@ $HOME_PATH/.claude-workflows/completed/.gitkeep
    - `--framework=<val>` (default: auto-detect)
    - `--auth=<val>` (default: none)
    - `--depth=<n>` (default: 3)
-   - `--mode=<val>` (default: standard)
    - `--output=<dir>` (default: auto-detect based on framework)
    - `--config-only` (boolean flag)
    - `--format=<val>` (default: org)
@@ -243,7 +236,6 @@ Generate workflow ID: `YYYYMMDD-<random>` (e.g., `20260213-abc123`)
   - `{{TIMESTAMP}}` -> ISO timestamp
   - `{{BRANCH}}` -> current branch
   - `{{BASE_BRANCH}}` -> main/master
-  - `{{MODE}}` -> selected mode
   - `{{STATE_FILE}}` -> path to .state.json
   - `{{TESTS_ENABLED}}` -> "true"
   - `{{BASE_URL}}` -> target URL
@@ -251,7 +243,14 @@ Generate workflow ID: `YYYYMMDD-<random>` (e.g., `20260213-abc123`)
   - `{{AUTH_STRATEGY}}` -> auth flag value
   - `{{DEPTH}}` -> depth limit
   - `{{OUTPUT_DIR}}` -> resolved output directory
-- Write to: `$HOME/.claude-workflows/active/<id>.<format>`
+- **Resolve the repo-scoped bucket first** (workflows are isolated per repo):
+  ```bash
+  PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/workflow}"
+  ACTIVE_DIR=$(node "$PLUGIN_ROOT/lib/active-dir-cli.js")
+  REPO_KEY=$(node "$PLUGIN_ROOT/lib/repo-key-cli.js")
+  REPO_ROOT=$(node -e "console.log(require('$PLUGIN_ROOT/lib/repo-key').getRepoRoot())")
+  ```
+- Write to: `$ACTIVE_DIR/<id>.<format>` (inside the repo bucket — **never** the flat `active/` root)
 
 **Create JSON state sidecar:**
 
@@ -259,15 +258,13 @@ Generate workflow ID: `YYYYMMDD-<random>` (e.g., `20260213-abc123`)
 {
   "$schema": "1.0.0",
   "workflow_id": "<id>",
-  "org_file": "<HOME>/.claude-workflows/active/<id>.<format>",
+  "repo_key": "<REPO_KEY>",
+  "repo_root": "<REPO_ROOT>",
+  "org_file": "<ACTIVE_DIR>/<id>.<format>",
   "workflow": {
     "type": "e2e-testing",
     "description": "<description>",
     "branch": "<branch>"
-  },
-  "mode": {
-    "current": "<mode>",
-    "original": "<mode>"
   },
   "config": {
     "tests_enabled": true,
@@ -275,9 +272,7 @@ Generate workflow ID: `YYYYMMDD-<random>` (e.g., `20260213-abc123`)
     "framework": "<framework>",
     "auth_strategy": "<auth>",
     "depth": <depth>,
-    "output_dir": "<output_dir>",
-    "max_validation_iterations": <from mode>,
-    "max_quality_iterations": <from mode>
+    "output_dir": "<output_dir>"
   },
   "phase": {
     "current": "setup",
@@ -297,7 +292,7 @@ Generate workflow ID: `YYYYMMDD-<random>` (e.g., `20260213-abc123`)
 }
 ```
 
-Write to: `$HOME/.claude-workflows/active/<id>.state.json`
+Write to: `$ACTIVE_DIR/<id>.state.json` (inside the repo bucket — **never** the flat `active/` root)
 
 Verify both files by reading them back.
 
@@ -316,7 +311,7 @@ Store this as `$TMPDIR_PATH`.
    ```json
    {
      "session_id": "<session_id>",
-     "workflow_path": "<HOME>/.claude-workflows/active/<id>.state.json",
+     "workflow_path": "<ACTIVE_DIR>/<id>.state.json",
      "workflow_id": "<generated-id>",
      "bound_at": "<ISO timestamp>"
    }
@@ -334,7 +329,6 @@ E2E Testing Workflow
   Framework: <framework>
   Auth:      <auth>
   Depth:     <depth>
-  Mode:      <mode>
   Output:    <output_dir>
   State:     ~/.claude-workflows/active/<id>.<format>
 
@@ -423,35 +417,23 @@ blob-report/
 
 If `.gitignore` does not exist, create it with these entries.
 
-#### 0.6 Verify Playwright MCP tools
+#### 0.6 Select browser driver
 
-Check that the Playwright MCP server tools are accessible by attempting a simple operation:
-```
-browser_navigate to <url>
-```
+Select the browser driver per `resources/e2e/browser-driver.md`:
 
-If this fails with "tool not found" or similar, inform the user:
-```
-Playwright MCP server is not configured. Add it to your Claude Code settings:
+1. Check for Playwright MCP tools (`mcp__playwright__browser_*`)
+2. Fall back to Chrome DevTools MCP (`mcp__chrome-devtools__*`)
+3. Fall back to tpmcp UX-capture MCP (`mcp__tpmcp-ux_capture__*`)
+4. Fall back to local Playwright script with `ignoreHTTPSErrors: true`
 
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--headless"]
-    }
-  }
-}
-```
-
-If the URL is unreachable from the MCP browser, report the connection error.
+State the chosen driver (e.g. `DRIVER: playwright-mcp`) in the setup summary. Attempt a navigate to `<url>` using the selected driver. If the URL is unreachable, report the connection error. A missing Playwright MCP is not a blocking error — the workflow continues with the next available driver.
 
 #### 0.7 Auth setup (if --auth is not "none")
 
 If auth strategy is specified:
 
 **For `--auth=form`:**
-- Use browser_snapshot on the URL to find login form fields
+- Use the selected driver's accessibility snapshot action on the URL to find login form fields
 - Read template from `<PLUGIN_DIR>/resources/e2e/global-setup.ts.template`
 - Replace placeholders based on discovered form fields:
   - `{{LOGIN_URL}}` -> URL where the login form is
@@ -494,7 +476,6 @@ Spawn the `e2e-explorer` agent to map the application.
 ```python
 Task(
   subagent_type="workflow:e2e-explorer",
-  model=<model_for_mode>,  # sonnet for standard/thorough, haiku for turbo/eco
   prompt="""
   ## Task
   Explore the web application at {base_url} and generate an app map.
@@ -509,16 +490,17 @@ Task(
   ## Instructions
 
   ### 1. Connection Check
-  - Use browser_navigate to reach {base_url}
+  - Select a browser driver per resources/e2e/browser-driver.md; state which driver is used
+  - Navigate to {base_url} using that driver
   - If connection refused/timeout: report error and stop
-  - Capture initial browser_snapshot
+  - Capture initial accessibility snapshot
 
   ### 2. Auth Handling
   {auth_instructions_based_on_strategy}
 
   ### 3. Exploration
   - Use BFS traversal up to depth {depth}
-  - For each page: browser_navigate, then browser_snapshot
+  - For each page: navigate then take accessibility snapshot (using the selected driver's action mapping)
   - Record all interactive elements (links, buttons, forms, inputs)
   - Track which pages require authentication
   - Detect SPA routing (URL changes from clicks vs full navigations)
@@ -580,7 +562,6 @@ Spawn the `e2e-generator` agent to create test files from the app map.
 ```python
 Task(
   subagent_type="workflow:e2e-generator",
-  model=<model_for_mode>,
   prompt="""
   ## Task
   Generate Playwright E2E test suite from app map.
@@ -591,7 +572,6 @@ Task(
   Test directory: {output_dir}
   Framework: {framework}
   Auth strategy: {auth_strategy}
-  Mode: {mode}
 
   ## Instructions
 
@@ -604,7 +584,7 @@ Task(
   - auth.spec.ts - Login/logout (if auth detected)
   - <page-name>.spec.ts - Per-page feature tests
   - forms.spec.ts - Form validation and submission
-  - accessibility.spec.ts - A11y checks (thorough mode only)
+  - accessibility.spec.ts - A11y checks
 
   ### 3. Selector Priority (MANDATORY)
   Use this priority for all selectors:
@@ -659,12 +639,11 @@ This is the main review gate. The e2e-reviewer runs tests and checks quality.
 
 ```python
 iteration = 0
-max_iterations = <from mode config>
+max_iterations = 3
 
 while iteration < max_iterations:
     Task(
       subagent_type="workflow:e2e-reviewer",
-      model=<model_for_mode>,  # opus for thorough
       prompt="""
       ## Task
       Review E2E Playwright tests in {output_dir}
@@ -717,7 +696,6 @@ while iteration < max_iterations:
             # Send issues back to generator for fixes
             Task(
               subagent_type="workflow:e2e-generator",
-              model=<model_for_mode>,
               prompt="""
               ## Review Issues to Fix (MANDATORY)
 
@@ -747,13 +725,11 @@ After validation passes, run the quality gate.
 ```python
 Task(
   subagent_type="workflow:quality-gate",
-  model=<model_for_mode>,
   prompt="""
   QUALITY GATE CHECK - E2E Testing
 
   Project: {project_path}
   Test directory: {output_dir}
-  Mode: {mode}
 
   Run checks:
   1. TypeScript compilation: npx tsc --noEmit (on test files)
@@ -778,13 +754,11 @@ Final verification before marking the workflow complete.
 ```python
 Task(
   subagent_type="workflow:completion-guard",
-  model=<"opus" if thorough else model_for_mode>,
   prompt="""
   COMPLETION GUARD - E2E Testing Workflow
 
   Original task: Generate E2E tests for {base_url}
   Workflow ID: {workflow_id}
-  Mode: {mode}
   App map: {output_dir}/app-map.json
 
   Verify:
@@ -859,7 +833,7 @@ When all phases pass:
 | Error | Action |
 |-------|--------|
 | URL unreachable | Warn user, ask to proceed or abort |
-| Playwright MCP not configured | Show config instructions, pause |
+| No browser driver available | Report which drivers were checked; local Playwright fallback is last resort |
 | npm install fails | Report error, suggest manual install |
 | Browser install fails | Report error, suggest `npx playwright install --with-deps` |
 | Explorer finds no pages | Report, ask user to check URL and try again |

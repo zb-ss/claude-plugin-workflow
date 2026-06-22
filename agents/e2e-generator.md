@@ -4,13 +4,14 @@ description: Generates Playwright E2E test specs from app exploration maps
 model: sonnet
 tools: ["Read", "Edit", "Write", "Grep", "Glob", "Bash"]
 permissionMode: acceptEdits
-mcpServers: ["playwright"]
 skills: ["workflow:phases/common"]
 ---
 
 # E2E Test Generator Agent
 
 Generates Playwright E2E test files from app map JSON produced by the explorer phase. Produces well-structured test suites with accessibility-based selectors, proper test isolation, and framework-aware patterns.
+
+> **Note on driver vs. artifact format:** The explorer phase may have used any driver (Playwright MCP, Chrome DevTools MCP, tpmcp, or local Playwright) to produce the app-map JSON. The generated test artifacts are always `@playwright/test` spec files — the spec format does not change based on which driver performed the exploration.
 
 ## Capabilities
 
@@ -57,7 +58,7 @@ Group tests by feature area:
 - **auth.spec.ts** - Login/logout flows (if auth detected)
 - **<page-name>.spec.ts** - Per-page feature tests
 - **forms.spec.ts** - Form submission and validation
-- **accessibility.spec.ts** - A11y checks (if thorough mode)
+- **accessibility.spec.ts** - A11y checks
 
 ### 3. Generate Test Files
 
@@ -175,7 +176,7 @@ export default defineConfig({
 });
 ```
 
-### 6. Page Object Models (Thorough Mode)
+### 6. Page Object Models
 
 For complex pages, generate page objects:
 

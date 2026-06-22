@@ -2,14 +2,13 @@
 
 > **Note:** Agent behavior is primarily governed by their frontmatter fields (`maxTurns`, `permissionMode`, `skills`, `mcpServers`) and loaded phase skills (`skills/phases/`). This file is a reference for understanding prompt patterns. See individual agent definitions in `agents/` for current configuration.
 
-Use these templates when invoking subagents. Customize with actual values.
-Select the appropriate agent tier based on the execution mode.
+Use these templates when invoking subagents in swarm and epic workflows. Customize with actual values.
 
 ## CRITICAL: Use Workflow Agents Only
 
 **ALWAYS use `workflow:` prefixed agents** to ensure they use native tools (Write/Edit) instead of bash commands for file operations.
 
-All custom workflow agents must use the `workflow:` prefix (e.g., `workflow:executor`, `workflow:reviewer`, `workflow:security`). The only exception is the built-in `Plan` agent which is read-only.
+All custom workflow agents must use the `workflow:` prefix (e.g., `workflow:executor`, `workflow:reviewer-deep`, `workflow:security-deep`). The only exception is the built-in `Plan` agent which is read-only.
 
 ---
 
@@ -27,10 +26,10 @@ RIGHT: Write(/home/user/.claude-workflows/active/state.org) → SUCCESS
 ```bash
 # Step 1: Get HOME path
 echo $HOME
-# Output: /home/zashboy
+# Output: /home/user
 
 # Step 2: Use absolute path in Write tool
-Write(/home/zashboy/.claude-workflows/active/state.org)
+Write(/home/user/.claude-workflows/active/<repo-key>/state.org)
 ```
 
 This applies to ALL file operations in `~/.claude/` directories.
@@ -39,7 +38,7 @@ This applies to ALL file operations in `~/.claude/` directories.
 
 ## Context Resilience
 
-**ALL agent spawns MUST include `max_turns`** to prevent unbounded context growth. Values come from the mode config's `MAX_TURNS_*` properties. See `resources/context-resilience.md` for the canonical table.
+**ALL agent spawns MUST include `max_turns`** to prevent unbounded context growth. See `resources/context-resilience.md` for the canonical table.
 
 **Reference, don't embed context:** Instead of inlining the codebase context file contents, provide the path and let the agent read it:
 
@@ -50,16 +49,6 @@ Focus on: [relevant sections for this task]
 ```
 
 This keeps prompts lean and lets each agent manage their own context budget.
-
----
-
-## Agent Tiers
-
-| Tier | Model | Suffix | Use Case |
-|------|-------|--------|----------|
-| Lite | haiku | `-lite` | Fast, simple tasks (turbo/eco mode) |
-| Standard | sonnet | (none) | Balanced approach (standard mode) |
-| Deep | opus | `-deep` | Complex analysis (thorough mode) |
 
 ---
 
@@ -116,27 +105,6 @@ Focus on: [relevant sections for this task]
 ---
 
 ## Planning Agents
-
-### architect-lite (haiku)
-
-```
-subagent_type: workflow:architect-lite
-model: haiku
-max_turns: 8
-prompt: |
-  ## Task
-  Quick analysis for: {task_description}
-
-  ## Instructions
-  1. Identify the main files involved (max 5)
-  2. Note the primary patterns used
-  3. List key dependencies
-
-  ## Output
-  - Key files with brief purpose
-  - Pattern notes (1-2 sentences)
-  - Recommended approach (2-3 sentences)
-```
 
 ### Plan (sonnet) - Built-in
 
@@ -198,57 +166,6 @@ prompt: |
 ---
 
 ## Implementation Agents
-
-### executor-lite (haiku)
-
-```
-subagent_type: workflow:executor-lite
-model: haiku
-max_turns: 15
-prompt: |
-  ## Task
-  Implement: {task_description}
-
-  ## Files
-  {file_list}
-
-  ## CRITICAL: Tool Usage
-  - Use `Write` tool to CREATE new files
-  - Use `Edit` tool to MODIFY existing files
-  - NEVER use bash commands for file operations:
-    - NO `php -r "file_put_contents(...)"`
-    - NO `python -c "open(...).write(...)"`
-    - NO `echo "..." > file`
-  - Write tool does NOT expand ~ - get $HOME first, use absolute paths
-
-  ## Skill Loading (Optional)
-  Load recommended skills from codebase context if available:
-  `Skill(skill: "{skill-name}")`
-
-  ## Instructions
-  1. Load recommended skills (if available)
-  2. Make the required changes
-  3. Follow existing code style
-  4. Keep changes minimal
-
-  ## Review Issues to Fix (if any - MANDATORY fix ALL)
-  {numbered_issues_list}
-
-  ### Fix Protocol (when review issues are provided)
-  1. Address EVERY issue by ID - no exceptions
-  2. For each issue:
-     a. Read the file at the specified line
-     b. Apply the fix
-     c. Self-verify: re-read the code to confirm the fix
-  3. Report: [ISSUE-N] FIXED: <what was changed>
-  4. False positives: [ISSUE-N] DISPUTE: <justification>
-  5. Do NOT skip any issue.
-
-  ## Output
-  - List of modified files
-  - Brief description of changes
-  - Fix report (if review issues were provided)
-```
 
 ### executor (sonnet)
 
@@ -319,130 +236,6 @@ prompt: |
 ---
 
 ## Code Review Agents
-
-### reviewer-lite (haiku)
-
-```
-subagent_type: workflow:reviewer-lite
-model: haiku
-max_turns: 8
-prompt: |
-  ## Task
-  Quick review of changes for: {task_description}
-
-  ## Changed Files
-  {changed_files_list}
-
-  ## Codebase Context
-  Read the context file at: <HOME>/.claude-workflows/context/<project>.md
-  Focus on: Naming conventions, code style
-
-  ## Review Focus
-  1. Obvious bugs or errors
-  2. Basic style compliance
-  3. Glaring security issues
-  4. Naming convention violations (from codebase context)
-
-  ## Verdict Rules
-  - PASS: ZERO issues at any severity (CRITICAL, MAJOR, MINOR)
-  - FAIL: ANY issue at any severity level
-  - If ANY issue exists, verdict MUST be FAIL
-
-  ## Previous Issues (if iteration > 1)
-  {previous_issues_list}
-
-  ### Re-review Protocol (if iteration > 1)
-  1. For EACH previous issue, verify:
-     - [ISSUE-N] ✓ RESOLVED / ✗ NOT RESOLVED / ⚠ REGRESSED
-  2. Scan for NEW issues (IDs start from max+1)
-  3. PASS only if ALL previous resolved AND zero new issues
-
-  ## Output Format
-  VERDICT: PASS or FAIL
-
-  ISSUES (if FAIL):
-  - [ISSUE-1] [CRITICAL] description - file:line - suggested fix
-  - [ISSUE-2] [MAJOR] description - file:line - suggested fix
-  - [ISSUE-3] [MINOR] description - file:line - suggested fix
-
-  TOTAL: N issues (X CRITICAL, Y MAJOR, Z MINOR)
-
-  IMPROVEMENTS (non-blocking):
-  - suggestion
-
-  QUICK NOTES:
-  Brief assessment (2-3 sentences max)
-```
-
-### reviewer (sonnet)
-
-```
-subagent_type: workflow:reviewer
-max_turns: 12
-prompt: |
-  ## Task
-  Review the implementation for: {task_description}
-
-  ## Context
-  Workflow ID: {workflow_id}
-  Plan file: {plan_file_path}
-  Changed files: {changed_files_list}
-  Review iteration: {iteration_number}
-
-  ## Codebase Context
-  Read the context file at: <HOME>/.claude-workflows/context/<project>.md
-  Focus on: Naming conventions, architectural patterns, error handling, code style
-
-  ## Language & Framework Best Practices
-  Check the implementation against:
-  1. Framework conventions (detected from codebase context)
-  2. Language idioms and best practices
-  3. Project-specific patterns and naming conventions
-  4. SOLID principles compliance
-  5. Security patterns appropriate for the framework
-
-  ## Skill Loading (Optional)
-  If codebase context lists "Recommended Skills", load them:
-  Skill(skill: "{skill-name}")
-
-  ## Review Criteria
-  1. Does implementation match the plan?
-  2. Code quality and readability
-  3. Error handling
-  4. Edge cases covered
-  5. No unnecessary complexity
-  6. Follows project conventions (from codebase context)
-
-  ## Verdict Rules
-  - PASS: ZERO issues at any severity (CRITICAL, MAJOR, MINOR)
-  - FAIL: ANY issue at any severity level
-  - If ANY issue exists, verdict MUST be FAIL
-
-  ## Previous Issues (if iteration > 1)
-  {previous_issues_list}
-
-  ### Re-review Protocol (if iteration > 1)
-  1. For EACH previous issue, verify:
-     - [ISSUE-N] ✓ RESOLVED / ✗ NOT RESOLVED / ⚠ REGRESSED
-  2. Scan for NEW issues (IDs start from max+1)
-  3. PASS only if ALL previous resolved AND zero new issues
-
-  ## Output Format
-  VERDICT: PASS or FAIL
-
-  ISSUES (if FAIL):
-  - [ISSUE-1] [CRITICAL] issue - file:line - suggested fix
-  - [ISSUE-2] [MAJOR] issue - file:line - suggested fix
-  - [ISSUE-3] [MINOR] issue - file:line - suggested fix
-
-  TOTAL: N issues (X CRITICAL, Y MAJOR, Z MINOR)
-
-  IMPROVEMENTS (non-blocking):
-  - suggestion description
-
-  SUMMARY:
-  Brief overall assessment
-```
 
 ### reviewer-deep (opus)
 
@@ -521,70 +314,6 @@ prompt: |
 ---
 
 ## Security Review Agents
-
-### security-lite (haiku)
-
-```
-subagent_type: workflow:security-lite
-model: haiku
-max_turns: 8
-prompt: |
-  ## Task
-  Quick security scan for: {task_description}
-
-  ## Changed Files
-  {changed_files_list}
-
-  ## Scan Focus
-  1. SQL injection patterns
-  2. Command injection
-  3. Obvious XSS vectors
-  4. Hardcoded credentials
-
-  ## Output Format
-  VERDICT: PASS or FAIL
-
-  FINDINGS (if any):
-  - [CRITICAL] vulnerability - file:line
-  - [HIGH] vulnerability - file:line
-
-  NOTES:
-  Brief assessment (1-2 sentences)
-```
-
-### security (sonnet)
-
-```
-subagent_type: workflow:security
-max_turns: 10
-prompt: |
-  ## Task
-  Security audit for: {task_description}
-
-  ## Context
-  Workflow ID: {workflow_id}
-  Changed files: {changed_files_list}
-
-  ## Audit Focus
-  1. OWASP Top 10 vulnerabilities
-  2. Input validation and sanitization
-  3. Authentication/authorization issues
-  4. Sensitive data exposure
-  5. Injection vulnerabilities (SQL, command, XSS)
-  6. Insecure dependencies
-
-  ## Output Format
-  VERDICT: PASS or FAIL
-
-  FINDINGS:
-  - [CRITICAL] vulnerability - file:line - remediation
-  - [HIGH] vulnerability - file:line - remediation
-  - [MEDIUM] vulnerability - file:line - remediation
-  - [LOW] vulnerability - file:line - remediation
-
-  RECOMMENDATIONS:
-  - Security improvements not blocking but advised
-```
 
 ### security-deep (opus)
 
@@ -674,116 +403,6 @@ prompt: |
 
 ---
 
-## Performance Agents
-
-### perf-lite (haiku)
-
-```
-subagent_type: workflow:perf-lite
-model: haiku
-max_turns: 8
-prompt: |
-  ## Task
-  Quick performance scan for: {task_description}
-
-  ## Changed Files
-  {changed_files_list}
-
-  ## Scan Focus
-  1. N+1 query patterns
-  2. Unnecessary loops
-  3. Large data structures
-  4. Missing caching
-
-  ## Output Format
-  ASSESSMENT: GOOD / CONCERNS / ISSUES
-
-  FINDINGS (if any):
-  - [PERF] issue - file:line - impact
-
-  NOTES:
-  Brief assessment (1-2 sentences)
-```
-
-### perf-reviewer (sonnet)
-
-```
-subagent_type: workflow:perf-reviewer
-model: sonnet
-max_turns: 10
-prompt: |
-  ## Task
-  Performance review for: {task_description}
-
-  ## Context
-  Workflow ID: {workflow_id}
-  Changed files: {changed_files_list}
-
-  ## Analysis Areas
-  1. Algorithm Efficiency - Time/space complexity
-  2. Database Operations - Queries, N+1, indexes
-  3. Memory Management - Lifecycle, collections, streams
-  4. I/O Operations - Files, network, async
-  5. Caching - Opportunities, invalidation
-  6. Concurrency - Thread safety, parallelization
-
-  ## Output Format
-  ASSESSMENT: OPTIMAL / ACCEPTABLE / NEEDS_WORK / CRITICAL
-
-  PERFORMANCE FINDINGS:
-  - [CRITICAL/HIGH/MEDIUM] issue - file:line
-    Complexity: O(x)
-    Impact: description
-    Optimization: suggested fix
-
-  OPTIMIZATION OPPORTUNITIES:
-  - Description with expected improvement
-
-  SUMMARY:
-  Performance assessment with prioritized recommendations
-```
-
----
-
-## Documentation Agent
-
-### doc-writer (haiku)
-
-```
-subagent_type: workflow:doc-writer
-model: haiku
-max_turns: 8
-prompt: |
-  ## Task
-  Update documentation for: {task_description}
-
-  ## Context
-  Workflow ID: {workflow_id}
-  Changed files: {changed_files_list}
-
-  ## CRITICAL: Tool Usage
-  - Use `Write` tool to CREATE new documentation files
-  - Use `Edit` tool to MODIFY existing documentation
-  - NEVER use bash commands for file operations
-
-  ## Scope
-  1. Identify affected documentation
-  2. Update relevant sections
-  3. Add new docs if needed
-  4. Ensure examples are accurate
-
-  ## Output Format
-  ### Documentation Updated
-  | File | Section | Change Type |
-  |------|---------|-------------|
-  | path | section | added/updated |
-
-  ### Changes Made
-  - Brief description of each update
-```
-
----
-
 ## Exploration Agent
 
 ### explorer (haiku)
@@ -828,8 +447,7 @@ prompt: |
 ## Workflow Complete
 
 **Workflow ID:** {workflow_id}
-**Type:** {workflow_type}
-**Mode:** {execution_mode}
+**Type:** {workflow_type} (swarm | epic)
 **Task:** {task_description}
 **Duration:** {duration}
 
@@ -844,12 +462,10 @@ prompt: |
 ### Tests
 - Tests created: {test_count}
 - All tests passing: {tests_pass}
-- Coverage: {coverage_percent}% (if thorough mode)
 
 ### Review History
-- Code review iterations: {review_iterations}
-- Security review iterations: {security_iterations}
-- Performance review: {perf_status} (thorough mode only)
+- Code review iterations (reviewer-deep): {review_iterations}
+- Security review iterations (security-deep): {security_iterations}
 
 ### Next Steps
 1. Review the changes manually

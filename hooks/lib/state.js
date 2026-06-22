@@ -14,19 +14,17 @@ const crypto = require('crypto');
 const { log } = require('./logger');
 const {
   getStateDir,
-  getActiveDir,
   getActiveBaseDir,
-  getCompletedDir,
   getCompletedBaseDir,
 } = require('../../lib/paths');
 const { getRepoKey } = require('../../lib/repo-key');
 
 const WORKFLOWS_DIR = getStateDir();
-// NOTE: ACTIVE_DIR / COMPLETED_DIR resolve at module-load time using the cwd in
-// which the hook was invoked. For multi-repo correctness we also expose helpers
-// that re-derive the path on demand. validatePath only requires WORKFLOWS_DIR.
-const ACTIVE_DIR = getActiveDir();
-const COMPLETED_DIR = getCompletedDir();
+// Repo-independent base dirs (parents of all per-repo buckets). The per-repo
+// active/completed dirs are intentionally NOT cached at module load: a hook's
+// launch cwd is not guaranteed to be the session's repo, so any code that needs
+// a repo-scoped path must derive it per-call from an explicit cwd (getActiveDir
+// in lib/paths). validatePath only requires WORKFLOWS_DIR.
 const ACTIVE_BASE_DIR = getActiveBaseDir();
 const COMPLETED_BASE_DIR = getCompletedBaseDir();
 
@@ -88,6 +86,17 @@ function readState(statePath) {
 function writeState(statePath, obj) {
   const validated = validatePath(statePath);
   if (!validated) return false;
+
+  // Refuse to write a *.state.json directly into the flat active/ root. Such a
+  // file carries no repo bucket and would be surfaced as unscoped "legacy" in
+  // every repo's session (the historical cross-repo leak). All workflow state
+  // must live in a per-repo bucket (active/<repo-key>/) or under completed/.
+  if (
+    validated.endsWith('.state.json') &&
+    path.resolve(path.dirname(validated)) === path.resolve(ACTIVE_BASE_DIR)
+  ) {
+    return false;
+  }
 
   const tmpPath = validated + '.tmp';
   try {
@@ -165,15 +174,25 @@ function findActiveStates(opts) {
     try {
       currentKey = getRepoKey(o.cwd);
     } catch {
-      // No repo key — fall through to legacy-only listing
+      // No repo key — only self-identifying (stamped) files can be classified;
+      // unstamped legacy files are excluded here (see findLegacyStates).
     }
 
-    // Legacy flat-layout files at the active root (pre-repo-scoping).
+    // Stamped flat-layout files (self-identifying via repo_key, e.g. mislocated
+    // or mid-migration). Classify by the embedded key. UNSTAMPED legacy files
+    // are intentionally NOT returned here — they belong to no repo and surface
+    // only via findLegacyStates() as a migrate-or-archive notice.
     for (const entry of readStatesInDir(ACTIVE_BASE_DIR)) {
-      collected.push({ ...entry, scope: 'legacy' });
+      const fileKey = entry.state && entry.state.repo_key;
+      if (!fileKey) continue;
+      const isCurrent = fileKey === currentKey;
+      if (scope === 'current' && !isCurrent) continue;
+      collected.push({ ...entry, scope: isCurrent ? 'current' : `other:${fileKey}` });
     }
 
-    // Per-repo subdirectories.
+    // Per-repo subdirectories. The directory name is the repo-key; a stamped
+    // state's embedded repo_key is preferred so a file in the wrong bucket still
+    // resolves to its true owner rather than its location.
     const subdirs = fs.readdirSync(ACTIVE_BASE_DIR, { withFileTypes: true })
       .filter(e => e.isDirectory())
       .map(e => e.name);
@@ -181,11 +200,12 @@ function findActiveStates(opts) {
     for (const sub of subdirs) {
       // Treat directories starting with "_" as reserved (e.g., _archive).
       if (sub.startsWith('_')) continue;
-      const isCurrent = sub === currentKey;
-      if (scope === 'current' && !isCurrent) continue;
       const states = readStatesInDir(path.join(ACTIVE_BASE_DIR, sub));
       for (const entry of states) {
-        collected.push({ ...entry, scope: isCurrent ? 'current' : `other:${sub}` });
+        const fileKey = (entry.state && entry.state.repo_key) || sub;
+        const isCurrent = fileKey === currentKey;
+        if (scope === 'current' && !isCurrent) continue;
+        collected.push({ ...entry, scope: isCurrent ? 'current' : `other:${fileKey}` });
       }
     }
 
@@ -199,6 +219,23 @@ function findActiveStates(opts) {
   } catch {
     return [];
   }
+}
+
+/**
+ * Find unscoped legacy flat-layout state files (no repo_key) at the active root.
+ * These predate repo-scoping and belong to no repository. They are surfaced only
+ * as a migrate-or-archive notice — never as resumable workflows for the current
+ * repo. This is what stops pre-scoping workflows from bleeding into every session.
+ *
+ * @returns {Array<{path:string, state:object}>}
+ */
+function findLegacyStates() {
+  const out = [];
+  for (const entry of readStatesInDir(ACTIVE_BASE_DIR)) {
+    if (entry.state && entry.state.repo_key) continue; // stamped → findActiveStates
+    out.push(entry);
+  }
+  return out;
 }
 
 /**
@@ -479,15 +516,14 @@ function findOrphanedOrgFiles(opts) {
 
 module.exports = {
   WORKFLOWS_DIR,
-  ACTIVE_DIR,
   ACTIVE_BASE_DIR,
-  COMPLETED_DIR,
   COMPLETED_BASE_DIR,
   validatePath,
   readState,
   writeState,
   updateState,
   findActiveStates,
+  findLegacyStates,
   countOtherRepoStates,
   getActiveWorkflow,
   writeSessionMarker,

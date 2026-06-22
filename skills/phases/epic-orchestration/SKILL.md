@@ -62,11 +62,25 @@ Agent(
       ["parser"],
       ["type_checker"],
       ["codegen"]
-    ]
+    ],
+    "execution_path": "epic",
+    "reasoning": "4 components, multi-wave DAG, disjoint file scopes → separate PRs",
+    "confidence": 0.85
   }
   ```
-  
+
+  Also emit `confidence` (0–1): how well-specified and unambiguous the task is.
+  Persist to `state.architecture.confidence`. In autonomous runs, a value below
+  the configured `confidence_threshold` makes the driver **park** the task
+  (`blocked` label + a comment asking for clarification) rather than guess.
+
   The dependency_order is a list of waves — each wave contains components that can run in parallel.
+
+  **Decision rule (emitted for EVERY task — the architect decomposes first, then
+  the supervisor routes on this field without asking the user):** set
+  `execution_path: "epic"` if ANY of — component count ≥ 3, the DAG has > 1 wave,
+  or ≥ 2 components with disjoint file scopes mapping to separate PRs; otherwise
+  `"swarm"` (one component, or several with shared scope in a single wave).
   """
 )
 ```
@@ -74,8 +88,25 @@ Agent(
 After the architect completes:
 1. Parse the component list from the output
 2. Write CONTRACTS.md to the project root (if architect hasn't already)
-3. Update the epic state file with components, dependency_order, and interfaces
+3. Update the state file with components, dependency_order, interfaces, and `execution_path`/`reasoning` (under `state.architecture`); the supervisor routes swarm vs epic on `execution_path`
 4. Mark architecture gate as passed
+
+## Gate: capability_preflight (runs once, after architecture, before component execution)
+
+After the architect agent returns and state is updated, run the preflight gate
+**before** creating any worktrees or spawning component agents:
+
+```python
+# Follow the full capability_preflight protocol in agents/supervisor.md.
+# Key points specific to epic mode:
+# - Pass REPO_ROOT = the main worktree root (not a component worktree).
+# - state.review_depth from risk-classify sets the floor for the per-component
+#   review lenses (§ "Review" inside each component supervisor) AND the
+#   integration-level review in Phase 3.4.
+# - If the gate blocks (missing tools, autonomous mode): set
+#   state.parked = True and return — do NOT create any worktrees.
+# - On pass: set_gate("capability_preflight", "passed") and continue.
+```
 
 ## Phase 2: Component Execution
 
@@ -144,6 +175,10 @@ Agent(
   4. Security check → 5. Run tests → 6. Verify completeness
 
   ## Create PR when done
+  ## SCRUB GATE: the push/PR below crosses into {target_repo}. If that repo is
+  ## not private, every `git push` / `gh pr create` is auto-intercepted by the
+  ## scrub-guard PreToolUse hook (blocks on internal markers). If it blocks,
+  ## genericize/redact the flagged content and retry — never history-rewrite.
   cd {absolute_worktree_path}
   git add -A && git commit -m "feat({component_id}): {component_name}"
   git push -u origin epic/{component_id}
@@ -339,31 +374,57 @@ git worktree remove .claude/worktrees/epic-{component_id}
 git branch -d epic/{component_id}  # or leave for reference
 ```
 
-## Phase 4: Post-Merge Multi-Architect Review (mandatory in thorough)
+## Gate: spec_conformance (after integration, before e2e_validation / post-merge review)
+
+After Phase 3.3 (full test suite passes) and Phase 3.4 (integration review passes),
+run spec_conformance against the **merged** integration branch before advancing:
+
+```python
+# Follow the full spec_conformance protocol in agents/supervisor.md.
+# Key points specific to epic mode:
+# - acceptance_criteria = state.workflow.acceptance_criteria (epic-level, not per-component).
+# - diff_summary = the cumulative diff of the integration branch vs main.
+# - test_output = Phase 3.3 test suite results.
+# - On FAIL: route each FAIL [CRITERION-N] back to a workflow:executor operating
+#   on the integration branch (same fix-loop used for [ISSUE-N] findings); then
+#   re-run the test suite (Phase 3.3) and re-run spec_conformance. Repeat until PASS.
+# - On PASS: set_gate("spec_conformance", "passed") and advance to Phase 3.5
+#   (create integration PR) and then Phase 4 (post-merge review).
+```
+
+## Phase 4: Post-Merge Review (mandatory in thorough)
 
 After Phase 3 closes with all components merged and integration tests green,
-the supervisor MUST run the post-merge multi-architect review. See
-`skills/phases/post-merge-review/SKILL.md` for the full protocol.
+the supervisor MUST invoke the fan-out review engine. The full protocol is
+defined in `skills/phases/post-merge-review/SKILL.md`; follow it verbatim.
 
 In summary:
 
-1. Spawn three opus architects in parallel: `workflow:architect` (functional),
-   `workflow:security-deep` (security), `workflow:reviewer-deep` (quality).
-2. Each architect compares the integrated codebase against
+1. Build an N-lens roster (core lenses: functional-completeness, security,
+   code-quality; add extended lenses — performance, data-integrity, API-contract,
+   etc. — scaled to the change profile and remaining quota).
+2. Spawn the full roster in parallel (`run_in_background=true`, opus tier);
+   each lens reports **every** candidate finding against
    `state.workflow.description` + `state.architecture.components` +
-   `state.components` (per-component plans) and returns a `[PASS]/[FAIL]`
-   checklist with a final `VERDICT:` line.
-3. Aggregate. If any architect returns `VERDICT: FAIL`, run an executor to
-   fix every `[FAIL]` line and re-spawn all three architects. Loop up to
-   `MAX_REVIEW_ITERATIONS` (default 5).
-4. On 100% PASS: write all architect outputs to `<id>.review.md`, mark
-   `gates.post_merge_review.status = "passed"`, advance to `completion_guard`.
-5. On exhausted iterations: pause and surface the still-failing items to the
-   user — do not auto-pass.
+   `state.components` (per-component plans). Lenses do not emit a verdict.
+3. Loop-until-dry: keep spawning fresh roster rounds until K=2 consecutive
+   rounds surface no new findings (dedup on file+line+claim).
+4. Adversarially verify every fresh finding with ≥3 independent skeptics
+   (correctness, reachability, reproduction); a finding is confirmed only on a
+   majority of CONFIRMED votes.
+5. Route confirmed findings to `workflow:executor` for fixes; after each
+   Fix-Report, **re-run the entire engine from Step 1** (fixed point). Reset
+   seen/dry; keep the all-time confirmed log for the audit trail.
+6. The gate passes only when a complete find→verify cycle yields zero confirmed
+   findings, K dry rounds in a row. On `MAX_FIX_CYCLES` exhaustion: pause and
+   surface the still-confirmed items to the user — do not auto-pass.
+7. Write the full audit trail to `<id>.review.md`; mark
+   `gates.post_merge_review.status = "passed"`; advance to `completion_guard`.
 
-This phase is **zero-tolerance**: a single missing acceptance criterion, even
-cosmetic, fails the gate. The trade-off is honest: epic-level investments
-deserve the scrutiny.
+This phase is **zero-tolerance**: a single confirmed finding blocks the gate.
+The fan-out engine's adversarial verification ensures the gate is both
+exhaustive and trustworthy — it does not cry wolf on noise, but it does not
+let real gaps through.
 
 ## State Update Pattern
 

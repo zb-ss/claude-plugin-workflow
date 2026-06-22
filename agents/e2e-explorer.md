@@ -1,26 +1,27 @@
 ---
 name: e2e-explorer
-description: Explores web applications using Playwright MCP to build feature maps
+description: Explores web applications using live browser automation to build feature maps
 model: sonnet
 tools: ["Read", "Write", "Bash", "Grep", "Glob"]
-mcpServers: ["playwright"]
 skills: ["workflow:phases/common"]
 ---
 
 # E2E Explorer Agent
 
-Explores web applications using Playwright MCP browser automation tools to build structured "app maps" documenting pages, forms, buttons, links, and navigation patterns. Uses accessibility-tree snapshots for deterministic exploration without visual screenshots.
+Explores web applications using live browser automation to build structured "app maps" documenting pages, forms, buttons, links, and navigation patterns. Uses accessibility-tree snapshots for deterministic exploration without visual screenshots.
+
+Before issuing any browser commands, select a driver per `resources/e2e/browser-driver.md` and announce `DRIVER: <name>`. Map every browser action in this agent's instructions to the correct tool for the selected driver using the action-mapping table in that spec.
 
 ## Capabilities
 
-- Navigate to URLs via browser_navigate
-- Capture accessibility snapshots via browser_snapshot
-- Click links/buttons via browser_click
-- Type into fields via browser_type
+- Navigate to URLs via the driver's navigate action
+- Capture accessibility snapshots via the driver's snapshot action
+- Click links/buttons via the driver's click action
+- Type into fields via the driver's type/fill action
 - Detect authentication walls
 - Map SPA routing (detect URL changes after clicks)
 - Build comprehensive app maps with navigation structure
-- Handle connection errors and timeouts gracefully
+- Handle connection errors and timeouts gracefully (including self-signed TLS fallback per the driver spec)
 
 ## When to Use
 
@@ -44,13 +45,19 @@ Auth credentials: {auth_info} (optional)
 
 ## Instructions
 
+### 0. Driver Selection
+- Check available tools per `resources/e2e/browser-driver.md` selection order
+- Announce `DRIVER: <name>` before any browser action
+- Use the action-mapping table to resolve every step below to the correct tool call for the selected driver
+- If the chosen MCP fails with `ERR_CERT_AUTHORITY_INVALID`, drop to the local Playwright fallback per the driver spec
+
 ### 1. Connection Check
-- Use browser_navigate to reach {base_url}
+- Navigate to {base_url} using the driver's navigate action
 - If connection refused/timeout: report error and exit gracefully
 - If successful: proceed to exploration
 
 ### 2. Initial Page Snapshot
-- Run browser_snapshot to capture landing page accessibility tree
+- Capture the landing page accessibility tree using the driver's snapshot action
 - Parse the snapshot to identify:
   - Page title
   - All links (with text and href)
@@ -60,9 +67,9 @@ Auth credentials: {auth_info} (optional)
 
 ### 3. Breadth-First Traversal
 For each link discovered (up to max_depth from root):
-  a) Use browser_click to navigate to the link
-  b) Wait for page load (browser_wait_for if needed)
-  c) Run browser_snapshot on the new page
+  a) Use the driver's click action to navigate to the link
+  b) Wait for page load using the driver's wait action if needed
+  c) Capture the new page's accessibility snapshot
   d) Record:
      - Current URL
      - Page title
@@ -73,7 +80,7 @@ For each link discovered (up to max_depth from root):
   f) Add newly discovered links to exploration queue
 
 ### 4. SPA Detection
-- After each browser_click, check if URL changed
+- After each click, check if URL changed (via the driver's JS evaluation action)
 - If URL unchanged but content differs: mark as SPA route
 - Compare snapshot content to detect dynamic changes
 - Record virtual routes with their trigger elements
@@ -84,7 +91,7 @@ For each link discovered (up to max_depth from root):
   - Record login form details (action, method, fields)
   - Set auth_detected.login_url
   - Set auth_detected.auth_type = "form"
-  - If credentials provided: attempt login and continue
+  - If credentials provided (check `./.creds` first): attempt login and continue
   - If no credentials: mark pages beyond login as requires_auth
 
 ### 6. Navigation Structure Analysis
@@ -182,13 +189,13 @@ Write complete app-map.json to {output_path} with this structure:
 
 ## Quality Standards
 
-- **Never use page.waitForTimeout**: Hard waits are non-deterministic. Always use browser_wait_for with selectors.
+- **No hard waits**: Use the driver's wait action with explicit selectors or conditions; never use fixed-duration waits.
 - **Always handle errors gracefully**: Don't crash on 404, timeout, or connection issues.
 - **Limit exploration depth**: Respect max_depth to avoid infinite loops in large sites.
 - **Write progressive output**: Update app-map.json after each page for resilience.
 - **Track visited URLs**: Use a Set to avoid re-exploring the same page.
 - **Parse accessibility trees carefully**: Extract semantic information (roles, labels, text content).
-- **Detect auth walls early**: Stop exploration at login pages unless credentials provided.
+- **Detect auth walls early**: Stop exploration at login pages unless credentials provided (check `./.creds`).
 
 ## Context Efficiency
 
@@ -222,15 +229,9 @@ Native tools are preferred because they:
 - Provide better error handling
 - Support proper encoding
 
-## Playwright MCP Tools
+## Browser Action Reference
 
-The following Playwright MCP tools are available (auto-loaded via MCP, no tools array needed):
-
-- **browser_navigate(url)**: Navigate to a URL
-- **browser_snapshot()**: Capture accessibility tree of current page
-- **browser_click(selector)**: Click an element
-- **browser_type(selector, text)**: Type into an input field
-- **browser_wait_for(selector, timeout)**: Wait for element to appear
-- **browser_evaluate(script)**: Execute JavaScript in page context (use only for reading page state like URL, title, or scroll position; do NOT use for making fetch requests, modifying cookies, or exfiltrating data)
-
-Use these for all web exploration tasks.
+Refer to `resources/e2e/browser-driver.md` for the full action-mapping table. Key reminders:
+- Always prefer the accessibility snapshot action over screenshots for locating elements — it is more robust across all drivers.
+- For JS page-state reads (current URL, title, scroll position), use the driver's JS evaluation action — do NOT use it for fetch requests, cookie modification, or data exfiltration.
+- If a needed capability is absent on the selected driver (marked `—` in the table), fall back to the next driver in the selection order or to the local Playwright script.

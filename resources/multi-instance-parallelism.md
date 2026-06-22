@@ -42,21 +42,21 @@ git worktree list
 ```bash
 cd ~/projects/myapp-feature-auth
 claude
-# Then: /workflow:start feature "Add user authentication"
+# Then: /workflow:start swarm: "Add user authentication"
 ```
 
 **Terminal 2 (API Feature):**
 ```bash
 cd ~/projects/myapp-feature-api
 claude
-# Then: /workflow:start feature "Build REST API endpoints"
+# Then: /workflow:start swarm: "Build REST API endpoints"
 ```
 
 **Terminal 3 (UI Feature):**
 ```bash
 cd ~/projects/myapp-feature-ui
 claude
-# Then: /workflow:start feature "Create dashboard components"
+# Then: /workflow:start swarm: "Create dashboard components"
 ```
 
 ### Merging Back
@@ -166,10 +166,10 @@ For maximum parallelism, combine all levels:
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
 │  │ 4 parallel  │  │ 4 parallel  │  │ sequential  │             │
 │  │ executors   │  │ executors   │  │ execution   │             │
-│  │ 3 architects│  │ 3 architects│  │             │             │
+│  │ N-lens gate │  │ N-lens gate │  │             │             │
 │  └─────────────┘  └─────────────┘  └─────────────┘             │
 │                                                                 │
-│  Total: 3 worktrees × (4 executors + 3 architects) = massive    │
+│  Total: 3 worktrees × (4 executors + N review lenses) = massive │
 │         parallel capacity                                       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -177,18 +177,17 @@ For maximum parallelism, combine all levels:
 
 ## Coordination Strategies
 
-### Memory Sharing
+### Shared Codebase Context
 
-Project memory is stored per-project, so all worktrees share learnings:
+Codebase context files are stored per-project slug, so all worktrees for the same repo share the same analysis:
 
 ```
-~/.claude-workflows/memory/myapp.md  ← Shared by all worktrees
+~/.claude-workflows/context/myapp.md  ← Shared by all worktrees
 ```
 
 This means:
-- Patterns discovered in worktree 1 are available in worktree 2
-- Key decisions are consistent across sessions
-- No duplicate learning needed
+- Conventions discovered in worktree 1 are available in worktree 2
+- Architectural decisions remain consistent across sessions
 
 ### Avoiding Conflicts
 
@@ -221,11 +220,11 @@ git worktree add ../myapp-api feature/api
 # 2. Open terminals and start workflows
 # Terminal 1:
 cd ../myapp-auth && claude
-# /workflow:start feature swarm: "Implement authentication"
+# /workflow:start swarm: swarm: "Implement authentication"
 
 # Terminal 2:
 cd ../myapp-api && claude
-# /workflow:start feature swarm: "Implement API endpoints"
+# /workflow:start swarm: swarm: "Implement API endpoints"
 ```
 
 ### Monitor Progress
@@ -269,8 +268,8 @@ git branch -d feature/auth feature/api
 
 | Project Size | Recommended Parallelism |
 |--------------|------------------------|
-| Small (< 10 files) | Single session, standard mode |
-| Medium (10-50 files) | Single session, swarm mode |
+| Small (< 10 files) | Single session, swarm execution |
+| Medium (10-50 files) | Single session, swarm execution |
 | Large (50-200 files) | 2-3 worktrees, swarm mode |
 | Very Large (200+ files) | 3-4 worktrees, swarm mode |
 
@@ -287,9 +286,10 @@ git worktree remove --force ../myapp-feature
 git worktree add ../myapp-feature feature-branch
 ```
 
-### Memory Not Shared
+### Codebase Context Slug
 
-Ensure all worktrees use the same project slug:
+Worktrees of the same repo share a `context/<project-slug>.md` file, so ensure
+they resolve to the same project slug:
 ```bash
 # Check project name
 basename "$(git rev-parse --show-toplevel)"
@@ -299,5 +299,5 @@ basename "$(git rev-parse --show-toplevel)"
 
 If a session's context fills up:
 1. Complete current task
-2. Save learnings: `/workflow:learn`
-3. Start fresh session or fork
+2. Start a fresh session (`/workflow:resume` picks up from state file)
+3. Or use `/fork` for a fresh context inheriting the current codebase context
