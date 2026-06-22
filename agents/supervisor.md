@@ -86,6 +86,23 @@ Batch 2 (parallel - after batch 1):
 
 **ALWAYS use `workflow:` prefixed agents** for all tasks except the built-in `Plan` agent.
 
+### Model resolution (policy-driven)
+
+Do **not** hardcode `model=`. Resolve every spawn's model from the policy so the
+role→model map is one config knob (see `resources/model-policy.md`):
+
+```bash
+node "$PLUGIN_ROOT/lib/model-policy.js" <role> [--risk <low|medium|high>]
+```
+
+Role keys: `architect, executor, reviewer, security, quality_gate,
+completion_guard, spec_conformance, codebase_analyzer, e2e, epic_integrator,
+test_writer, web_tester, explorer`. Pass `--risk` (from the capability-preflight
+risk classification) when spawning the **executor** so the `risk-driven` preset can
+escalate the coder to opus on high-risk work. The shipped default (`all-opus`)
+returns opus for coding and every review/judgment role. **The `model=` values in the
+examples below are illustrative — always substitute the policy-resolved model.**
+
 Always use `run_in_background=true` for parallel execution:
 
 ```python
@@ -167,6 +184,19 @@ risk = parse_json(risk_result)
 state.review_depth = risk.review_depth   # e.g. "standard" | "security" | "security-deep"
 # review_depth governs: min reviewers, security vs security-deep lens, mandatory human-gate
 
+# 4. Codex review prerequisite — if the policy enables the cross-model lens, Codex must be usable
+codex_cfg = parse_json(Bash(f'node "$PLUGIN_ROOT/lib/model-policy.js" --codex'))
+if codex_cfg.enabled:
+    avail = parse_json(Bash(f'node "$PLUGIN_ROOT/lib/codex-review.js" --available'))
+    if not avail.available:
+        if autonomous_mode:
+            state.parked = True
+            state.parked_reason = "capability_preflight: codex_review enabled but Codex unavailable (needs `codex login`)"
+            write_state(state); set_gate("capability_preflight", "blocked"); return
+        else:
+            tell_user("codex_review is enabled but Codex is not installed/authenticated. "
+                      "Run /codex:setup + `codex login`, or disable codex_review in model-policy.json.")
+
 write_state(state)
 set_gate("capability_preflight", "passed")   # or "skipped" if cap was empty and no risk
 # Proceed to implementation / component execution
@@ -222,8 +252,19 @@ Invoke the fan-out review engine (`skills/phases/post-merge-review/SKILL.md`):
 # Fan-out review engine — follow SKILL.md verbatim
 # 1. Build N-lens roster (core: functional-completeness, security, code-quality;
 #    add extended lenses based on change profile and remaining quota).
-# 2. Spawn full roster in parallel (run_in_background=true, opus tier).
+# 2. Spawn full roster in parallel (run_in_background=true, models from the policy —
+#    `model-policy.js reviewer` / `security`, default opus).
 #    Each lens reports EVERY candidate finding — no self-filtering, no verdict.
+# 2b. CODEX CROSS-MODEL LENS — if `node "$PLUGIN_ROOT/lib/model-policy.js --codex"`
+#    reports enabled: confirm `node "$PLUGIN_ROOT/lib/codex-review.js" --available`,
+#    then run Codex on the committed diff via lib/codex-review.js
+#    (locateCompanion → `<companion> review --base $BASE_BRANCH --scope branch
+#    --background` → poll `status <id> --json` → `result <id> --json` →
+#    parseReview → toIssueLines) and MERGE its [codex]-tagged findings into the
+#    same pool. They get the SAME adversarial verification + zero-tolerance fix
+#    loop — a different model family catches blind spots the opus lenses share. If
+#    codex_review is enabled but unavailable, capability-preflight already
+#    parked/warned (needs `codex login`).
 # 3. Loop-until-dry: K=2 consecutive dry rounds required.
 # 4. Adversarially verify every fresh finding: ≥3 skeptics, majority CONFIRMED.
 # 5. Route confirmed findings to workflow:executor; re-run engine after each

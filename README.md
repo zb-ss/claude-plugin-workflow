@@ -20,6 +20,7 @@ Long-running autonomous development workflows with parallel agent execution, zer
 - **E2E testing** — Automated Playwright test generation via browser exploration
 - **Autonomous autopilot** — A private GitHub-issues queue + a scheduled driver run tasks unattended across many repos, surviving usage-limit windows; manage it all from GitHub (even your phone)
 - **Scrub gate** — An unbypassable pre-push check blocks internal/secret information from leaking into public repos
+- **Configurable model policy** — role→model is one runtime config knob (presets: `all-opus` / `balanced` / `risk-driven` / `economy`), never hardcoded, plus an optional **Codex cross-model review** lens for an unbiased third pair of eyes from a different model family. See [`resources/model-policy.md`](resources/model-policy.md)
 
 ## Installation
 
