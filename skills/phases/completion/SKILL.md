@@ -117,7 +117,7 @@ If web files were changed, include this in your output:
 
 This workflow modified web-facing files. You can verify the changes visually:
 
-  /workflow:test-live <URL> [--user=<email>] [--pass=<password>]
+  /workflow:test-live <URL>     # authenticated runs read login from ./.creds (gitignored)
 
 This will open a browser and test the running application interactively.
 ```

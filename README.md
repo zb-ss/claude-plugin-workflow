@@ -50,8 +50,8 @@ The agent does everything it safely can on its own — creates the private contr
 # E2E test generation
 /workflow:test-e2e http://localhost:8080 --framework=symfony --auth=form
 
-# Interactive live browser testing
-/workflow:test-live http://localhost:8080 --user=admin@test.com --pass=secret
+# Interactive live browser testing (authenticated runs read login from the gitignored ./.creds)
+/workflow:test-live http://localhost:8080
 
 # Markdown state files (default is org)
 /workflow:start swarm: "Add feature" --format=md

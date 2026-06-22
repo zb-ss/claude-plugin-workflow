@@ -19,8 +19,8 @@ The plugin supports two long-running autonomous workflow styles:
 # E2E test generation
 /workflow:test-e2e http://localhost:8080 --framework=laravel --auth=form
 
-# Interactive live browser testing
-/workflow:test-live http://localhost:8080 --user=admin@test.com --pass=secret
+# Interactive live browser testing (authenticated runs read login from the gitignored ./.creds)
+/workflow:test-live http://localhost:8080
 ```
 
 ## Swarm Workflow Walkthrough
