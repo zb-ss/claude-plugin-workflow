@@ -81,7 +81,7 @@ State is tracked per-repository in `~/.claude-workflows/active/<repo-key>/`.
 
 ```bash
 # Check active workflows for this repo
-node ~/.claude/plugins/workflow/lib/active-dir-cli.js
+node $CLAUDE_PLUGIN_ROOT/lib/active-dir-cli.js
 
 # Check status from within a workflow session
 /workflow:status

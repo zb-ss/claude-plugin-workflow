@@ -62,26 +62,24 @@ When the user invokes this skill:
 
 ### Action: `enable`
 
-1. **Locate the plugin script**
-   - Run `echo $HOME` to get the home directory
-   - The script is at the plugin root: look for the installed plugin location
-   - Check both paths (installed copy and source):
-     - `~/.claude/plugins/workflow/statusline/statusline.js`
-     - The dotfiles source if symlinked
-   - Use whichever path exists. The path MUST be absolute (no `~` or variables)
+1. **Locate the plugin script (absolute path)**
+   - Resolve the plugin root to an absolute path: `PLUGIN_ABS=$(cd "$CLAUDE_PLUGIN_ROOT" && pwd)`
+   - The status line script is at `$PLUGIN_ABS/statusline/statusline.js`
+     (e.g. `/home/user/.claude/plugins/marketplaces/zb-ss-workflow/statusline/statusline.js`)
+   - Confirm the file exists. The path written to settings MUST be absolute (no `~`, no env vars — see step 3).
 
 2. **Read current settings**
    - Read `~/.claude/settings.json` (create `{}` if missing)
    - Parse existing JSON, preserve all current settings
 
 3. **Add status line configuration**
-   - Resolve the absolute script path (e.g., `/home/user/.claude/plugins/workflow/statusline/statusline.js`)
+   - Use the absolute script path resolved in step 1 (e.g., `/home/user/.claude/plugins/marketplaces/zb-ss-workflow/statusline/statusline.js`)
    - Merge this into the settings:
    ```json
    {
      "statusLine": {
        "type": "command",
-       "command": "node \"/home/user/.claude/plugins/workflow/statusline/statusline.js\""
+       "command": "node \"/home/user/.claude/plugins/marketplaces/zb-ss-workflow/statusline/statusline.js\""
      }
    }
    ```
@@ -101,7 +99,7 @@ When the user invokes this skill:
    ## Status Line Enabled
 
    Configuration added to ~/.claude/settings.json
-   Script: /home/user/.claude/plugins/workflow/statusline/statusline.js
+   Script: /home/user/.claude/plugins/marketplaces/zb-ss-workflow/statusline/statusline.js
 
    **Restart Claude Code** to see the status line.
 

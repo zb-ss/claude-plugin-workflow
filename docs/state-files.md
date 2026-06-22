@@ -49,7 +49,7 @@ State files live in per-repository buckets so workflows from different repos nev
 `<repo-key>` is derived from the current repository's git remote URL (or the toplevel path when no remote exists). Resolve the exact active directory for the current repo:
 
 ```bash
-node ~/.claude/plugins/workflow/lib/active-dir-cli.js
+node $CLAUDE_PLUGIN_ROOT/lib/active-dir-cli.js
 ```
 
 ### Legacy Migration
