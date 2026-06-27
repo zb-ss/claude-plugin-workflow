@@ -81,6 +81,12 @@ Commit + push. If the user can't answer now, leave the template and **record it 
 deferred** in the hand-back — until it's filled, the gate runs structural markers
 only (secrets, AI-context files, real public IPs) and warns.
 
+**Optional `allow_ips`:** add an `"allow_ips": ["1.2.3.4", "203.0.113.5"]` array to
+the same file to treat specific public IPs as neutral — useful for long-standing
+placeholder IPs your test suite uses that would otherwise trip the public-IP guard.
+This is an **exact-string match only**; it never weakens secret, denylist-name, or
+other-public-IP detection.
+
 ## 5. Wire the configuration
 
 **Confirm with the user**, then add to `~/.claude/settings.json` under an `env` block:

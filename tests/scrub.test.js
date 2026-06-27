@@ -128,6 +128,57 @@ describe('scanSurface (full crossing surface)', () => {
   });
 });
 
+describe('allow_ips (operator IP allowlist)', () => {
+  let dlPath;
+  before(() => {
+    dlPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'scrub-allow-')), 'denylist.json');
+    fs.writeFileSync(dlPath, JSON.stringify({
+      allow_ips: ['1.2.3.4'],
+      entries: [{ category: 'customer', pattern: 'AcmeCorp', regex: false }],
+    }));
+  });
+  after(() => { try { fs.rmSync(path.dirname(dlPath), { recursive: true, force: true }); } catch {} });
+
+  it('loadDenylist exposes allow_ips as a Set', () => {
+    const dl = loadDenylist(dlPath);
+    assert.ok(dl.allowIps instanceof Set);
+    assert.ok(dl.allowIps.has('1.2.3.4'));
+  });
+
+  it('un-flags exactly the allow-listed public IPs', () => {
+    const dl = loadDenylist(dlPath);
+    assert.deepEqual(scanText('host 1.2.3.4 here', 'x', dl.entries, dl.allowIps), []);
+  });
+
+  it('still flags a public IP that is not in allow_ips', () => {
+    const dl = loadDenylist(dlPath);   // allows 1.2.3.4 only
+    const hits = scanText('host 54.1.2.3 here', 'x', dl.entries, dl.allowIps);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].category, 'public_ip');
+    assert.equal(hits[0].match, '54.1.2.3');
+  });
+
+  it('does not weaken denylist-name detection (allow_ips only gates IPs)', () => {
+    const dl = loadDenylist(dlPath);
+    assert.ok(scanText('deploy for AcmeCorp', 'x', dl.entries, dl.allowIps).some(h => h.category === 'customer'));
+  });
+
+  it('scanSurface honors allow_ips end-to-end', () => {
+    const allowed = scanSurface({ diff: '+ host = 1.2.3.4' }, { denylistPath: dlPath });
+    assert.equal(allowed.clean, true);
+    const flagged = scanSurface({ diff: '+ host = 54.1.2.3' }, { denylistPath: dlPath });
+    assert.equal(flagged.clean, false);
+    assert.ok(flagged.hits.some(h => h.category === 'public_ip'));
+  });
+
+  it('absent allow_ips behaves as before (empty set, no allowance)', () => {
+    const dl = loadDenylist(makeDenylist());  // denylist with no allow_ips key
+    assert.ok(dl.allowIps instanceof Set);
+    assert.equal(dl.allowIps.size, 0);
+    assert.ok(scanText('host 1.2.3.4', 'x', dl.entries, dl.allowIps).some(h => h.category === 'public_ip'));
+  });
+});
+
 function makeDenylist() {
   const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'scrub2-')), 'dl.json');
   fs.writeFileSync(p, JSON.stringify({
