@@ -1,3 +1,8 @@
+---
+name: status
+description: Report active or recent workflows, including repository-scoped and legacy state.
+---
+
 # Workflow Status
 
 Check the status of active or recent workflows.

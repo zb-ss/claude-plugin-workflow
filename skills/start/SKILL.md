@@ -1,3 +1,8 @@
+---
+name: start
+description: Start a long-running autonomous workflow in swarm or epic mode for work that warrants a full execution pipeline.
+---
+
 # Workflow Orchestrator
 
 Start a long-running autonomous workflow (swarm or epic). Native Claude prompting handles small tasks — this skill is for work that warrants a full autonomous execution pipeline.

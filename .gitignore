@@ -1,2 +1,5 @@
 # Local notes and research (not committed)
 local/
+
+# Personal Claude Code settings (machine-local)
+.claude/settings.local.json
