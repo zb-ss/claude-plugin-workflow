@@ -1,3 +1,8 @@
+---
+name: resume
+description: Resume an interrupted or paused workflow from its persisted repository-scoped state.
+---
+
 # Resume Workflow
 
 Resume an interrupted or paused workflow from its current state.

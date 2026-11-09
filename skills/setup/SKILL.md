@@ -1,9 +1,9 @@
-# Workflow Setup
-
+---
 name: setup
-description: Configure Claude Code permissions and initialize workflow directories
-user-invocable: true
-arguments: none
+description: Configure Claude Code permissions and initialize workflow directories.
+---
+
+# Workflow Setup
 
 ## Instructions
 
