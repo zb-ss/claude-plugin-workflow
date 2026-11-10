@@ -1,188 +1,205 @@
 # Workflow Plugin for Claude Code
 
-Long-running autonomous development workflows with parallel agent execution, zero-tolerance review gates, and repo-scoped state isolation.
+Plans, implements and reviews code changes with a team of agents on tiered models: a
+strong model for judgement, a cheaper one for the work, and the cheapest for mechanical
+steps. You type one command and a task in plain words; the plugin plans it, asks you what
+it needs to know, implements it, reviews it with findings checked against the code, fixes
+what the review confirms, and signs the work off. Nothing is committed for you.
 
-**State tracking in Emacs org-mode or Markdown** — edit your plans live while Claude works.
+It also ships a usage status line, Playwright E2E test generation, a scrub gate that
+keeps internal names and secrets out of public repositories, and an autonomous driver
+that works through a queue of GitHub issues.
 
-> ### 🤖 Run it fully autonomously
-> Point your coding agent at **[`SETUP.md`](SETUP.md)** — *"Set up the autopilot system by following SETUP.md"* — and it provisions the private task queue, scrub gate, and config on its own, then hands you the few manual steps (restart, schedule). Day-to-day you queue and manage work as GitHub issues, even from your phone. → [Autonomous Setup](#autonomous-setup)
+## Quick start
 
-## Highlights
+1. Install, then restart Claude Code:
 
-- **Org-mode & Markdown plans** — Human-readable, editable workflow state files
-- **Swarm mode** — Up to 4 parallel executors per batch, N-lens fan-out review gate with adversarial verification and zero-tolerance routing
-- **Epic mode** — Multi-component projects with one git worktree per component, PR per component, rate-limit resilience, dependency-ordered integration
-- **Repo-scoped state isolation** — State files live in `~/.claude-workflows/active/<repo-key>/`; workflows from different repos never collide
-- **Hardened review system** — Zero-issue PASS, structured `[ISSUE-N]` tracking, fix-by-ID protocol, opus-tier reviewers
-- **Quality and security gates** — `quality-gate` + `completion-guard` run independently after every review pass
-- **Outcome-quality gates** — Capability preflight (loads the right convention skills + verifies tooling), spec-conformance (every acceptance criterion verified against evidence), risk-scaled review depth, coverage-on-changed-lines + mutation-lite, Context7 version-grounding, and per-repo lessons memory that compounds quality across runs
-- **Status line** — Live API usage limits, context window, and session cost in your status bar
-- **E2E testing** — Automated Playwright test generation via browser exploration
-- **Autonomous autopilot** — A private GitHub-issues queue + a scheduled driver run tasks unattended across many repos, surviving usage-limit windows; manage it all from GitHub (even your phone)
-- **Scrub gate** — An unbypassable pre-push check blocks internal/secret information from leaking into public repos
-- **Configurable model policy** — role→model is one runtime config knob (presets: `all-opus` / `balanced` / `risk-driven` / `economy`), never hardcoded, plus an optional **Codex cross-model review** lens for an unbiased third pair of eyes from a different model family. See [`resources/model-policy.md`](resources/model-policy.md)
+   ```
+   /plugin marketplace add zb-ss/claude-plugin-workflow
+   /plugin install workflow@zb-ss-workflow
+   ```
 
-## Installation
+2. Run `/workflow:setup` once. It configures permissions and offers, each only with your
+   yes: a short model-tier note in your global `CLAUDE.md`, the judge fallback (below),
+   and the session model recommendation. A startup check reminds you in one line if one
+   of these is missing, and stays silent once they are set or you decline.
+
+3. Give it a task:
+
+   ```
+   /workflow:do add rate limiting to the login endpoint
+   ```
+
+What happens:
+
+1. **Plan.** Explorer agents read the code from several angles; a judge writes a plan
+   with acceptance criteria and work items, or asks you questions first.
+2. **Confirm.** You see the plan and decide whether to build it.
+3. **Implement.** One executor per work item; tests are written unless the plan's items
+   already include them.
+4. **Review.** The change is reviewed for quality and, unless it is low risk, security.
+   Only CRITICAL and MAJOR findings block, and only after a verifier has confirmed each one
+   by quoting the code. Minor findings come back as notes.
+5. **Fix and sign off.** Confirmed findings are fixed in bounded rounds, then a judge
+   checks every acceptance criterion and runs the test suite.
+6. **Summary.** What changed, what is still open, the sign-off, and how many agents ran.
+
+Plain words change the route: `/workflow:do plan only …`, `/workflow:do review my changes`,
+`/workflow:do careful: …` (judges think longer), `/workflow:do quick: …` (cheaper).
+
+## What it costs
+
+Measured on runs against this repository, at list price as Claude Code reports it. These
+are examples, not promises: the size of the change and the codebase drive the numbers.
+
+| Run | Agents | Time | Cost |
+|-----|--------|------|------|
+| `plan`, one round, mid-size task | 4 | ~5 min | ~$2 |
+| `review` of a ~1,800-line change, two lenses | 6 | ~6 min | ~$4.30 |
+| `implement`, 3 work items, three review rounds and sign-off | 14 | ~9 min | ~$6.70 |
+
+- The `fable` judges are most of the cost: in the review above, the two review lenses
+  were $3.75 of $4.30, and in the implement run $5.29 of $6.70.
+- On a subscription, runs draw on your plan's usage limits like any other session.
+  Depending on your plan and seat tier, Fable usage can bill to usage credits instead of
+  drawing on your plan's included limits, so check `/usage` before relying on the judge
+  tier.
+- `max_agents` caps a run (default 25), and `/workflows` shows each agent's token use
+  while it runs.
+
+## Model tiers
+
+Each agent pins its model and effort in its definition. Your main session is the
+orchestrator: it talks to you and launches the workflows, and works best on `opus`.
+
+| Tier | Model alias | Agents | Role |
+|------|-------------|--------|------|
+| Judge | `fable` | architect, reviewer-deep, security-deep, completion-guard, spec-conformance | Planning judgement, code and security review, sign-off |
+| Worker | `sonnet` | explorer, executor, test-writer, verifier, quality-gate, codebase-analyzer, e2e-explorer, e2e-generator, e2e-reviewer, web-tester, epic-integrator, supervisor | Exploration, coding, tests, checking findings |
+| Mechanical | `haiku` | scope, finding-merger | Scoping a review, merging duplicate findings |
+
+**The judge tier needs the `fable` model.** If your account cannot use it:
+
+- The saved workflows (`/workflow:do`, `plan`, `implement`, `review`) retry a judge that
+  returns nothing once on `opus`, and their result says which stages ran on the fallback.
+  Change it per run with `judge_fallback`, or for `/workflow:do` in `/workflow:setup`;
+  `none` turns the retry off.
+- The previous engine (`/workflow:start`, `/workflow:resume`) and the autonomous driver
+  have no such retry: without Fable access their judge steps fail. Add a fallback to your
+  user settings (`/workflow:setup` offers to do it):
+
+  ```json
+  { "fallbackModel": ["opus"] }
+  ```
+
+- To point the `fable` alias at another model instead, set `ANTHROPIC_DEFAULT_FABLE_MODEL`
+  in the `env` block of your settings. If your organization's `availableModels` list
+  blocks `fable`, Claude Code substitutes a permitted model by its own rules.
+
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `/workflow:do <task>` | **Start here.** Plan, questions, implement, review, fix, sign-off |
+| `/workflow:plan` | Plan a task, or return the questions that block a plan |
+| `/workflow:implement` | Build a plan, then review, fix and sign off |
+| `/workflow:review` | Review uncommitted changes, with verified findings |
+| `/workflow:setup` | Permissions, the model-tier note, the judge fallback |
+| `/workflow:setup-statusline` | Turn the usage status line on or off |
+| `/workflow:test-e2e <url>` | Generate Playwright E2E tests by exploring a running app |
+| `/workflow:test-live <url>` | Interactive live testing of a running app |
+| `/workflow:verify` | Run build, type, lint, test and security checks on current changes |
+| `/workflow:queue` | Manage the autonomous task queue |
+| `/workflow:auto` | Run the autonomous driver |
+| `/workflow:start`, `/workflow:resume` | The previous engine (see below) |
+| `/workflow:migrate-legacy` | Move old flat state files into per-repository folders |
+
+## Saved workflows
+
+`plan`, `implement` and `review` are saved workflows that Claude Code's workflow runtime
+runs in the background; `/workflow:do` drives them for you. Called directly, they take
+arguments for scope, effort, the judge fallback and an agent cap. The
+[workflows reference](docs/workflows.md) lists every argument and result field, and how
+the review spends its agents.
+
+## The previous engine: start, resume, swarm and epic
+
+`/workflow:start` and `/workflow:resume` run the plugin's earlier engine: a supervisor
+agent that drives a state machine kept in `~/.claude-workflows/`, in `swarm` mode (one
+feature, parallel executors) or `epic` mode (several components, one git worktree each).
+It is still present and unchanged apart from its agents moving to the model tiers above,
+and it is planned to be replaced by the saved workflows. Its documentation:
+[swarm mode](docs/swarm-mode.md), [review system](docs/review-system.md),
+[state files](docs/state-files.md), [parallel execution](docs/parallel-execution.md).
+
+Its review engine can add an optional Codex lens for a second model family's view;
+enable it with `"codex_review": {"enabled": true}` in `~/.claude-workflows/model-policy.json`.
+
+## Autonomous driver and queue
+
+`/workflow:queue` manages a queue of tasks kept as issues in a private GitHub repository,
+and `/workflow:auto`, run on a schedule, works through it unattended across your
+repositories and waits out usage limits. You manage the queue from GitHub, including from
+your phone. The driver runs the previous engine (`/workflow:start`), so it needs the user
+`fallbackModel` setting above if your account cannot use Fable.
+
+To set it up, point your coding agent at [SETUP.md](SETUP.md): *"Set up the autopilot
+system by following SETUP.md."* It creates the private queue repository, seeds the scrub
+denylist with you, wires the configuration, verifies it, and hands you the few steps only
+you can do.
+
+## Status line
 
 ```
-/plugin marketplace add zb-ss/claude-plugin-workflow
-/plugin install workflow@zb-ss-claude-plugin-workflow
+Opus | 5h ██████████ 100% 2h30m | 7d █████░░░░░  52% 3d | ctx ████░░░░░░  42% | $0.87
 ```
 
-After installation, restart CC and run `/workflow:setup` to configure permissions.
+Shows the 5-hour and 7-day usage limits, the context window and the session cost, from
+the data Claude Code passes to the status line: no credentials and no network. An
+extra-usage spend segment (`+ 29% $11.61/$40.00`) is an opt-in, off by default; turning it
+on reads your local Claude credentials and calls an undocumented endpoint that may change.
+[Setup and details](docs/status-line.md)
 
-## Autonomous Setup
-
-To run the plugin **fully autonomously** — a private GitHub-issues queue feeding a scheduled driver that works tasks across your repos unattended — point your coding agent at **[`SETUP.md`](SETUP.md)**:
-
-> "Set up the autopilot system by following SETUP.md."
-
-The agent does everything it safely can on its own — creates the private control repo, the queue labels, the task template, seeds the scrub denylist (asking you for your internal names), and wires the config — then live-verifies it and hands you a short checklist of the steps only you can do (restart Claude Code, the `/schedule` spike). After that you queue and manage work entirely as GitHub issues, even from your phone.
-
-## Quick Start
+## E2E testing
 
 ```bash
-# Swarm mode — parallel executors within one worktree
-/workflow:start swarm: "Build notification system with email and push channels"
-
-# Epic mode — decompose into components, each in its own worktree
-/workflow:start epic "Build a C++ compiler from scratch"
-
-# E2E test generation
-/workflow:test-e2e http://localhost:8080 --framework=symfony --auth=form
-
-# Interactive live browser testing (authenticated runs read login from the gitignored ./.creds)
-/workflow:test-live http://localhost:8080
-
-# Markdown state files (default is org)
-/workflow:start swarm: "Add feature" --format=md
-```
-
-## Execution Styles
-
-Two long-running autonomous workflow styles are available:
-
-| Style | Parallelism | Review Gate | Best For |
-|-------|-------------|-------------|----------|
-| `swarm` | Up to 4 executors/batch, parallel within one worktree | N-lens fan-out review (core lenses: correctness/security/code-quality + extended; adversarial verification; zero-tolerance routing) | Large single-feature implementations |
-| `epic` | Up to 4 component worktrees per wave | Full swarm pipeline per component | Multi-component projects, greenfield apps |
-
-Both styles use opus-tier agents for planning, code review, and security review.
-
-## Pipeline
-
-**Swarm:**
-```
-Codebase Analysis -> Planning (architect/opus)
-  -> CAPABILITY PREFLIGHT (detect stack, load convention skills, verify tooling/MCP — park if a hard req is missing)
-  -> Implementation Batches (up to 4 parallel executors/batch; grounded in mined conventions + Context7 version docs + per-repo lessons)
-  -> Fan-Out Review Gate (risk-scaled depth: N lenses in parallel; loop-until-dry; adversarial verification ≥3 skeptics per finding; zero-tolerance — confirmed finding blocks and re-runs entire gate)
-  -> QUALITY GATE (green baseline, build/type/lint/test, coverage on changed lines, run-rarely-run-code, mutation-lite)
-  -> SPEC CONFORMANCE (each acceptance criterion verified against evidence — unmet routes back to implementation)
-  -> E2E VALIDATION (mandatory for FE-facing changes) -> SCRUB GATE (blocks internal-info leak before any public-repo push)
-  -> COMPLETION GUARD (independent test re-run, requirement verification)
-  -> COMPLETE (suggests /workflow:test-live if web files changed)
-```
-
-**Epic:**
-```
-Architecture (decompose into components + dependency DAG)
-  -> CAPABILITY PREFLIGHT (stack/tooling check before any worktree is created)
-  -> Component Execution (parallel worktrees, each runs full swarm pipeline above)
-    -> Wave 1: independent components (parallel, max 4 worktrees)
-    -> Wave 2: components depending on wave 1
-    -> ... (rate limit? pause -> auto-resume at exact reset time)
-  -> Integration (merge PRs in dependency order, resolve conflicts, full test suite)
-  -> SPEC CONFORMANCE (merged result vs the epic's acceptance criteria)
-  -> E2E VALIDATION -> SCRUB GATE
-  -> COMPLETION GUARD
-  -> COMPLETE
-```
-
-## Review System
-
-Every review issue gets a tracked `[ISSUE-N]` ID. Executors must address every issue by ID. Reviewers verify each prior issue on re-review. Zero issues required for PASS — no thresholds or exceptions.
-
-```
-ISSUES:
-- [ISSUE-1] [CRITICAL] SQL injection - src/auth.php:42 - use parameterized query
-- [ISSUE-2] [MINOR] Naming mismatch - src/helper.ts:7 - use camelCase
-
-Re-review:
-- [ISSUE-1] RESOLVED
-- [ISSUE-2] REGRESSED - fix introduced typo in import
-```
-
-[Full review system documentation](docs/review-system.md)
-
-## Agents
-
-| Category | Agents | Models |
-|----------|--------|--------|
-| Orchestration | supervisor | sonnet |
-| Analysis | codebase-analyzer | sonnet |
-| Planning | architect | opus |
-| Implementation | executor | sonnet |
-| Code Review | reviewer-deep | opus |
-| Security | security-deep | opus |
-| Quality Gates | quality-gate, completion-guard | sonnet, opus |
-| E2E Testing | e2e-explorer, e2e-generator, e2e-reviewer | sonnet |
-| Browser Testing | web-tester | sonnet |
-| Epic Integration | epic-integrator | sonnet |
-| Utility | explorer, test-writer | haiku, sonnet |
-
-## Skills
-
-| Command | Description |
-|---------|-------------|
-| `/workflow:start` | Start a new swarm or epic workflow |
-| `/workflow:status` | Check workflow status |
-| `/workflow:resume` | Resume an interrupted workflow |
-| `/workflow:test-e2e` | Generate E2E Playwright tests for a web app |
-| `/workflow:verify` | Run verification loop |
-| `/workflow:skill-create` | Generate skills from git history |
-| `/workflow:migrate-legacy` | Migrate pre-v2 flat state files to repo-scoped buckets |
-| `/workflow:setup` | Configure permissions |
-| `/workflow:setup-statusline` | Enable/disable usage status line |
-| `/workflow:test-live` | Interactive live E2E testing via Playwright MCP |
-
-## Status Line
-
-```
-Opus | 5h ██████████ 100% 2h30m | 7d █████░░░░░  52% 3d | + 29% $11.61/$40.00 | ctx ████░░░░░░  42% | $0.87
-```
-
-Live display of 5h session limit, 7d weekly limit, extra usage spend, context window, and session cost. Colors adapt based on usage level. [Setup & details](docs/status-line.md)
-
-## E2E Testing
-
-Generate Playwright E2E test suites from a running web application:
-
-```bash
 /workflow:test-e2e http://localhost:8080 --framework=symfony --auth=form
 ```
 
-6-phase pipeline: Setup → Exploration (BFS via Playwright MCP) → Generation (app map → test specs) → Validation → Quality Gate → Completion Guard. Supports Symfony, Laravel, Vue, React, Next.js with form/token/cookie auth. [Full guide](docs/e2e-testing.md)
+Explores a running web app through the browser, maps its features, and generates a
+Playwright test suite. Supports Symfony, Laravel, Vue, React and Next.js with form, token
+or cookie auth. [Full guide](docs/e2e-testing.md)
+
+## Scrub gate
+
+Before a push or pull request to a non-private repository, a hook scans the change, the
+commit messages and the branch name for secrets, AI-assistant context files, real IP
+addresses, and the internal names on your private denylist, and blocks the write if it
+finds any. Point `CLAUDE_WORKFLOW_SCRUB_DENYLIST` at your denylist file; a `~/` path
+works on every machine that shares your settings. [SETUP.md](SETUP.md) covers the
+denylist.
 
 ## Documentation
 
-| Guide | Description |
-|-------|-------------|
-| [E2E Testing](docs/e2e-testing.md) | Playwright test generation, selectors, auth strategies, pipeline |
-| [Review System](docs/review-system.md) | Structured issue tracking, verdicts, fix-by-ID protocol |
-| [Swarm Mode](docs/swarm-mode.md) | N-lens fan-out review gate, parallel batching, Agent Teams |
-| [State Files](docs/state-files.md) | Repo-scoped schema, org/markdown formats, live editing |
-| [Status Line](docs/status-line.md) | Usage limits display, setup, segments |
-| [Parallel Execution](docs/parallel-execution.md) | Git worktrees, cascade method, combined approach |
-| [Settings & Permissions](docs/settings.md) | Autonomous execution, hooks, recommended config |
-| [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
+| Guide | Covers |
+|-------|--------|
+| [Saved workflows](docs/workflows.md) | Arguments, results, review design, effort and fallback |
+| [Status line](docs/status-line.md) | Setup, segments, the reset cache, the extra-usage opt-in |
+| [E2E testing](docs/e2e-testing.md) | Test generation, selectors, auth strategies |
+| [Settings and permissions](docs/settings.md) | Permissions, hooks, recommended configuration |
+| [Troubleshooting](docs/troubleshooting.md) | Common problems and fixes |
+| [Swarm mode](docs/swarm-mode.md) | Previous engine |
+| [Review system](docs/review-system.md) | Previous engine |
+| [State files](docs/state-files.md) | Previous engine |
+| [Parallel execution](docs/parallel-execution.md) | Previous engine |
 
 ## Requirements
 
-- Claude Code with Agent tool access (formerly Task tool — both work, Agent preferred in CC v2.1.63+)
-- Git repository
-- Node.js (for hooks — included with Claude Code)
-- Works on Linux, macOS, Windows, and WSL
+- Claude Code with dynamic workflows (available on paid plans; on Pro, turn them on in
+  `/config`)
+- Access to the `fable` model for the judge tier, or a fallback as described above
+- Node.js and git
+- Linux, macOS, Windows or WSL
 
 ## License
 

@@ -1,5 +1,9 @@
 # Parallel Execution
 
+> **Previous engine.** This page describes `/workflow:start` and `/workflow:resume` (swarm and epic),
+> the plugin's earlier engine. It is still present and works as described, and it is planned to be
+> replaced by the [saved workflows](workflows.md). For new work, start with `/workflow:do`.
+
 ## Agent-Level (Within Session)
 
 | Workflow | Parallel Behavior |
@@ -49,5 +53,3 @@ For very large projects combining manual instance parallelism with swarm:
 ```
 3 manual worktrees x swarm mode (4 executors each) = 12 parallel executors
 ```
-
-See `resources/multi-instance-parallelism.md` for the full guide.

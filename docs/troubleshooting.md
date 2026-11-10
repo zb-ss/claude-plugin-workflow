@@ -1,5 +1,33 @@
 # Troubleshooting
 
+## A Judge Step Fails or Runs on Opus
+
+The judge agents pin the `fable` model alias. If your account cannot use it, the saved
+workflows (`/workflow:do`, `plan`, `implement`, `review`) retry the judge once on `opus` and
+list it under `judge_fallback.used` in their result. If a judge still returns nothing,
+`/workflow:do` relays the error from the agent's transcript.
+
+The previous engine (`/workflow:start`, `/workflow:resume`) and the autonomous driver have no
+retry of their own. Add a fallback to `~/.claude/settings.json`, or let `/workflow:setup` add it:
+
+```json
+{ "fallbackModel": ["opus"] }
+```
+
+## A Workflow Stops After 10 Minutes in `claude -p`
+
+Headless `claude -p` stops background work 10 minutes after its last turn. Set
+`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` for runs that take longer. To finish a stopped run,
+resume the session with `claude -p --resume <session id>` and relaunch the workflow; agents that
+finished return their saved results.
+
+## Scrub Gate Says the Denylist Path Is Not Readable
+
+`CLAUDE_WORKFLOW_SCRUB_DENYLIST` is set, but the file is missing or is not valid JSON, so only
+the structural checks ran. Settings values are not shell-expanded except for a leading `~/`,
+`$HOME/` or `${HOME}/`, which the plugin expands. If you share one settings file between
+machines, use the `~/` form so the path resolves on each of them.
+
 ## Permission Prompts During Workflows
 
 If you're getting permission prompts for bash commands:
@@ -37,7 +65,7 @@ Both formats are fully supported. Use `--format=md` or `--format=org` when start
 
 ## Legacy State Files (pre-v2)
 
-Workflows created before the repo-scoped schema live flat under `~/.claude-workflows/active/`. They appear with a `[legacy]` tag in `/workflow:status`. Migrate them to the new per-repo buckets:
+Workflows created before the repo-scoped schema live flat under `~/.claude-workflows/active/`. `/workflow:migrate-legacy` lists them; assign each to the new per-repo buckets:
 
 ```bash
 /workflow:migrate-legacy

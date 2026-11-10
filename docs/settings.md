@@ -60,16 +60,17 @@ Or manually add to your `.claude/settings.json`:
 
 ## Hooks
 
-The plugin includes automated validation hooks (enabled by default, cross-platform):
+The plugin ships these hooks (enabled by default, cross-platform):
 
-| Hook | Trigger | Platforms |
-|------|---------|-----------|
-| TypeScript validation | After `.ts`/`.tsx` edits | Windows, macOS, Linux |
-| PHP syntax check | After `.php` edits | Windows, macOS, Linux |
-| Python syntax check | After `.py` edits | Windows, macOS, Linux |
-| JSON validation | After `.json` writes | Windows, macOS, Linux |
+| Hook | Trigger | Purpose |
+|------|---------|---------|
+| Scrub gate | Before `git push`, `gh pr create` and GitHub MCP writes | Blocks internal information from reaching a public repository |
+| Stop guard / task-completed gate | Session or task end | Keeps a bound workflow from stopping with mandatory gates open |
+| Subagent tracking | Subagent end | Records gate progress in the workflow state file |
+| Session start | Session start or resume | Reports this repository's active workflows |
+| Setup check | Session start (new sessions only) | Prints one line when the model-tier note, the session model or a configured scrub denylist needs attention; prints nothing otherwise |
 
-Hooks are written in Node.js for full cross-platform compatibility. They gracefully skip validation if the required tool (php, python, etc.) is not installed.
+Hooks are written in Node.js for full cross-platform compatibility. The stop, task and subagent hooks only act on sessions bound to a workflow.
 
 ## Platform Support
 
