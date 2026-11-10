@@ -675,7 +675,6 @@ If a subagent fails or returns unexpected results:
 
 See `agents/` directory for full agent definitions.
 See `resources/mode-routing.md` for detailed routing guide.
-See `resources/subagent-prompts.md` for subagent prompt templates.
 
 ---
 

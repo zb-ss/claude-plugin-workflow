@@ -3,7 +3,7 @@
  * Shared state management library for workflow hooks.
  * Provides atomic read/write for JSON state files and workflow queries.
  *
- * Security: Reuses path validation patterns from validate-file.js.
+ * Security: validates every state path before reading or writing it.
  * Module pattern: Reuses export pattern from lib/init-directories.js.
  */
 

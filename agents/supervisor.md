@@ -86,22 +86,10 @@ Batch 2 (parallel - after batch 1):
 
 **ALWAYS use `workflow:` prefixed agents** for all tasks except the built-in `Plan` agent.
 
-### Model resolution (policy-driven)
+### Model selection
 
-Do **not** hardcode `model=`. Resolve every spawn's model from the policy so the
-role→model map is one config knob (see `resources/model-policy.md`):
-
-```bash
-node "$PLUGIN_ROOT/lib/model-policy.js" <role> [--risk <low|medium|high>]
-```
-
-Role keys: `architect, executor, reviewer, security, quality_gate,
-completion_guard, spec_conformance, codebase_analyzer, e2e, epic_integrator,
-test_writer, web_tester, explorer`. Pass `--risk` (from the capability-preflight
-risk classification) when spawning the **executor** so the `risk-driven` preset can
-escalate the coder to opus on high-risk work. The shipped default (`all-opus`)
-returns opus for coding and every review/judgment role. **The `model=` values in the
-examples below are illustrative — always substitute the policy-resolved model.**
+Each `workflow:` agent pins its model and effort in its own frontmatter. Do **not**
+pass `model=` when spawning one; the frontmatter decides.
 
 Always use `run_in_background=true` for parallel execution:
 
@@ -111,7 +99,6 @@ agents = []
 for task in decomposed_tasks:
     agent = Agent(
         subagent_type="workflow:executor",  # workflow: prefix ensures our agent
-        model=task.model,
         max_turns=25,  # From mode config MAX_TURNS_EXECUTOR (standard default)
         run_in_background=true,
         prompt=f"""
@@ -185,7 +172,7 @@ state.review_depth = risk.review_depth   # e.g. "standard" | "security" | "secur
 # review_depth governs: min reviewers, security vs security-deep lens, mandatory human-gate
 
 # 4. Codex review prerequisite — if the policy enables the cross-model lens, Codex must be usable
-codex_cfg = parse_json(Bash(f'node "$PLUGIN_ROOT/lib/model-policy.js" --codex'))
+codex_cfg = parse_json(Bash(f'node "$PLUGIN_ROOT/lib/codex-review.js" --config'))
 if codex_cfg.enabled:
     avail = parse_json(Bash(f'node "$PLUGIN_ROOT/lib/codex-review.js" --available'))
     if not avail.available:
@@ -210,7 +197,6 @@ Run after `quality_gate` (swarm) or after integration (epic), before `e2e_valida
 # Spawn the conformance checker with the full acceptance-criteria context
 verdict = Agent(
     subagent_type="workflow:spec-conformance",
-    model="opus",
     prompt=f"""
     ## Spec Conformance Check
 
@@ -252,10 +238,10 @@ Invoke the fan-out review engine (`skills/phases/post-merge-review/SKILL.md`):
 # Fan-out review engine — follow SKILL.md verbatim
 # 1. Build N-lens roster (core: functional-completeness, security, code-quality;
 #    add extended lenses based on change profile and remaining quota).
-# 2. Spawn full roster in parallel (run_in_background=true, models from the policy —
-#    `model-policy.js reviewer` / `security`, default opus).
+# 2. Spawn full roster in parallel (run_in_background=true, models from each
+#    agent's frontmatter).
 #    Each lens reports EVERY candidate finding — no self-filtering, no verdict.
-# 2b. CODEX CROSS-MODEL LENS — if `node "$PLUGIN_ROOT/lib/model-policy.js --codex"`
+# 2b. CODEX CROSS-MODEL LENS — if `node "$PLUGIN_ROOT/lib/codex-review.js" --config`
 #    reports enabled: confirm `node "$PLUGIN_ROOT/lib/codex-review.js" --available`,
 #    then run Codex on the committed diff via lib/codex-review.js
 #    (locateCompanion → `<companion> review --base $BASE_BRANCH --scope branch
@@ -386,7 +372,6 @@ if context_limit_detected(agent_output):
     # 2. Spawn continuation agent (NEW agent, never resume)
     continuation = Agent(
         subagent_type="workflow:executor",
-        model=task.model,
         max_turns=remaining_budget,
         run_in_background=true,
         prompt=f"""

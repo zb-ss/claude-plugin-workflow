@@ -81,3 +81,41 @@ describe('parseReview (Codex → workflow finding shape)', () => {
     assert.match(lines[1], /\[ISSUE-6\] \[MINOR\] \[codex\] naming - src\/x\.ts:7/);
   });
 });
+
+describe('codex review config', () => {
+  const NOFILE = path.join(os.tmpdir(), 'cx-config-missing-' + process.pid + '.json');
+
+  function withFile(content, fn) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cx-config-'));
+    const p = path.join(dir, 'model-policy.json');
+    fs.writeFileSync(p, content);
+    try { return fn(p); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
+
+  it('defaults to disabled when the file is missing', () => {
+    assert.deepEqual(cx.loadConfig({ file: NOFILE }), { enabled: false, scope: 'branch', mode: 'auto' });
+  });
+  it('reads enabled + scope from the policy file', () => {
+    withFile(JSON.stringify({ codex_review: { enabled: true, scope: 'branch', mode: 'auto' } }), (p) => {
+      const c = cx.loadConfig({ file: p });
+      assert.equal(c.enabled, true);
+      assert.equal(c.scope, 'branch');
+    });
+  });
+  it('treats unreadable JSON as disabled', () => {
+    withFile('{not json', (p) => {
+      assert.equal(cx.loadConfig({ file: p }).enabled, false);
+    });
+  });
+  it('honors CLAUDE_WORKFLOW_MODEL_POLICY_FILE', () => {
+    withFile(JSON.stringify({ codex_review: { enabled: true } }), (p) => {
+      const prev = process.env.CLAUDE_WORKFLOW_MODEL_POLICY_FILE;
+      process.env.CLAUDE_WORKFLOW_MODEL_POLICY_FILE = p;
+      try { assert.equal(cx.loadConfig({}).enabled, true); }
+      finally {
+        if (prev === undefined) delete process.env.CLAUDE_WORKFLOW_MODEL_POLICY_FILE;
+        else process.env.CLAUDE_WORKFLOW_MODEL_POLICY_FILE = prev;
+      }
+    });
+  });
+});
