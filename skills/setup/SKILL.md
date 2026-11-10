@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Configure Claude Code permissions and initialize workflow directories.
+description: Configure Claude Code permissions, initialize workflow directories and fix the startup setup reminders.
 ---
 
 # Workflow Setup
@@ -171,6 +171,59 @@ After making changes, verify:
 1. All directories exist
 2. Settings file is valid JSON
 3. Required paths are in additionalDirectories
+
+### Step 8: Model Tiers and Setup Reminders
+
+Run the status check:
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/tier-setup.js" status
+```
+
+Read the JSON: `items`, `block_version`, `installed_block_version`, `claude_md`, `settings_file`, `model`, `preferences`, `denylist`. Then go through the four parts below in order.
+
+Rule: every write happens only after the user says yes to that specific change.
+
+**8a. Tier block**
+
+If `installed_block_version` is equal to or higher than `block_version`, say the block is current and move on (a higher one came from a newer plugin version; never offer to replace it). Otherwise:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/tier-setup.js" show
+```
+
+Show the output verbatim in a code block. Name the target file (the `claude_md` path) and say that only the text between the markers is written. Ask whether to apply it.
+
+- Yes: run `node "${CLAUDE_PLUGIN_ROOT}/lib/tier-setup.js" apply`
+- No: run `node "${CLAUDE_PLUGIN_ROOT}/lib/tier-setup.js" decline`, and tell the user the startup reminder stays quiet until the plugin ships a newer block. Declining also quiets the default-model reminder, but not the denylist one.
+
+**8b. Default model**
+
+When `model` is absent or does not contain `opus`, explain that the main session is the orchestrator and should run on opus. There are two ways to set it:
+
+- `/model opus` in the session
+- `"model": "opus"` in settings.json
+
+**Never change the model setting yourself.** If the user wants to keep another default model and stop the reminder, offer `decline` (same command as in 8a).
+
+**8c. Judge fallback**
+
+Ask one question, showing the current value (`preferences.judge_fallback`, default `opus`): keep opus, pick another model alias, or `none` (turns the retry off). Run:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/tier-setup.js" set-fallback <value>
+```
+
+Then, as a separate question, offer to add `"fallbackModel": ["opus"]` to the user settings.json (`settings_file`). If that file already has a `fallbackModel` list, show it and say this replaces it. Explain that this protects the legacy start pipeline and the autonomous driver, which do not have the saved workflows' built-in retry. Only on a yes, run:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/tier-setup.js" add-fallback-model opus
+```
+
+Mention that Claude Code must be restarted for the settings change to take effect.
+
+**8d. Scrub denylist**
+
+Only when `denylist.status` is `unreadable`. Show the configured path (`denylist.configured`) and the error, and suggest writing `CLAUDE_WORKFLOW_SCRUB_DENYLIST` in the `~/` form, which resolves on every machine that shares the settings file. Do not edit it automatically.
 
 ### Important Notes
 
