@@ -71,13 +71,18 @@ Emit one block per criterion (or sub-criterion). Format strictly as:
 
 ### Step 4: Emit gate verdict
 
-After all criterion blocks:
+After all criterion blocks, write the summary. In it, repeat every criterion as
+one result line, `PASS [CRITERION-N]: <one line>` or
+`FAIL [CRITERION-N]: <gap description>`, then the verdict. Emit both forms:
+the start pipeline reads the blocks above, while the supervisor and the epic
+orchestration extract the `FAIL [CRITERION-N]` lines.
 
 ```
 SPEC CONFORMANCE SUMMARY
 Criteria evaluated: N
   PASS: X
   FAIL: Y (listed above)
+PASS [CRITERION-1]: Feature flag controls new endpoint exposure
 
 GATE VERDICT: PASS
 ```
@@ -89,6 +94,9 @@ SPEC CONFORMANCE SUMMARY
 Criteria evaluated: N
   PASS: X
   FAIL: Y
+PASS [CRITERION-1]: Feature flag controls new endpoint exposure
+FAIL [CRITERION-2]: ErrorHandler::render() returns a plain {"error"} envelope, not RFC 7807 Problem Details
+FAIL [CRITERION-3b]: per_page is not capped at 100
 
 GATE VERDICT: FAIL
 
