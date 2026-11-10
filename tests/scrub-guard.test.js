@@ -76,3 +76,11 @@ describe('decide (allow/deny)', () => {
     assert.equal(decide(dirty, 'INTERNAL').decision, 'deny');
   });
 });
+
+describe('deny verdict carries the denylist status', () => {
+  it('passes an unreadable configured path through to the deny note', () => {
+    const v = decide({ diff: 'key=AKIA' + 'IOSFODNN7EXAMPLE' }, 'PUBLIC', { denylistPath: '/no/such/denylist.json' });
+    assert.equal(v.decision, 'deny');
+    assert.equal(v.denylist_status, 'unreadable');
+  });
+});
