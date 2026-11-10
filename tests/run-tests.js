@@ -20,6 +20,11 @@ console.log('Test files:');
 testFiles.forEach(file => console.log(`  - ${path.basename(file)}`));
 console.log('');
 
-run({ files: testFiles })
-  .compose(spec)
-  .pipe(process.stdout);
+const stream = run({ files: testFiles });
+
+// The reporter only prints; without this the runner exits 0 when tests fail.
+stream.on('test:fail', () => {
+  process.exitCode = 1;
+});
+
+stream.compose(spec).pipe(process.stdout);
