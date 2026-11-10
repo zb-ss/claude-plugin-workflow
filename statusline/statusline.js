@@ -2,28 +2,29 @@
 /**
  * Workflow plugin status line script
  *
- * Displays usage limits (5h session, 7d weekly) and session cost
- * in Claude Code's status line bar.
+ * Displays usage limits (5h session, 7d weekly), context usage and session
+ * cost in Claude Code's status line bar.
  *
- * Data sources:
- * - Usage limits: Anthropic OAuth usage API (cached, refreshed every 60s)
- * - Session info: JSON provided via stdin by Claude Code
- *
- * Credential lookup order:
- * 1. ~/.claude/.credentials.json (plain file - Linux/headless)
- * 2. macOS Keychain via `security` command
+ * Stdin-only by default: no credentials are read and no network call is made.
+ * Everything shown comes from the JSON Claude Code pipes to stdin. The opt-in
+ * extra-usage segment is documented in docs/status-line.md.
  */
+
+'use strict';
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execSync } = require('child_process');
-const { getTranslateDir } = require('../lib/paths');
+const { getTranslateDir, getStateDir } = require('../lib/paths');
+const {
+  WINDOW_KEYS, isPlainObject, resolveResetCacheFile, syncResetCache, toIsoString, epochToIso,
+} = require('./reset-cache');
 
-// --- Configuration ---
-const CACHE_TTL_MS = 60_000;
-const CACHE_FILE = path.join(os.tmpdir(), 'claude-statusline-usage.json');
-const API_URL = 'https://api.anthropic.com/api/oauth/usage';
+const SETTINGS_FILE_NAME = 'statusline.json';
+const EXTRA_USAGE_SETTING_KEY = 'extra_usage';
+const BAR_WIDTH = 10;
+const TRANSLATE_BAR_WIDTH = 8;
+const WINDOW_LABELS = { five_hour: '5h', seven_day: '7d' };
 
 // --- ANSI helpers ---
 const RESET = '\x1b[0m';
@@ -35,149 +36,12 @@ const RED = '\x1b[31m';
 const CYAN = '\x1b[36m';
 const WHITE = '\x1b[37m';
 
-// --- Read stdin (session JSON from Claude Code) ---
-function readStdin() {
-  try {
-    const input = fs.readFileSync(0, 'utf-8').trim();
-    return input ? JSON.parse(input) : {};
-  } catch {
-    return {};
-  }
-}
-
-// --- Credential retrieval ---
-function getAccessToken() {
-  // 1. Plain file (Linux / headless fallback)
-  const credential_paths = [
-    path.join(os.homedir(), '.claude', '.credentials.json'),
-  ];
-
-  for (const cred_path of credential_paths) {
-    try {
-      const data = JSON.parse(fs.readFileSync(cred_path, 'utf-8'));
-      if (data.claudeAiOauth?.accessToken) {
-        return data.claudeAiOauth.accessToken;
-      }
-    } catch {
-      // Continue to next method
-    }
-  }
-
-  // 2. macOS Keychain
-  if (process.platform === 'darwin') {
-    try {
-      const raw = execSync(
-        'security find-generic-password -s "Claude Code-credentials" -w',
-        { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] }
-      ).trim();
-      const data = JSON.parse(raw);
-      if (data.claudeAiOauth?.accessToken) {
-        return data.claudeAiOauth.accessToken;
-      }
-    } catch {
-      // Keychain not available
-    }
-  }
-
-  return null;
-}
-
-// --- Cached API fetch ---
-function getCachedUsage() {
-  try {
-    const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
-    const cached = JSON.parse(raw);
-    if (Date.now() - cached.fetched_at < CACHE_TTL_MS) {
-      return cached.data;
-    }
-  } catch {
-    // No valid cache
-  }
-  return null;
-}
-
-function writeCacheUsage(data) {
-  try {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify({ fetched_at: Date.now(), data }));
-  } catch {
-    // Cache write failure is non-fatal
-  }
-}
-
-function httpGet(url, headers) {
-  const https = require('https');
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const options = {
-      hostname: parsed.hostname,
-      path: parsed.pathname,
-      method: 'GET',
-      headers,
-      timeout: 5000,
-    };
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => { body += chunk; });
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(JSON.parse(body));
-        } else {
-          reject(new Error(`HTTP ${res.statusCode}`));
-        }
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    req.end();
-  });
-}
-
-async function fetchUsage(token) {
-  // Check cache first
-  const cached = getCachedUsage();
-  if (cached) return cached;
-
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'anthropic-beta': 'oauth-2025-04-20',
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-  };
-
-  try {
-    // Use native fetch (Node 18+) with fallback to https module
-    let data;
-    if (typeof globalThis.fetch === 'function') {
-      const response = await fetch(API_URL, {
-        method: 'GET',
-        headers,
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) return null;
-      data = await response.json();
-    } else {
-      data = await httpGet(API_URL, headers);
-    }
-
-    writeCacheUsage(data);
-    return data;
-  } catch {
-    // Return stale cache if available
-    try {
-      const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
-      return JSON.parse(raw).data;
-    } catch {
-      return null;
-    }
-  }
-}
-
 // --- Formatting helpers ---
 function progressBar(pct, width) {
   const filled = Math.round((pct / 100) * width);
   const empty = width - filled;
-  const bar_char = '\u2588'; // Full block
-  const empty_char = '\u2591'; // Light shade
+  const bar_char = '█'; // Full block
+  const empty_char = '░'; // Light shade
 
   let color;
   if (pct >= 90) color = RED;
@@ -196,12 +60,11 @@ function formatPct(pct) {
   return `${color}${String(rounded).padStart(3)}%${RESET}`;
 }
 
-function formatResetTime(iso_string) {
+function formatResetTime(iso_string, now_ms = Date.now()) {
   if (!iso_string) return '';
   try {
     const reset = new Date(iso_string);
-    const now = new Date();
-    const diff_ms = reset - now;
+    const diff_ms = reset - now_ms;
     if (diff_ms <= 0) return 'now';
 
     const hours = Math.floor(diff_ms / 3_600_000);
@@ -295,89 +158,224 @@ function getTranslateProgress(sessionId, cwd) {
   }
 }
 
-// --- Main ---
-async function main() {
-  const session = readStdin();
-  const token = getAccessToken();
-
-  const parts = [];
-  const BAR_WIDTH = 10;
-
-  // Usage limits (from API)
-  if (token) {
-    const usage = await fetchUsage(token);
-    if (usage) {
-      // 5-hour session
-      if (usage.five_hour) {
-        const pct = usage.five_hour.utilization || 0;
-        const reset = formatResetTime(usage.five_hour.resets_at);
-        const reset_str = reset ? ` ${DIM}${reset}${RESET}` : '';
-        parts.push(`${DIM}5h${RESET} ${progressBar(pct, BAR_WIDTH)} ${formatPct(pct)}${reset_str}`);
-      }
-
-      // 7-day all models
-      if (usage.seven_day) {
-        const pct = usage.seven_day.utilization || 0;
-        const reset = formatResetTime(usage.seven_day.resets_at);
-        const reset_str = reset ? ` ${DIM}${reset}${RESET}` : '';
-        parts.push(`${DIM}7d${RESET} ${progressBar(pct, BAR_WIDTH)} ${formatPct(pct)}${reset_str}`);
-      }
-
-      // Extra usage (only for OAuth users with extra usage enabled)
-      if (usage.extra_usage?.is_enabled) {
-        const pct = usage.extra_usage.utilization || 0;
-        const used = (usage.extra_usage.used_credits / 100).toFixed(2);
-        const limit = (usage.extra_usage.monthly_limit / 100).toFixed(2);
-        parts.push(`${DIM}+${RESET} ${formatPct(pct)} ${CYAN}$${used}${DIM}/$${limit}${RESET}`);
-      }
-    }
-  }
-
-  // Context window (from stdin JSON)
-  const ctx = session.context_window;
-  if (ctx && ctx.used_percentage != null) {
-    const pct = Math.round(ctx.used_percentage);
-    parts.push(`${DIM}ctx${RESET} ${progressBar(pct, BAR_WIDTH)} ${formatPct(pct)}`);
-  }
-
-  // Session cost (from stdin JSON)
-  const cost = session.cost;
-  if (cost && cost.total_cost_usd != null) {
-    const cost_str = formatCost(cost.total_cost_usd);
-    if (cost_str) {
-      parts.push(`${CYAN}${cost_str}${RESET}`);
-    }
-  }
-
-  // Translate workflow progress
-  const tx = getTranslateProgress(session.session_id, session.cwd);
-  if (tx) {
-    const bar = progressBar(tx.pct, 8);
-    const staleTag = tx.stale ? ` ${RED}STALE${RESET}` : '';
-
-    // Show phase-appropriate status
-    let detail = '';
-    if (tx.phase === 'browser_verification') {
-      detail = `${YELLOW}browser${RESET}`;
-    } else if (tx.phase === 'verification') {
-      detail = `${YELLOW}verify${RESET}`;
-    } else if (tx.processing > 0) {
-      detail = `${GREEN}${tx.done}done ${tx.processing}run${RESET}`;
-    } else {
-      detail = `${tx.done}/${tx.total}`;
-    }
-
-    parts.push(`${DIM}i18n${RESET} ${CYAN}${tx.component}${RESET} ${bar} ${detail}${staleTag}`);
-  }
-
-  // Model name (from stdin JSON)
-  if (session.model?.display_name) {
-    parts.unshift(`${BOLD}${WHITE}${session.model.display_name}${RESET}`);
-  }
-
-  if (parts.length > 0) {
-    console.log(parts.join(` ${DIM}\u2502${RESET} `));
+// --- Input helpers ---
+function readStdinText() {
+  try {
+    return fs.readFileSync(0, 'utf-8');
+  } catch {
+    return '';
   }
 }
 
-main().catch(() => process.exit(0));
+function isFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+// 'x'.repeat(negative) throws, so bar arguments must be clamped.
+function clampPct(value) {
+  return Math.min(100, Math.max(0, value));
+}
+
+function parseSession(stdin_text) {
+  const text = typeof stdin_text === 'string' ? stdin_text.trim() : '';
+  if (!text) return {};
+  try {
+    const parsed = JSON.parse(text);
+    return isPlainObject(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function windowsFromStdin(session) {
+  const windows = {};
+  const rate_limits = session.rate_limits;
+  if (!isPlainObject(rate_limits)) return windows;
+  for (const key of WINDOW_KEYS) {
+    const raw = rate_limits[key];
+    if (!isPlainObject(raw)) continue;
+    const utilization = isFiniteNumber(raw.used_percentage) ? raw.used_percentage : null;
+    const resets_at = epochToIso(raw.resets_at);
+    if (utilization === null && resets_at === null) continue;
+    windows[key] = { utilization, resets_at };
+  }
+  return windows;
+}
+
+// --- Segment builders (each returns a string or null) ---
+function renderWindowSegment(label, window, now_ms) {
+  if (!window || window.utilization === null) return null;
+  const pct = window.utilization;
+  const reset = formatResetTime(window.resets_at, now_ms);
+  const reset_str = reset ? ` ${DIM}${reset}${RESET}` : '';
+  return `${DIM}${label}${RESET} ${progressBar(clampPct(pct), BAR_WIDTH)} ${formatPct(pct)}${reset_str}`;
+}
+
+function renderContextSegment(session) {
+  const ctx = session.context_window;
+  if (!isPlainObject(ctx) || !isFiniteNumber(ctx.used_percentage)) return null;
+  const pct = Math.round(ctx.used_percentage);
+  return `${DIM}ctx${RESET} ${progressBar(clampPct(pct), BAR_WIDTH)} ${formatPct(pct)}`;
+}
+
+function renderCostSegment(session) {
+  const cost = session.cost;
+  if (!isPlainObject(cost) || !isFiniteNumber(cost.total_cost_usd)) return null;
+  const cost_str = formatCost(cost.total_cost_usd);
+  return cost_str ? `${CYAN}${cost_str}${RESET}` : null;
+}
+
+function renderTranslateSegment(session) {
+  const session_id = typeof session.session_id === 'string' ? session.session_id : undefined;
+  const cwd = typeof session.cwd === 'string' ? session.cwd : undefined;
+  const tx = getTranslateProgress(session_id, cwd);
+  if (!tx) return null;
+  const bar = progressBar(tx.pct, TRANSLATE_BAR_WIDTH);
+  const staleTag = tx.stale ? ` ${RED}STALE${RESET}` : '';
+
+  // Show phase-appropriate status
+  let detail = '';
+  if (tx.phase === 'browser_verification') {
+    detail = `${YELLOW}browser${RESET}`;
+  } else if (tx.phase === 'verification') {
+    detail = `${YELLOW}verify${RESET}`;
+  } else if (tx.processing > 0) {
+    detail = `${GREEN}${tx.done}done ${tx.processing}run${RESET}`;
+  } else {
+    detail = `${tx.done}/${tx.total}`;
+  }
+
+  return `${DIM}i18n${RESET} ${CYAN}${tx.component}${RESET} ${bar} ${detail}${staleTag}`;
+}
+
+function renderModelSegment(session) {
+  const model = session.model;
+  if (!isPlainObject(model)) return null;
+  if (typeof model.display_name !== 'string' || model.display_name === '') return null;
+  return `${BOLD}${WHITE}${model.display_name}${RESET}`;
+}
+
+// One bad segment must not blank the whole line.
+function safeSegment(build) {
+  try {
+    return build();
+  } catch {
+    return null;
+  }
+}
+
+function buildParts(session, display_windows, usage, now_ms) {
+  return [
+    () => renderModelSegment(session),
+    () => renderWindowSegment(WINDOW_LABELS.five_hour, display_windows.five_hour, now_ms),
+    () => renderWindowSegment(WINDOW_LABELS.seven_day, display_windows.seven_day, now_ms),
+    () => renderExtraUsageSegment(usage && usage.extra_usage),
+    () => renderContextSegment(session),
+    () => renderCostSegment(session),
+    () => renderTranslateSegment(session),
+  ].map(safeSegment).filter((part) => part !== null);
+}
+
+// --- Opt-in extra usage (the only path that may touch credentials/network) ---
+function isExtraUsageEnabled(settings_file) {
+  try {
+    const settings = JSON.parse(fs.readFileSync(settings_file, 'utf-8'));
+    return isPlainObject(settings) && settings[EXTRA_USAGE_SETTING_KEY] === true;
+  } catch {
+    return false;
+  }
+}
+
+async function loadOptInUsage({ settings_file, fetch_usage, now_ms }) {
+  if (!isExtraUsageEnabled(settings_file)) return null;
+  try {
+    const lookup_usage = fetch_usage || require('./oauth-usage').fetchUsage;
+    const usage = await lookup_usage({ now_ms });
+    return isPlainObject(usage) ? usage : null;
+  } catch {
+    return null;
+  }
+}
+
+function windowsFromUsage(usage) {
+  const windows = {};
+  if (!isPlainObject(usage)) return windows;
+  for (const key of WINDOW_KEYS) {
+    const raw = usage[key];
+    if (!isPlainObject(raw)) continue;
+    windows[key] = {
+      utilization: isFiniteNumber(raw.utilization) ? raw.utilization : null,
+      resets_at: toIsoString(raw.resets_at),
+    };
+  }
+  return windows;
+}
+
+function renderExtraUsageSegment(extra_usage) {
+  if (!isPlainObject(extra_usage) || extra_usage.is_enabled !== true) return null;
+  if (!isFiniteNumber(extra_usage.used_credits) || !isFiniteNumber(extra_usage.monthly_limit)) return null;
+  const pct = isFiniteNumber(extra_usage.utilization) ? extra_usage.utilization : 0;
+  const used = (extra_usage.used_credits / 100).toFixed(2);
+  const limit = (extra_usage.monthly_limit / 100).toFixed(2);
+  return `${DIM}+${RESET} ${formatPct(pct)} ${CYAN}$${used}${DIM}/$${limit}${RESET}`;
+}
+
+function pickDisplayWindow(stdin_window, fetched_window, now_ms) {
+  if (stdin_window && stdin_window.utilization !== null) return stdin_window;
+  if (!fetched_window || fetched_window.utilization === null) return null;
+  const reset_ms = fetched_window.resets_at === null ? null : Date.parse(fetched_window.resets_at);
+  return reset_ms === null || reset_ms > now_ms ? fetched_window : null;
+}
+
+// --- Orchestration ---
+async function run(options = {}) {
+  const stdin_text = options.stdin_text || '';
+  const now_ms = options.now_ms === undefined ? Date.now() : options.now_ms;
+  const cache_file = options.reset_cache_file || resolveResetCacheFile();
+  const settings_file = options.settings_file || path.join(getStateDir(), SETTINGS_FILE_NAME);
+
+  const session = parseSession(stdin_text);
+  const stdin_windows = windowsFromStdin(session);
+  const usage = await loadOptInUsage({
+    settings_file,
+    fetch_usage: options.fetch_usage,
+    now_ms,
+  });
+  const fetched_windows = windowsFromUsage(usage);
+  const display_windows = {};
+  for (const key of WINDOW_KEYS) {
+    const window = pickDisplayWindow(stdin_windows[key], fetched_windows[key], now_ms);
+    if (window) display_windows[key] = window;
+  }
+
+  try {
+    syncResetCache({ cache_file, sources: [stdin_windows, fetched_windows], now_ms });
+  } catch {
+    // Cache problems never change the rendered line
+  }
+
+  return buildParts(session, display_windows, usage, now_ms).join(` ${DIM}│${RESET} `);
+}
+
+async function main() {
+  const line = await run({ stdin_text: readStdinText() });
+  if (line) console.log(line);
+}
+
+if (require.main === module) {
+  main().catch(() => process.exit(0));
+}
+
+module.exports = {
+  run,
+  parseSession,
+  windowsFromStdin,
+  windowsFromUsage,
+  isExtraUsageEnabled,
+  loadOptInUsage,
+  renderExtraUsageSegment,
+  formatResetTime,
+  progressBar,
+  formatPct,
+  formatCost,
+};
