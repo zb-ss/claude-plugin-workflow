@@ -160,3 +160,67 @@ describe('diff_smell: oversized diff', () => {
     assert.equal(result.diff_smell.flagged, false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 5 — --worktree: uncommitted and untracked changes, limited by path
+// ---------------------------------------------------------------------------
+
+describe('gatherFromWorktree: uncommitted work', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { execFileSync } = require('node:child_process');
+  const { gatherFromWorktree } = require('../lib/risk-classify-cli.js');
+
+  function makeRepo() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'risk-worktree-'));
+    const git = (...args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' });
+    git('init', '-q');
+    git('config', 'user.email', 'test@test.test');
+    git('config', 'user.name', 'Test');
+    fs.mkdirSync(path.join(dir, 'src'));
+    fs.writeFileSync(path.join(dir, 'src', 'format.js'), 'module.exports = 1;\n');
+    fs.writeFileSync(path.join(dir, 'notes.md'), 'notes\n');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'init');
+    return dir;
+  }
+
+  it('sees unstaged edits and untracked files that --git cannot', () => {
+    const dir = makeRepo();
+    try {
+      fs.writeFileSync(path.join(dir, 'src', 'format.js'), 'module.exports = 2;\n');
+      fs.writeFileSync(path.join(dir, 'src', 'login.js'), 'const password = check();\n');
+      const out = gatherFromWorktree({ cwd: dir });
+      assert.deepEqual(out.files.sort(), ['src/format.js', 'src/login.js']);
+      assert.deepEqual(out.untracked, ['src/login.js']);
+      assert.equal(classify(out.diff, out.files).risk, 'high', 'untracked login.js content must be classified');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('limits the change to the given paths', () => {
+    const dir = makeRepo();
+    try {
+      fs.writeFileSync(path.join(dir, 'src', 'format.js'), 'module.exports = 3;\n');
+      fs.writeFileSync(path.join(dir, 'notes.md'), 'more notes\n');
+      const out = gatherFromWorktree({ cwd: dir, paths: ['notes.md'] });
+      assert.deepEqual(out.files, ['notes.md']);
+      assert.equal(classify(out.diff, out.files).risk, 'low');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns nothing for a clean tree', () => {
+    const dir = makeRepo();
+    try {
+      const out = gatherFromWorktree({ cwd: dir });
+      assert.deepEqual(out.files, []);
+      assert.equal(out.diff.trim(), '');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

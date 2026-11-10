@@ -86,7 +86,7 @@ function decide(surface, visibility, scanOpts) {
   }
   const result = scanSurface(surface, scanOpts || {});
   if (result.clean) return { decision: 'allow' };
-  return { decision: 'deny', hits: result.hits, denylist_loaded: result.denylist_loaded };
+  return { decision: 'deny', hits: result.hits, denylist_loaded: result.denylist_loaded, denylist_status: result.denylist_status };
 }
 
 // ---- live git/gh helpers (used only in main, not in tests) -----------------
@@ -151,7 +151,10 @@ if (require.main === module) {
     const verdict = decide(surface, visibility);
     if (verdict.decision === 'deny') {
       const where = verdict.hits.map(h => `${h.category}@${h.where}:${h.match}`).join(', ');
-      const note = verdict.denylist_loaded ? '' : ' (operator denylist NOT loaded — only structural markers checked; set CLAUDE_WORKFLOW_SCRUB_DENYLIST)';
+      const note = verdict.denylist_loaded ? ''
+        : verdict.denylist_status === 'unreadable'
+          ? ' (configured denylist path not readable — only structural markers checked; fix CLAUDE_WORKFLOW_SCRUB_DENYLIST)'
+          : ' (operator denylist NOT loaded — only structural markers checked; set CLAUDE_WORKFLOW_SCRUB_DENYLIST)';
       process.stdout.write(denyOutput(
         `Scrub gate BLOCKED a write to a non-private repo (visibility=${visibility || 'unknown'}). ` +
         `Internal markers found: ${where}.${note} Fix the content (genericize/redact) or push to a private repo. ` +

@@ -1,6 +1,6 @@
 {
   "name": "workflow",
-  "description": "Automated development workflow orchestration for long-running autonomous workflows with swarm and epic modes, deep quality gates, and security validation",
+  "description": "Tiered role agents and saved workflows for planning, implementing and reviewing code, plus an autonomous issue-queue driver, E2E testing and a public-repo scrub gate",
   "author": {
     "name": "zb-ss"
   },
@@ -13,11 +13,9 @@
     "automation",
     "code-review",
     "security",
-    "swarm",
-    "epic",
-    "parallel",
-    "orchestration",
-    "agent-teams"
+    "planning",
+    "e2e",
+    "playwright"
   ],
   "agents": [
     "./agents/codebase-analyzer.md",
@@ -29,6 +27,10 @@
     "./agents/test-writer.md",
     "./agents/quality-gate.md",
     "./agents/completion-guard.md",
+    "./agents/spec-conformance.md",
+    "./agents/verifier.md",
+    "./agents/scope.md",
+    "./agents/finding-merger.md",
     "./agents/supervisor.md",
     "./agents/e2e-explorer.md",
     "./agents/e2e-generator.md",

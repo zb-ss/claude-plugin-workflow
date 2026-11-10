@@ -1,5 +1,9 @@
 # Swarm Mode
 
+> **Previous engine.** This page describes `/workflow:start` and `/workflow:resume` (swarm and epic),
+> the plugin's earlier engine. It is still present and works as described, and it is planned to be
+> replaced by the [saved workflows](workflows.md). For new work, start with `/workflow:do`.
+
 Swarm mode enables aggressive parallel execution with a scalable N-lens fan-out review gate. Use it for large features, multi-service implementations, and when quality matters more than cost.
 
 ## Key Features

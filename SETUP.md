@@ -93,8 +93,21 @@ other-public-IP detection.
 ```json
 "env": {
   "CLAUDE_WORKFLOW_CONTROL_REPO": "<$CONTROL>",
-  "CLAUDE_WORKFLOW_SCRUB_DENYLIST": "<$LOCAL/scrub-denylist.json>"
+  "CLAUDE_WORKFLOW_SCRUB_DENYLIST": "~/<path under the home directory>/scrub-denylist.json"
 }
+```
+Write the denylist path in the `~/` form. Settings values are not shell-expanded, but the
+plugin expands a leading `~/`, `$HOME/` or `${HOME}/`, so one value works on every machine
+that shares this settings file. An absolute path tied to one machine silently disables
+name-based scrubbing on the others; the scrub gate and the startup check report that case
+as "configured denylist path not readable".
+
+**Judge fallback for the driver.** The driver runs the previous engine, whose judge agents
+pin the `fable` model alias and have no retry of their own. If the user's account cannot use
+Fable, every judge step fails. Ask the user, and on a yes add this top-level key to
+`~/.claude/settings.json` (`/workflow:setup` offers the same):
+```json
+"fallbackModel": ["opus"]
 ```
 Optionally set the autonomous run posture and scoped permissions now — see
 `resources/autonomy-config.md` (approval posture, `confidence_threshold`,
@@ -126,7 +139,8 @@ Print this, with your results filled in:
   - Private control repo: <$CONTROL>
   - Labels, README, Task template, denylist template
   - Denylist seeded: <yes / DEFERRED — user to fill scrub-denylist.json>
-  - Config wired in settings.json (CONTROL_REPO + SCRUB_DENYLIST)
+  - Config wired in settings.json (CONTROL_REPO + SCRUB_DENYLIST, ~/ form)
+  - Judge fallback: <fallbackModel set / not needed (Fable available) / declined>
   - Verified: queue round-trip + scrub denylist load
 
 👤 You must do (an agent can't):

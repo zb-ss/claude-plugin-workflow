@@ -189,3 +189,75 @@ function makeDenylist() {
   }));
   return p;
 }
+
+describe('denylist path: home expansion and unreadable paths', () => {
+  const { expandHome, denylistWarning } = require('../lib/scrub-cli.js');
+  let tmp_home;
+  let saved_home;
+  let saved_env;
+
+  before(() => {
+    tmp_home = fs.mkdtempSync(path.join(os.tmpdir(), 'scrub-home-'));
+    saved_home = process.env.HOME;
+    saved_env = process.env.CLAUDE_WORKFLOW_SCRUB_DENYLIST;
+    process.env.HOME = tmp_home;
+    delete process.env.CLAUDE_WORKFLOW_SCRUB_DENYLIST;
+    fs.writeFileSync(path.join(tmp_home, 'denylist.json'), JSON.stringify({ entries: [{ pattern: 'acme-internal' }] }));
+  });
+
+  after(() => {
+    process.env.HOME = saved_home;
+    if (saved_env === undefined) delete process.env.CLAUDE_WORKFLOW_SCRUB_DENYLIST;
+    else process.env.CLAUDE_WORKFLOW_SCRUB_DENYLIST = saved_env;
+    fs.rmSync(tmp_home, { recursive: true, force: true });
+  });
+
+  it('expands a leading ~, $HOME or ${HOME} and nothing else', () => {
+    const home = os.homedir();
+    assert.equal(expandHome('~/a/b.json'), path.join(home, 'a/b.json'));
+    assert.equal(expandHome('$HOME/a.json'), path.join(home, 'a.json'));
+    assert.equal(expandHome('${HOME}/a.json'), path.join(home, 'a.json'));
+    assert.equal(expandHome('/abs/~/a.json'), '/abs/~/a.json');
+    assert.equal(expandHome('~other/a.json'), '~other/a.json');
+    assert.equal(expandHome('$HOMEDIR/a.json'), '$HOMEDIR/a.json');
+    assert.equal(expandHome('$USER/a.json'), '$USER/a.json');
+  });
+
+  for (const form of ['~/denylist.json', '$HOME/denylist.json', '${HOME}/denylist.json']) {
+    it(`loads a denylist configured as ${form}`, () => {
+      process.env.CLAUDE_WORKFLOW_SCRUB_DENYLIST = form;
+      try {
+        const result = scanSurface({ diff: 'see acme-internal' });
+        assert.equal(result.denylist_loaded, true);
+        assert.equal(result.denylist_status, 'loaded');
+        assert.ok(result.hits.length > 0, 'a denylisted name is caught');
+      } finally {
+        delete process.env.CLAUDE_WORKFLOW_SCRUB_DENYLIST;
+      }
+    });
+  }
+
+  it('reports a configured path whose file is missing as unreadable, and still runs the structural checks', () => {
+    const result = scanSurface({ diff: 'key=AKIA' + 'IOSFODNN7EXAMPLE' }, { denylistPath: '~/no-such-denylist.json' });
+    assert.equal(result.denylist_loaded, false);
+    assert.equal(result.denylist_status, 'unreadable');
+    assert.equal(result.denylist_error, 'file not found');
+    assert.ok(result.hits.some(h => h.category === 'secret'));
+    assert.match(denylistWarning(result), /configured denylist path not readable: .*no-such-denylist\.json \(file not found\)/);
+  });
+
+  it('reports a denylist that is not valid JSON as unreadable', () => {
+    fs.writeFileSync(path.join(tmp_home, 'broken.json'), '{ not json');
+    const dl = loadDenylist('~/broken.json');
+    assert.equal(dl.status, 'unreadable');
+    assert.equal(dl.error, 'not valid JSON');
+  });
+
+  it('keeps "not configured" distinct from "not readable"', () => {
+    const result = scanSurface({ diff: 'nothing here' });
+    assert.equal(result.denylist_status, 'not_configured');
+    assert.match(denylistWarning(result), /operator denylist not loaded/);
+    assert.doesNotMatch(denylistWarning(result), /not readable/);
+    assert.equal(denylistWarning(scanSurface({ diff: 'x' }, { denylistPath: '~/denylist.json' })), '');
+  });
+});

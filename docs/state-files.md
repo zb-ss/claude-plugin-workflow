@@ -1,5 +1,9 @@
 # State Files
 
+> **Previous engine.** This page describes `/workflow:start` and `/workflow:resume` (swarm and epic),
+> the plugin's earlier engine. It is still present and works as described, and it is planned to be
+> replaced by the [saved workflows](workflows.md). For new work, start with `/workflow:do`.
+
 Workflows are tracked in human-readable state files that you can **view and edit in real-time**.
 
 ## State File Formats

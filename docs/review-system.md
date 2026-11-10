@@ -1,5 +1,9 @@
 # Review System
 
+> **Previous engine.** This page describes `/workflow:start` and `/workflow:resume` (swarm and epic),
+> the plugin's earlier engine. It is still present and works as described, and it is planned to be
+> replaced by the [saved workflows](workflows.md). For new work, start with `/workflow:do`.
+
 The review system enforces zero-issue-tolerance across all gates through a multi-lens fan-out engine. The canonical implementation is `skills/phases/post-merge-review/SKILL.md`; the per-lens finding contract is `skills/phases/review/SKILL.md`.
 
 Surviving workflow modes are **swarm** and **epic** only.
