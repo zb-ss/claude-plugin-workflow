@@ -442,6 +442,24 @@ describe('plan workflow', () => {
     assert.deepEqual(result.explore, ['config loading']);
   });
 
+  it('asks the judge for user_facing and user_flows and returns them unchanged', async () => {
+    const plan = {
+      summary: 's', acceptance_criteria: ['a'],
+      work_items: [{ id: '1', title: 't', description: 'd', files: ['f'] }],
+      user_facing: true, user_flows: 'open /login',
+    };
+    const { result, calls } = await runScript('plan.js', {
+      args: { task: 'Add a login page' },
+      respond: ({ kind }) => kind === 'explorer' ? explorerResult('a') : { status: 'plan', plan },
+    });
+    const judge = of(calls, 'architect')[0];
+    const props = judge.opts.schema.properties.plan.properties;
+    assert.equal(props.user_facing.type, 'boolean');
+    assert.equal(props.user_flows.type, 'string');
+    assert.match(judge.prompt, /user_facing/);
+    assert.deepEqual(result.plan, plan);
+  });
+
   it('goes straight to the judge in a follow-up round with nothing new to explore', async () => {
     const { calls } = await runScript('plan.js', {
       args: { task: 'Add a helper', round: 2, findings: [explorerResult('a')], answers: [{ question: 'Which format?', answer: 'JSON' }] },
@@ -819,5 +837,109 @@ describe('no-op fix round', () => {
     assert.equal(result.status, 'needs_attention');
     assert.ok(result.dropped.some(d => d.why === 'the fix round changed nothing'));
     assert.ok(logs.some(l => /changed no files/.test(l)));
+  });
+});
+
+describe('implement browser check and proof video', () => {
+  const FLOWS = 'log in, open the dashboard';
+  const userPlan = () => planWith({ user_facing: true, user_flows: FLOWS });
+
+  /** Responder: browser/demo results are configurable; `check` and `demo` may be null. */
+  function responder({ check = { status: 'passed', verified: ['golden path'], not_verified: [] }, demo = { status: 'recorded', file: 'demo.mp4', notes: 'ok' }, signOff } = {}) {
+    const base = implementResponder(signOff ? { signOff } : {});
+    return call => {
+      if (call.opts.label === 'browser-check') return check;
+      if (call.opts.label === 'proof-video') return demo;
+      return base(call);
+    };
+  }
+  const idx = (calls, pred) => calls.findIndex(pred);
+
+  it('starts no web-tester for a plan that is not user-facing', async () => {
+    const { result, calls } = await runScript('implement.js', { args: { plan: planWith(), demo_skill: 'demo-recorder' }, respond: responder() });
+    assert.equal(of(calls, 'web-tester').length, 0);
+    assert.equal(result.browser_check.required, false);
+    assert.equal(result.proof_video.ran, false);
+  });
+
+  it('runs one browser check after the review loop and before sign-off', async () => {
+    const { result, calls } = await runScript('implement.js', { args: { plan: userPlan() }, respond: responder() });
+    const checks = calls.filter(c => c.opts.label === 'browser-check');
+    assert.equal(checks.length, 1);
+    const at = calls.indexOf(checks[0]);
+    const lastReview = calls.map(c => c.kind).lastIndexOf('reviewer-deep');
+    assert.ok(at > lastReview);
+    assert.ok(at < idx(calls, c => c.kind === 'completion-guard'));
+    assert.match(of(calls, 'completion-guard')[0].prompt, /Browser check \(JSON\)/);
+    assert.ok(checks[0].prompt.includes(FLOWS));
+    assert.equal(result.status, 'complete');
+  });
+
+  it('blocks sign-off when the check failed', async () => {
+    const { result, calls } = await runScript('implement.js', {
+      args: { plan: userPlan() },
+      respond: responder({ check: { status: 'failed', verified: [], not_verified: [], failures: [{ where: '/login', detail: '500' }] } }),
+    });
+    assert.equal(of(calls, 'completion-guard').length, 0);
+    assert.equal(result.sign_off.ran, false);
+    assert.match(result.sign_off.reason, /browser check failed/);
+    assert.ok(result.sign_off.reason.includes('/login'));
+    assert.equal(result.status, 'needs_attention');
+  });
+
+  it('blocks sign-off when the check could not run', async () => {
+    const { result, calls } = await runScript('implement.js', {
+      args: { plan: userPlan() },
+      respond: responder({ check: { status: 'could_not_run', verified: [], not_verified: [], reason: 'no browser tool' } }),
+    });
+    assert.equal(of(calls, 'completion-guard').length, 0);
+    assert.match(result.sign_off.reason, /could not run/);
+    assert.equal(result.status, 'needs_attention');
+  });
+
+  it('treats a missing web-tester result as could_not_run', async () => {
+    const { result } = await runScript('implement.js', { args: { plan: userPlan() }, respond: responder({ check: null }) });
+    assert.equal(result.browser_check.status, 'could_not_run');
+    assert.equal(result.status, 'needs_attention');
+    assert.ok(result.dropped.some(d => /browser check/.test(d.what || d.title || JSON.stringify(d))));
+  });
+
+  it('records a demo through the configured skill after a passing check', async () => {
+    const { result, calls } = await runScript('implement.js', { args: { plan: userPlan(), demo_skill: 'demo-recorder' }, respond: responder() });
+    const demos = calls.filter(c => c.opts.label === 'proof-video');
+    assert.equal(demos.length, 1);
+    assert.ok(demos[0].prompt.includes('demo-recorder'));
+    assert.equal(result.proof_video.ran, true);
+    assert.equal(result.proof_video.skill, 'demo-recorder');
+    assert.equal(result.status, 'complete');
+  });
+
+  it('skips the proof video without a demo skill', async () => {
+    const { result, calls } = await runScript('implement.js', { args: { plan: userPlan() }, respond: responder() });
+    assert.equal(calls.filter(c => c.opts.label === 'proof-video').length, 0);
+    assert.deepEqual(result.proof_video, { ran: false, skipped: true, reason: 'no demo skill configured' });
+  });
+
+  it('rejects an invalid demo_skill before any agent starts', async () => {
+    const calls = [];
+    await assert.rejects(
+      runScript('implement.js', { args: { plan: userPlan(), demo_skill: 'bad name!' }, respond: c => { calls.push(c); return responder()(c); } }),
+      /demo_skill must be a skill name/,
+    );
+    assert.equal(calls.length, 0);
+  });
+
+  it('keeps four agent slots for a user-facing run with a demo skill', async () => {
+    const { result } = await runScript('implement.js', { args: { plan: userPlan(), demo_skill: 'demo-recorder', max_agents: 1 }, respond: responder() });
+    assert.match(result.stopped, /agent cap of 4/);
+  });
+
+  it('skips the proof video when the work is not complete', async () => {
+    const { result, calls } = await runScript('implement.js', {
+      args: { plan: userPlan(), demo_skill: 'demo-recorder' },
+      respond: responder({ signOff: { approved: false, issues: ['tests fail'] } }),
+    });
+    assert.equal(calls.filter(c => c.opts.label === 'proof-video').length, 0);
+    assert.equal(result.proof_video.reason, 'the work is not complete');
   });
 });

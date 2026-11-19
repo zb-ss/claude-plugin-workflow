@@ -10,7 +10,9 @@ export const meta = {
     { title: 'Merge', detail: 'group duplicate findings across lenses' },
     { title: 'Verify', detail: 'verifiers quote the line each verdict rests on' },
     { title: 'Fix', detail: 'executor fixes confirmed findings; bounded rounds' },
+    { title: 'Browser check', detail: 'for a user-facing task: drive the running app through the golden path, an adjacent path and a failure case' },
     { title: 'Sign-off', detail: 'completion-guard checks requirements, build and tests' },
+    { title: 'Proof video', detail: 'after a passing browser check and sign-off: record a demo through the configured skill' },
   ],
 }
 
@@ -22,7 +24,8 @@ export const meta = {
 //   max_fix_rounds?: number,    fix rounds after the first review (default 2)
 //   verifiers?: number,         verifiers for CRITICAL and security MAJOR findings (default 3, majority decides)
 //   sign_off?: boolean,         run completion-guard at the end (default true)
-//   max_agents?: number,        stop spawning agents after this many; one slot stays reserved for sign-off (default 25)
+//   max_agents?: number,        stop spawning agents after this many; slots stay reserved for sign-off, the browser check and the proof video (default 25)
+//   demo_skill?: string,         skill that records a demo after a passing browser check (default: none, the stage is skipped)
 //   include_optional?: boolean, also build work items the plan marked optional (default false)
 //   judge_effort?: string,      effort for the fable lenses and sign-off: low | medium | high | xhigh | max (default: frontmatter)
 //   worker_effort?: string,     effort for the sonnet executors, test-writer and verifiers (default: frontmatter)
@@ -61,7 +64,17 @@ const PATHS = Array.isArray(input.paths) ? input.paths.filter(Boolean) : []
 const MAX_FIX_ROUNDS = input.max_fix_rounds === undefined ? 2 : input.max_fix_rounds
 const VERIFIERS = Math.max(1, input.verifiers || 3)
 const SIGN_OFF = input.sign_off !== false
-const MAX_AGENTS = Math.max(SIGN_OFF ? 2 : 1, input.max_agents || 25)
+function checkSkillName(name, value) {
+  if (value === undefined || value === null || value === '') return null
+  if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9:_.-]*$/.test(value)) {
+    throw new Error(`${name} must be a skill name (got ${JSON.stringify(value)})`)
+  }
+  return value
+}
+const USER_FACING = PLAN.user_facing === true
+const DEMO_SKILL = checkSkillName('implement: demo_skill', input.demo_skill)
+const RESERVE = (SIGN_OFF ? 1 : 0) + (USER_FACING ? 1 : 0) + (USER_FACING && DEMO_SKILL ? 1 : 0)
+const MAX_AGENTS = Math.max(RESERVE + 1, input.max_agents || 25)
 const INCLUDE_OPTIONAL = input.include_optional === true
 
 const dropped = []
@@ -136,6 +149,25 @@ const SIGNOFF_SCHEMA = {
       },
     },
   },
+}
+
+const BROWSER_SCHEMA = {
+  type: 'object',
+  required: ['status', 'verified', 'not_verified'],
+  properties: {
+    status: { type: 'string', enum: ['passed', 'failed', 'could_not_run'] },
+    driver: { type: 'string', description: 'The browser tool used' },
+    verified: { type: 'array', items: { type: 'string' }, description: 'What was checked and held' },
+    not_verified: { type: 'array', items: { type: 'string' }, description: 'What could not be checked, and why' },
+    failures: { type: 'array', items: { type: 'object', required: ['where', 'detail'], properties: { where: { type: 'string' }, detail: { type: 'string' } } } },
+    cleanup: { type: 'string', description: 'Test records created and whether they were deleted' },
+    reason: { type: 'string', description: 'With could_not_run: why' },
+  },
+}
+const DEMO_SCHEMA = {
+  type: 'object',
+  required: ['status', 'notes'],
+  properties: { status: { type: 'string', enum: ['recorded', 'failed'] }, file: { type: 'string' }, notes: { type: 'string' } },
 }
 
 // ==== shared review core: keep identical in review.js and implement.js ====
@@ -232,8 +264,8 @@ const SECURITY_CHECKLIST =
 // agent's frontmatter level applies. The haiku agents (scope, finding-merger)
 // are never overridden.
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
-const JUDGE_TYPES = new Set(['workflow:architect', 'workflow:reviewer-deep', 'workflow:security-deep', 'workflow:completion-guard', 'workflow:spec-conformance'])
-const WORKER_TYPES = new Set(['workflow:explorer', 'workflow:executor', 'workflow:test-writer', 'workflow:verifier'])
+const JUDGE_TYPES = new Set(['workflow:architect', 'workflow:reviewer-deep', 'workflow:security-deep', 'workflow:completion-guard'])
+const WORKER_TYPES = new Set(['workflow:explorer', 'workflow:executor', 'workflow:test-writer', 'workflow:verifier', 'workflow:web-tester'])
 
 function checkEffort(name, value) {
   if (value === undefined || value === null || value === '') return null
@@ -516,7 +548,7 @@ const EFFORT = {
   worker: checkEffort('implement: worker_effort', input.worker_effort),
 }
 const FALLBACK = checkFallback('implement: judge_fallback', input.judge_fallback)
-const { spawn, state } = makeSpawner(MAX_AGENTS, SIGN_OFF ? 1 : 0, EFFORT, FALLBACK)
+const { spawn, state } = makeSpawner(MAX_AGENTS, RESERVE, EFFORT, FALLBACK)
 
 const planBlock =
   `Repository: ${REPO}\n` +
@@ -708,10 +740,43 @@ while (!state.stop) {
   }
 }
 
+// ---------------------------------------------------------------- Browser check
+let browser_check
+if (!USER_FACING) {
+  browser_check = { required: false, ran: false, reason: 'the plan does not mark the task as user-facing' }
+} else if (state.stop) {
+  browser_check = { required: true, ran: false, status: 'could_not_run', reason: `the run stopped early: ${state.stop}` }
+} else {
+  phase('Browser check')
+  const result = await spawn(
+    `${planBlock}\n\nUser-facing flows named by the plan: ${PLAN.user_flows || '(none: derive them from the acceptance criteria)'}\n` +
+    `Files changed: ${changedFiles.join(', ') || '(see git status)'}\n\n` +
+    'Check this change in a real browser against the running application: the golden path of the change, one adjacent path and one obvious failure case. ' +
+    'Watch for console errors, page errors, 4xx and 5xx responses, unexpected redirects and missing elements. Delete any test records you create. ' +
+    'Report what you verified and what you could not. If no browser tool is available or the application cannot be started, return status could_not_run with the reason. Change no project files.',
+    { label: 'browser-check', phase: 'Browser check', agentType: 'workflow:web-tester', schema: BROWSER_SCHEMA },
+    true,
+  )
+  if (result) {
+    browser_check = { required: true, ran: true, ...result }
+  } else {
+    const reason = state.stop || 'web-tester returned no result'
+    browser_check = { required: true, ran: false, status: 'could_not_run', reason }
+    drop('browser check', reason)
+  }
+}
+const browser_ok = !browser_check.required || browser_check.status === 'passed'
+
 // ---------------------------------------------------------------- Sign-off
 let sign_off
 if (!SIGN_OFF) {
   sign_off = { ran: false, reason: 'disabled with sign_off: false' }
+} else if (!browser_ok) {
+  const reason = browser_check.status === 'failed'
+    ? `the browser check failed: ${(browser_check.failures || []).map(f => `${f.where}: ${f.detail}`).join('; ')}`
+    : `the browser check could not run: ${browser_check.reason}`
+  sign_off = { ran: false, reason }
+  drop('sign-off', reason)
 } else {
   phase('Sign-off')
   const result = await spawn(
@@ -721,6 +786,7 @@ if (!SIGN_OFF) {
     `Files reviewed: ${scope.files.join(', ')}\n` +
     `Review findings still open: ${JSON.stringify(open)}\n` +
     `Blocking findings nobody could verify: ${JSON.stringify(unverifiedAll)}\n` +
+    (browser_check.required ? `Browser check (JSON): ${JSON.stringify(browser_check)}\n` : '') +
     `${state.stop ? `The run stopped early: ${state.stop}\n` : ''}\n` +
     'Verify every acceptance criterion against the code, run the build (if any) and the full test suite, ' +
     'and decide whether this work may be called complete. Base the verdict on the code, the suite and at ' +
@@ -734,8 +800,35 @@ if (!SIGN_OFF) {
 }
 
 const complete = !state.stop && open.length === 0 && unverifiedAll.length === 0 &&
-  (!SIGN_OFF || sign_off.approved === true) &&
+  (!SIGN_OFF || sign_off.approved === true) && browser_ok &&
   items.every(it => itemResults[it.id] && itemResults[it.id].status === 'done')
+
+// ---------------------------------------------------------------- Proof video
+let proof_video
+if (!USER_FACING) {
+  proof_video = { ran: false, reason: 'the task is not user-facing' }
+} else if (!browser_ok) {
+  proof_video = { ran: false, reason: 'no passing browser check' }
+} else if (DEMO_SKILL === null) {
+  proof_video = { ran: false, skipped: true, reason: 'no demo skill configured' }
+} else if (!complete) {
+  proof_video = { ran: false, reason: 'the work is not complete' }
+} else {
+  phase('Proof video')
+  const result = await spawn(
+    `${planBlock}\n\nBrowser check that passed (JSON): ${JSON.stringify(browser_check)}\n\n` +
+    `Record a demo of this change with the skill named "${DEMO_SKILL}": invoke it with the Skill tool and follow it. ` +
+    'Show the golden path of the change. Report where the recording was saved. Change no project files.',
+    { label: 'proof-video', phase: 'Proof video', agentType: 'workflow:web-tester', schema: DEMO_SCHEMA },
+    true,
+  )
+  if (result) {
+    proof_video = { ran: true, skill: DEMO_SKILL, ...result }
+  } else {
+    proof_video = { ran: false, reason: state.stop || 'web-tester returned no result' }
+    drop('proof video', proof_video.reason)
+  }
+}
 
 return {
   status: complete ? 'complete' : 'needs_attention',
@@ -753,5 +846,8 @@ return {
     rounds: round, open, fixes: fixLog, refuted: refutedAll, unverified: unverifiedAll, notes: notesAll, lens_stats: lensStatsAll,
   },
   sign_off,
+  user_facing: USER_FACING,
+  browser_check,
+  proof_video,
   dropped,
 }

@@ -138,8 +138,8 @@ const SECURITY_CHECKLIST =
 // agent's frontmatter level applies. The haiku agents (scope, finding-merger)
 // are never overridden.
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
-const JUDGE_TYPES = new Set(['workflow:architect', 'workflow:reviewer-deep', 'workflow:security-deep', 'workflow:completion-guard', 'workflow:spec-conformance'])
-const WORKER_TYPES = new Set(['workflow:explorer', 'workflow:executor', 'workflow:test-writer', 'workflow:verifier'])
+const JUDGE_TYPES = new Set(['workflow:architect', 'workflow:reviewer-deep', 'workflow:security-deep', 'workflow:completion-guard'])
+const WORKER_TYPES = new Set(['workflow:explorer', 'workflow:executor', 'workflow:test-writer', 'workflow:verifier', 'workflow:web-tester'])
 
 function checkEffort(name, value) {
   if (value === undefined || value === null || value === '') return null
