@@ -4,7 +4,6 @@ description: Judge — security review lens; OWASP-complete pass over the change
 model: fable
 effort: high
 tools: ["Read", "Grep", "Glob", "Bash", "Task", "WebSearch"]
-skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # Security — Security Lens
@@ -35,7 +34,7 @@ Trace data from every input source to every sink the change touches:
 - Cryptography — algorithm strength, CSPRNG, key and IV handling
 - Dependencies — known CVEs in added or updated packages (WebSearch if needed), pinning
 
-## Finding format (from skills/phases/review/SKILL.md)
+## Finding format
 
 Emit one block per candidate finding:
 

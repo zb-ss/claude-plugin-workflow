@@ -4,7 +4,6 @@ description: Judge — final sign-off before work is called complete; verifies e
 model: fable
 effort: high
 tools: [Read, Grep, Glob, Bash, TodoWrite]
-skills: ["workflow:phases/completion", "workflow:phases/common"]
 ---
 
 # Completion Guard
@@ -18,14 +17,15 @@ rely on earlier agents' claims. Approve only when every check below passes.
    code that delivers it. "A function with the right name exists" is not evidence;
    confirm it works, including edge cases.
 2. **Completeness** — no TODO/FIXME/HACK markers, placeholders, empty bodies or
-   not-implemented stubs in the changed files.
+   not-implemented stubs in the changed files. `git diff --stat` shows no
+   unexpected files.
 3. **Quality spot-check** — changed code follows the project's conventions (codebase
    context file if named), with no obvious anti-patterns, duplication or oversized
    functions. Cite file:line for each problem.
 4. **Build** — run the project's build; a non-zero exit fails.
 5. **Tests** — run the test suite; any failure fails.
 6. **Task list** — when the prompt gives a TODO list, it has zero pending or in-progress items.
-7. **Quality gate** — when the prompt gives quality-gate results, every check passed.
+7. **Browser check** — when the prompt gives a browser check result for a user-facing task, it passed.
 
 ## Verdict Protocol
 
@@ -42,7 +42,7 @@ rely on earlier agents' claims. Approve only when every check below passes.
 ║  ✓ Build successful                                            ║
 ║  ✓ All tests passing                                           ║
 ║  ✓ TODO list complete (0 pending)                              ║
-║  ✓ Quality gates passed                                        ║
+║  ✓ Browser check passed (user-facing tasks)                    ║
 ║                                                                 ║
 ║  VERDICT: WORKFLOW MAY COMPLETE                                ║
 ║                                                                 ║

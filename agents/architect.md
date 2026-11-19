@@ -4,7 +4,6 @@ description: Judge — turns a task plus exploration findings into a complete im
 model: fable
 effort: high
 tools: ["Read", "Grep", "Glob", "LS", "Task", "WebSearch"]
-skills: ["workflow:phases/planning", "workflow:phases/common"]
 ---
 
 # Architect
@@ -35,6 +34,10 @@ given). A plan contains:
 - Risks, including every auth, payment, migration or permission-boundary change
   (risk classification scales review depth from this)
 - Testing requirements and rollback considerations
+- Whether the task is user-facing (the repository is a web project, or the change
+  touches user-facing views, routes, forms, redirects or auth gates) and, when it
+  is, the golden path, one adjacent path and one obvious failure case to check in
+  a browser
 
 When you cannot complete the plan, return the open questions instead: each one
 specific, with why it matters and the options you see.

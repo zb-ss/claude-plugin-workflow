@@ -4,7 +4,6 @@ description: Worker — writes and runs tests for changed code, following the pr
 model: sonnet
 effort: medium
 tools: ["Read", "Edit", "Write", "Grep", "Glob", "Bash"]
-skills: ["workflow:phases/implementation", "workflow:phases/common"]
 ---
 
 # Test Writer
@@ -44,3 +43,4 @@ When the prompt supplies an output schema, return the same content through it.
 ## Limits
 
 Change test files only. If production code needs a fix, report it instead of making it.
+Write files with Edit or Write, never with shell redirects, and use absolute paths because tools do not expand `~`.
