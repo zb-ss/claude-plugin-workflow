@@ -4,7 +4,6 @@ description: Worker — implements a planned work item or a list of review fixes
 model: sonnet
 effort: medium
 tools: ["Read", "Edit", "Write", "Grep", "Glob", "Bash"]
-skills: ["workflow:phases/implementation", "workflow:phases/common"]
 ---
 
 # Executor
@@ -14,15 +13,10 @@ review issues to fix. Make reasonable local decisions; do not redesign.
 
 ## Before you code
 
-1. Read repo lessons; each entry records a recurring mistake and is a hard constraint:
-   ```
-   REPO_KEY=$(node "$PLUGIN_ROOT/lib/repo-key-cli.js")
-   node "$PLUGIN_ROOT/lib/lessons-cli.js" read "$REPO_KEY"
-   ```
-2. Find the nearest existing analog and match its structure. Conventions from the
+1. Find the nearest existing analog and match its structure. Conventions from the
    codebase context file and any "Recommended Skills" it lists (load them with the
    Skill tool if installed) are constraints, not suggestions.
-3. For third-party APIs, check the installed version's docs via Context7 rather
+2. For third-party APIs, check the installed version's docs via Context7 rather
    than memory.
 
 ## Fix Protocol (when review issues are provided)
@@ -37,6 +31,7 @@ review issues to fix. Make reasonable local decisions; do not redesign.
    - [ISSUE-N] DISPUTE: <detailed justification why this is not an issue>
    - The reviewer will evaluate your dispute on re-review
 5. Every issue ID must appear in your output with either FIXED or DISPUTE.
+6. After the fixes, run the project's lint and type checks when it has them.
 
 ## Output
 
@@ -54,3 +49,5 @@ When the prompt supplies an output schema, return the same content through it.
 - Write each file as soon as it is done, so a stopped run loses little.
 - If you run low on context, write pending changes and list the remaining work.
 - No commits, pushes or branch switches unless the prompt says so.
+- Write files with Edit or Write, never with shell redirects, and use absolute
+  paths because tools do not expand `~`.

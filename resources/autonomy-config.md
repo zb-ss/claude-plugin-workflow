@@ -1,54 +1,79 @@
-# Autonomous Run Configuration & First-Run Setup
+# Driver configuration
 
-The driver (`skills/auto/SKILL.md`) runs unattended, so its posture and limits
-come from **config**, not from asking a human mid-run. Configure once, then the
-scheduled `/schedule` routine reads the config on every wake.
+The driver (`skills/auto/SKILL.md`) runs unattended, so its settings come from
+the environment and from `preferences.json`, not from questions during a run.
 
-## Run config
+## 1. Environment
 
-Stored in the plugin settings file (and/or a config file in the private control
-repo — never source constants):
+| Variable | Meaning |
+|---|---|
+| `CLAUDE_WORKFLOW_CONTROL_REPO` | Private repository (`owner/name`) that holds the issue queue. `--repo` overrides it. |
+| `CLAUDE_WORKFLOW_SCRUB_DENYLIST` | Path to the operator's list of markers the scrub gate refuses in public repositories. Keep the list in the private control repository. |
+| `CLAUDE_WORKFLOW_CLAUDE_BIN` | Full path of the `claude` binary the wake launcher starts. Default `claude` from the scheduler's PATH. |
+| `CLAUDE_WORKFLOW_STATE_DIR` | State directory. Default `~/.claude-workflows`. Holds `preferences.json` and the driver's files under `driver/`. |
 
-| Key | Meaning | Default |
-|---|---|---|
-| `control_repo` | private GitHub queue repo (`owner/name`) | env `CLAUDE_WORKFLOW_CONTROL_REPO` |
-| `scrub_denylist` | path to the operator marker denylist (lives in the **private** control repo) | env `CLAUDE_WORKFLOW_SCRUB_DENYLIST` |
-| `approval_posture` | `autonomous` (park on low confidence) or `human_gate` (pause per task after the architect) | `autonomous` |
-| `confidence_threshold` | architect confidence below this → park the task as `blocked` | `0.6` |
-| `spend_cap_usd` | per-task spend ceiling → on exceed, pause + `blocked` | unset (no cap) |
-| `empty_queue_policy` | `once` (stop when queue empties) or `forever` (idle until a new `queued` issue) | `once` |
+## 2. preferences.json
 
-## Approval posture (asked once, at setup — not per wake)
+Located in the state directory.
 
-When the user first turns on autonomous mode (interactive `/workflow:auto` or
-`/workflow:setup`), ask the posture **once** with `AskUserQuestion` and persist
-it to `approval_posture`:
+```json
+{
+  "target_repos": { "owner/repo": "~/projects/repo" },
+  "demo_skill": "record-demo",
+  "driver_max_agents": 4,
+  "driver_max_attempts": 3,
+  "driver_claude_args": ["--model", "opus"],
+  "judge_fallback": "opus"
+}
+```
 
-- **autonomous** (default) — architect plans auto-approve; tasks below
-  `confidence_threshold` move to `blocked` + a clarifying comment rather than
-  guessing; `spend_cap_usd` parks runaway tasks. INTERNAL-visibility repos are
-  scrubbed like public.
-- **human_gate** — after the architect phase, each task pauses for the user to
-  approve the plan before implementation.
+| Key | Meaning |
+|---|---|
+| `target_repos` | Maps a Target Repo (`owner/repo`) to a local checkout. An issue whose Target Repo is not mapped is parked as blocked with a comment. |
+| `demo_skill` | Name of the skill that records the proof video. Unset means the stage is skipped. |
+| `driver_max_agents` | Passed to implement as `max_agents`. Unset means the workflow default. |
+| `driver_max_attempts` | Launches per stage before the issue is parked. Default 3. |
+| `driver_pass_lock_minutes` | How long a manual `/workflow:auto` pass blocks scheduled wakes if it is not released. Default 240. |
+| `driver_claude_args` | Extra arguments for the wake's `claude -p`, for example a model or a permission mode. |
+| `judge_fallback` | Model the workflows retry a judge on when it returns nothing. |
 
-The scheduled routine never re-asks; it reads `approval_posture` from config.
+## 3. Unattended plan handling
 
-## First-run scoped permissions (via the `update-config` skill)
+- Plan questions park the issue as blocked, with the questions in a comment. A
+  person answers in a comment and relabels the issue `queued`; the next wake reruns
+  plan with the replies and the saved findings.
+- A returned plan is implemented straight away; there is no approval stop.
+- The attempt is counted when a plan or implement stage starts, before any work,
+  so a stage that fails before its workflow launches still reaches the retry limit.
+- The checkout is switched back to the task branch only when it is clean;
+  otherwise the issue is parked as `dirty_tree` and nothing is stashed or
+  committed. A close-out park for unnamed files leaves them in place, and the
+  comment says what to do; a reply alone does not resolve it.
+- Cost is bounded by `driver_max_agents` and the retry limit
+  (`driver_max_attempts`).
 
-Unattended runs need the burst's routine verbs allowed without prompts, while
-keeping dangerous verbs gated. On first run, **confirm with the user**, then use
-the `update-config` skill to write to `settings.json`:
+## 4. Permissions for unattended runs
 
-- **Allow** (`acceptEdits` for file writes + a Bash/MCP allowlist): `git add|commit|status|diff|stash|checkout -b`, build/lint/test runners (`npm|pnpm|yarn`, `composer`, `pytest|tox`, `tsc`), the plugin's own `node lib/*.js` CLIs, read-only `gh`/GitHub-MCP issue ops on the control repo, and the workflow read tools.
-- **Never bypass / keep gated** (regardless of posture): `git push --force` / `--force-with-lease`, `git reset --hard`, `rm -rf`, package publishing, and cloud-resource deletion/termination (`aws|ovh|hetzner … terminate|delete`, instance stop). 
-- **The scrub gate is never bypassable** — the `scrub-guard` `PreToolUse` hook denies any `git push` / `gh pr create` / GitHub-MCP write to a non-private repo whose surface carries internal markers, *even with a broad allowlist*. Allowlisting `git push *` does **not** disable the scrub gate.
+Allow:
 
-This is forward-safe: the allowlist removes friction for routine work; the
-scrub gate + the gated-verb denylist keep the irreversible/leak-prone actions
-under control even in fully autonomous mode.
+- file edits in the target repositories
+- the build, lint and test commands of those repositories
+- `git add`, `git commit`, `git switch`, `git fetch`
+- `git push` without force
+- `gh pr create`
+- `gh issue` operations on the control repository
+- `node` for the plugin CLIs
 
-## Guardrails the driver enforces (see `skills/auto/SKILL.md`)
+Keep denied:
 
-- **Park-on-low-confidence** — `state.architecture.confidence < confidence_threshold` → `transition(... 'blocked')` + comment; stop (don't guess).
-- **Spend cap** — `state.spend_usd >= spend_cap_usd` → pause + `blocked` rather than burn the weekly quota.
-- **Quota windows** — handled by the Phase-1 `rate-limit.js` pause → one-shot UTC cron → `/workflow:resume`.
+- `git push --force` and `--force-with-lease`
+- `git reset --hard`
+- `rm -rf`
+- package publishing
+- deleting cloud resources
+
+## 5. The scrub gate
+
+The scrub gate is never bypassable. Allowing `git push` does not disable it: every
+push and pull request creation is still scanned, and a denial parks the issue
+instead of retrying with reworded content.

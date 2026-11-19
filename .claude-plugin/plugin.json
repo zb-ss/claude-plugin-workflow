@@ -1,6 +1,6 @@
 {
   "name": "workflow",
-  "description": "Tiered role agents and saved workflows for planning, implementing and reviewing code, plus an autonomous issue-queue driver, E2E testing and a public-repo scrub gate",
+  "description": "Tiered role agents and saved workflows for planning, implementing and reviewing code, with a browser check for user-facing changes, an autonomous issue-queue driver and a public-repo scrub gate",
   "author": {
     "name": "zb-ss"
   },
@@ -14,29 +14,20 @@
     "code-review",
     "security",
     "planning",
-    "e2e",
-    "playwright"
+    "browser-testing"
   ],
   "agents": [
-    "./agents/codebase-analyzer.md",
     "./agents/architect.md",
     "./agents/executor.md",
     "./agents/reviewer-deep.md",
     "./agents/security-deep.md",
     "./agents/explorer.md",
     "./agents/test-writer.md",
-    "./agents/quality-gate.md",
     "./agents/completion-guard.md",
-    "./agents/spec-conformance.md",
     "./agents/verifier.md",
     "./agents/scope.md",
     "./agents/finding-merger.md",
-    "./agents/supervisor.md",
-    "./agents/e2e-explorer.md",
-    "./agents/e2e-generator.md",
-    "./agents/e2e-reviewer.md",
-    "./agents/web-tester.md",
-    "./agents/epic-integrator.md"
+    "./agents/web-tester.md"
   ],
   "skills": [
     "./skills/"

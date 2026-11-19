@@ -155,6 +155,14 @@ const JUDGE_SCHEMA = {
           type: 'boolean',
           description: 'true when the work items themselves write the tests that cover the acceptance criteria',
         },
+        user_facing: {
+          type: 'boolean',
+          description: 'true when the repository is a web project, or the change touches user-facing views, routes, forms, redirects or auth gates; implement then checks the change in a browser before sign-off',
+        },
+        user_flows: {
+          type: 'string',
+          description: 'With user_facing: how to start the application when the findings say, and the golden path, one adjacent path and one obvious failure case to check in the browser',
+        },
         risks: { type: 'array', items: { type: 'string' } },
         testing: { type: 'string' },
         assumptions: { type: 'array', items: { type: 'string' } },
@@ -204,7 +212,10 @@ const judge_prompt = (
   'Write the smallest plan that meets the acceptance criteria. Hardening, extra validation or policy ' +
   'beyond them goes into separate work items marked optional: true, not into the required items. Set ' +
   'tests_in_items to true when the work items themselves write the tests that cover the acceptance ' +
-  'criteria. Do not write the plan to disk; return it.'
+  'criteria. Set user_facing to true when the repository is a web project, or the change touches ' +
+  'user-facing views, routes, forms, redirects or auth gates, and describe in user_flows the golden ' +
+  'path, one adjacent path and one obvious failure case to check in a browser; implement then runs a ' +
+  'browser check before sign-off. Do not write the plan to disk; return it.'
 )
 let verdict = await agent(judge_prompt, judge_opts)
 if (verdict === null && FALLBACK) {

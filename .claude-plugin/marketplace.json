@@ -8,7 +8,7 @@
     {
       "name": "workflow",
       "source": "./",
-      "description": "Automated development workflow orchestration with org-mode tracking"
+      "description": "Tiered agents, saved plan/implement/review workflows, an autonomous issue-queue driver and a public-repo scrub gate"
     }
   ]
 }

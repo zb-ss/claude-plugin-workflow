@@ -23,16 +23,13 @@ results filled in.
    `$PLUGIN_ROOT`. Its CLIs live at `$PLUGIN_ROOT/lib/*.js`. Verify:
    `node "$PLUGIN_ROOT/lib/queue-cli.js" --help` (or just confirm the file exists).
 4. Note the canonical references you'll reuse:
-   `skills/queue/SKILL.md` (queue + labels), `skills/auto/SKILL.md` (the driver +
-   `/schedule`), `resources/autonomy-config.md` (posture, spend cap, permissions).
+   `skills/queue/SKILL.md` (queue + labels), `skills/auto/SKILL.md` (the driver),
+   `resources/autonomy-config.md` (configuration, permissions).
 
-> **No setup needed for the quality gates.** Every task automatically runs the full
-> quality pipeline — **capability preflight** (loads the project's convention skills,
-> verifies tooling), risk-scaled **fan-out review**, **quality gate** (baseline +
-> coverage-on-changed-lines + run-rarely-run-code + mutation-lite), **spec-conformance**
-> (each acceptance criterion verified against evidence), **E2E**, and the **scrub gate**.
-> Writing clear **Acceptance Criteria** on each task is what makes the spec-conformance
-> gate effective — that's the one quality lever the user controls per task.
+> Each task runs the plan and implement workflows (review, a browser check for
+> user-facing changes, sign-off), then the target repository's full test suite locally
+> and the scrub gate before a pull request. Clear **Acceptance Criteria** on the issue
+> are what the sign-off checks.
 
 ## 1. Create the private control repo
 
@@ -102,28 +99,30 @@ that shares this settings file. An absolute path tied to one machine silently di
 name-based scrubbing on the others; the scrub gate and the startup check report that case
 as "configured denylist path not readable".
 
-**Judge fallback for the driver.** The driver runs the previous engine, whose judge agents
-pin the `fable` model alias and have no retry of their own. If the user's account cannot use
-Fable, every judge step fails. Ask the user, and on a yes add this top-level key to
-`~/.claude/settings.json` (`/workflow:setup` offers the same):
+Ask the user for the local checkout of each target repository and write `target_repos`
+into `<state dir>/preferences.json` (default state dir `~/.claude-workflows`), merging
+with any existing keys:
 ```json
-"fallbackModel": ["opus"]
+{ "target_repos": { "owner/repo": "~/projects/repo" } }
 ```
-Optionally set the autonomous run posture and scoped permissions now — see
-`resources/autonomy-config.md` (approval posture, `confidence_threshold`,
-`spend_cap_usd`, `empty_queue_policy`, and the allow/deny verb lists). **Never**
-weaken the deny list (force-push, `rm -rf`, resource deletion) and **never** bypass
-the scrub gate.
+Optionally add `demo_skill`, the skill that records a proof video for user-facing work.
+Configure the permissions in `resources/autonomy-config.md`. **Never** weaken the deny
+list (force-push, `rm -rf`, resource deletion) and **never** bypass the scrub gate.
 
 ## 6. Verify (live, against the real repo)
 
 1. **Queue round-trip:** create a throwaway issue with the task template body and the
    `queued` label, then:
    ```bash
-   node "$PLUGIN_ROOT/lib/queue-cli.js" listQueued --repo "$CONTROL"   # lists it
-   node "$PLUGIN_ROOT/lib/queue-cli.js" readTask <n> --repo "$CONTROL" # parsed spec
+   node "$PLUGIN_ROOT/lib/queue-cli.js" list --repo "$CONTROL"   # lists it
+   node "$PLUGIN_ROOT/lib/queue-cli.js" read <n> --repo "$CONTROL" # parsed spec
    ```
    Confirm `target_repo`/`priority` parse correctly, then **close the test issue**.
+   Then check the driver:
+   ```bash
+   node "$PLUGIN_ROOT/lib/driver-cli.js" install-wake                 # prints the launcher path
+   node "$PLUGIN_ROOT/lib/driver-cli.js" next --repo "$CONTROL"       # action idle on an empty queue
+   ```
 2. **Scrub denylist loads:** pipe a surface containing one seeded name into
    `node "$PLUGIN_ROOT/lib/scrub-cli.js" scan` with `CLAUDE_WORKFLOW_SCRUB_DENYLIST`
    set, and confirm `denylist_loaded: true` and the name is caught.
@@ -140,18 +139,22 @@ Print this, with your results filled in:
   - Labels, README, Task template, denylist template
   - Denylist seeded: <yes / DEFERRED — user to fill scrub-denylist.json>
   - Config wired in settings.json (CONTROL_REPO + SCRUB_DENYLIST, ~/ form)
-  - Judge fallback: <fallbackModel set / not needed (Fable available) / declined>
   - Verified: queue round-trip + scrub denylist load
 
 👤 You must do (an agent can't):
   [ ] Restart Claude Code — loads the new env vars + rebuilds the plugin.
   [ ] If the plugin was just installed/updated: /plugin → reinstall/refresh.
-  [ ] Spike the schedule:
-        /schedule every hour, run /workflow:auto --once
-      then fire it once to test:  /schedule run <name>
-      and confirm the cloud routine actually invoked /workflow:auto (it should
-      comment on a queued issue). If the cloud env can't reach the plugin command,
-      use the /loop fallback — see skills/auto/SKILL.md.
+  [ ] Schedule the launcher locally: `node <launcher path>` from cron, e.g.
+        0 * * * * PATH="$HOME/.local/bin:<dir of node>:<dir of gh>:/usr/local/bin:$PATH" node "$HOME/.claude-workflows/driver/wake.js" >> "$HOME/.claude-workflows/driver/wake.log" 2>&1
+      or a systemd timer. Cron's PATH is only /usr/bin:/bin, so node, claude,
+      git and gh are not found unless PATH is set inside the command (sh
+      expands $HOME and $PATH there, not in a separate `PATH=` crontab line).
+      Fill <dir of node> and <dir of gh> from `dirname "$(command -v node)"` and
+      `dirname "$(command -v gh)"`; also include the directory of `claude`
+      (`command -v claude`) if it is not ~/.local/bin, because an npm-installed
+      claude needs node on PATH too.
+      A start failure is written to wake.log. Then run it once by hand and confirm it comments on a
+      queued issue.
   [ ] Enqueue your first real task (Issues → New → Task) and watch it run.
 ```
 

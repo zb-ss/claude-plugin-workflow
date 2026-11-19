@@ -38,6 +38,10 @@ retry a judge that returns nothing once on `opus`. If
 `judge_fallback`, pass that value as `judge_fallback` to every workflow you run.
 Otherwise pass nothing and the default applies.
 
+**Demo skill.** If `${CLAUDE_WORKFLOW_STATE_DIR:-~/.claude-workflows}/preferences.json`
+exists and sets `demo_skill`, pass that value as `demo_skill` to implement. Otherwise
+pass nothing and the proof video stage is skipped.
+
 ## Steps
 
 1. **Plan.** Run `Workflow({ name: "workflow:plan", args: { task, ...efforts } })`.
@@ -49,9 +53,11 @@ Otherwise pass nothing and the default applies.
    user whether to narrow the task.
 3. **Confirm.** Show the plan's summary, its acceptance criteria and its work items
    in a few lines, marking optional items. Ask whether to implement it. If the user
-   wants changes, rerun plan with their notes added to the answers.
+   wants changes, rerun plan with their notes added to the answers. When the plan has
+   `user_facing: true`, say that implement will check the change in a browser before
+   sign-off, and show the plan's `user_flows`.
 4. **Implement.** Run `Workflow({ name: "workflow:implement", args: { plan: <the plan
-   result>, ...efforts, include_optional } })`. Leave `max_agents` at its default unless
+   result>, ...efforts, include_optional, demo_skill } })`. Leave `max_agents` at its default unless
    the user set a limit.
 5. **Review only.** For the review route, run
    `Workflow({ name: "workflow:review", args: { context: <the user's words>, ...efforts } })`.
@@ -65,6 +71,12 @@ Summarise the result in a few lines:
 - what changed: `changed_files`, or for review the scoped files and their risk
 - review: open findings, findings nobody could verify, and how many notes came back
 - sign-off: approved or not, and its issues; say plainly if it did not run
+- browser check: for a user-facing task, `browser_check.status` (passed, failed,
+  could_not_run), what was verified and what was not, and the failures. When it failed
+  or could not run, say that this is why sign-off did not run
+- proof video: recorded (with the file it reports), failed (with the reason), or
+  skipped (with the reason; `no demo skill configured` means `demo_skill` is not set
+  in preferences.json)
 - cost-relevant facts: `agents_used`, the `effort` levels used, and per-lens counts
   from `lens_stats`
 - any judge stage listed in `judge_fallback.used`: say it ran on the fallback model

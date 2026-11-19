@@ -1,5 +1,5 @@
 {
-  "description": "Workflow plugin hooks for validation, enforcement, and tracking (cross-platform)",
+  "description": "Workflow plugin hooks: the public-repo scrub gate and the startup setup check (cross-platform)",
   "hooks": {
     "PreToolUse": [
       {
@@ -13,56 +13,13 @@
         ]
       }
     ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-guard.js\"",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
     "SessionStart": [
-      {
-        "matcher": "startup|resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.js\"",
-            "timeout": 5
-          }
-        ]
-      },
       {
         "matcher": "startup",
         "hooks": [
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/tier-check.js\"",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-stop-track.js\"",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "TaskCompleted": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-completed-gate.js\"",
             "timeout": 5
           }
         ]

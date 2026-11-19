@@ -41,7 +41,6 @@ Then **restart Claude Code** to see the status line. `enable` also asks whether 
 
 - Everything comes from the JSON Claude Code passes to the status line on stdin: model, context, cost and the `rate_limits` windows
 - No credentials are read and no network call is made
-- Each run records the window resets in a small cache file (see Reset cache)
 
 ## When the usage bars are missing
 
@@ -81,19 +80,6 @@ Only the JSON value `true` enables it. The change applies on the next status lin
 - If the lookup fails for any reason (no credentials, network error, changed endpoint), the default line is shown unchanged
 - Responses are cached for 60 seconds, and a failed lookup for 30 seconds, in `claude-statusline-oauth-usage.json` in the state directory (owner-only, `0600`); a failure never falls back to older data
 - `rate_limits.spend_limit` (a gateway spend limit) is a different thing and is not shown
-
-## Reset cache
-
-The workflow quota pause reads the next reset time from a cache file:
-
-- Path: `claude-statusline-usage.json` in the system temp directory; override with `CLAUDE_STATUSLINE_CACHE`
-- Shape: `{"fetched_at": <ms>, "data": {"five_hour": {"utilization": 52, "resets_at": "<ISO>"}, "seven_day": {...}}}`, where `resets_at` is always an ISO 8601 UTC string
-- A window missing from stdin keeps its last known reset until that reset passes
-- Expired windows are removed
-- The file is written only when its content changes, and not created when there is nothing to record
-- The status line reads an existing file only when it is a regular file owned by you. A file owned by another user, or anything that is not a regular file, is ignored as if absent; the temp directory is shared on multi-user machines
-
-Inspect it with `cat "$(node -e "console.log(require('os').tmpdir())")/claude-statusline-usage.json"`; deleting it is safe.
 
 ## Requirements
 

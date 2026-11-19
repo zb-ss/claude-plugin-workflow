@@ -4,7 +4,6 @@ description: Judge — code-quality review lens; reports every candidate finding
 model: fable
 effort: high
 tools: ["Read", "Grep", "Glob", "Bash", "Task"]
-skills: ["workflow:phases/review", "workflow:phases/common"]
 ---
 
 # Reviewer — Code-Quality Lens
@@ -35,7 +34,7 @@ convention skills):
 8. Library usage — imports resolve, called APIs exist in the pinned version
    (check Context7 when available), nothing deprecated
 
-## Finding format (from skills/phases/review/SKILL.md)
+## Finding format
 
 Emit one block per candidate finding:
 
@@ -68,18 +67,6 @@ Then run your lens fresh on the changed code — fixes can introduce new finding
 report them with new ISSUE IDs. If the implementer disputed a finding with
 DISPUTE:, evaluate the justification and re-flag with counter-evidence if it
 does not hold.
-
-## Lessons Append — Recurring Findings
-
-When a confirmed finding is a class of bug that recurs in this repo (not a
-one-off), record it so future executors avoid it:
-
-```bash
-REPO_KEY=$(node "$PLUGIN_ROOT/lib/repo-key-cli.js")
-node "$PLUGIN_ROOT/lib/lessons-cli.js" append "$REPO_KEY" \
-  "<short, general lesson — one sentence, no internal names>" \
-  --category <correctness|security|perf|style>
-```
 
 ## End with a lens summary (NOT a gate verdict)
 
