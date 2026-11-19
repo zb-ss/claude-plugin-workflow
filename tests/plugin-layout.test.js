@@ -130,6 +130,36 @@ describe('driver skill', () => {
   }
 });
 
+describe('recorder skill', () => {
+  const skill = read('skills/record-demo/SKILL.md');
+
+  it('has frontmatter naming the skill', () => {
+    assert.ok(skill.startsWith('---\n'));
+    assert.ok(skill.slice(0, skill.indexOf('\n---', 4)).includes('name: record-demo'));
+  });
+
+  for (const needle of [
+    '${CLAUDE_PLUGIN_ROOT}/skills/record-demo/record-harness.js',
+    '${CLAUDE_PLUGIN_ROOT}/skills/record-demo/deps.js',
+  ]) {
+    it(`contains ${needle}`, () => {
+      assert.ok(skill.includes(needle), `skills/record-demo/SKILL.md lacks ${needle}`);
+    });
+  }
+
+  for (const file of [
+    'skills/record-demo/SKILL.md',
+    'skills/record-demo/record-harness.js',
+    'skills/record-demo/deps.js',
+  ]) {
+    for (const banned of ['.codex', '~/projects', '~/websites', '~/Videos']) {
+      it(`${file} does not contain ${banned}`, () => {
+        assert.ok(!read(file).includes(banned), `${file} contains ${banned}`);
+      });
+    }
+  }
+});
+
 describe('plugin CLI references', () => {
   it('every node "${CLAUDE_PLUGIN_ROOT}/<path>" in skills and agents exists', () => {
     for (const file of [...SKILL_FILES, ...AGENT_FILES]) {
