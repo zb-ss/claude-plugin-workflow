@@ -32,6 +32,9 @@ complete plan or the questions that block one.
 | `angles` | Exploration angles for a first round |
 | `judge_effort`, `worker_effort`, `judge_fallback` | See [Effort and fallback](#effort-and-fallback) |
 
+The plan marks `user_facing` and `user_flows`: whether the change touches views, routes,
+forms or auth gates, and the flows to check in a browser.
+
 It returns `{status: 'plan', task, plan}` or `{status: 'questions', questions, findings, explore}`.
 The plan result keeps the original task so implement can hand executors any exact text it
 gives; the judge is also told to copy such text into the work item that needs it.
@@ -52,14 +55,24 @@ findings in bounded rounds, and ends with a sign-off.
 | `max_fix_rounds` | Fix rounds after the first review (default 2) |
 | `verifiers` | Verifiers for CRITICAL and security MAJOR findings (default 3, majority decides) |
 | `sign_off` | Run the completion-guard sign-off (default true) |
-| `max_agents` | Stop starting agents after this many (default 25); one slot stays reserved for the sign-off |
+| `max_agents` | Stop starting agents after this many (default 25); slots stay reserved for the sign-off, the browser check and the proof video |
 | `include_optional` | Also build the plan's optional work items (default false) |
+| `demo_skill` | Skill that records a proof video after a passing browser check (default none: the stage is skipped) |
 | `judge_effort`, `worker_effort`, `judge_fallback` | See [Effort and fallback](#effort-and-fallback) |
 
 The result has `status` (`complete` or `needs_attention`), per-item results, the files
 reviewed and their risk, the test report, open, refuted and unverified findings, notes,
 per-lens statistics, the sign-off, why the run stopped if it did, and everything it
-dropped. It never commits.
+dropped. It also reports `user_facing`, `browser_check` and `proof_video`. It never
+commits.
+
+**Browser check.** For user-facing plans only, after the fix rounds and before the
+sign-off, a web-tester agent walks the plan's flows in a real browser, through a connected
+browser automation MCP or a local Playwright script. A failed check, or one that could not
+run, means the sign-off does not run and the status is `needs_attention`.
+
+**Proof video.** After a passing check and a complete run, the skill named by `demo_skill`
+records a demo. Otherwise the stage is skipped and `proof_video` says why.
 
 ## review
 
@@ -100,7 +113,7 @@ verifiers' quotes, refuted and unverified findings, notes, and per-lens statisti
 
 - `judge_effort` and `worker_effort` override the effort level for one run: judges are
   the `fable` agents (architect, review lenses, completion-guard), workers the `sonnet`
-  agents (explorers, executors, test-writer, verifiers). Each takes `low`, `medium`,
+  agents (explorers, executors, test-writer, verifiers, web-tester). Each takes `low`, `medium`,
   `high`, `xhigh` or `max`; an unknown value stops the run before any agent starts. Left
   out, the agents run at their own levels (judges `high`, workers `medium`, explorer
   `low`), and the `haiku` agents always do. `CLAUDE_CODE_EFFORT_LEVEL`, if set, overrides
@@ -123,6 +136,6 @@ verifiers' quotes, refuted and unverified findings, notes, and per-lens statisti
 
 For long runs from a headless `claude -p` session, set
 `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`. Otherwise `claude -p` stops a workflow that is
-still running 10 minutes after its last turn. A stopped run can be relaunched in the same
-session with `claude -p --resume <session id>`, and agents that finished return their
-saved results.
+still running 10 minutes after its last turn. Resuming needs the same session
+(`claude -p --resume <session id>`) and the run id of the stopped run; agents that
+finished return their saved results. The driver stores both.

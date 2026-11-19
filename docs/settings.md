@@ -15,6 +15,14 @@ Workflows run **without asking permission** for:
 - File deletion
 - Destructive operations
 
+`/workflow:do` never commits. The autonomous driver does: it commits, pushes and opens
+pull requests on a branch per issue, so unattended runs need `git push` and
+`gh pr create` allowed (see `resources/autonomy-config.md`). In a driver run the push
+hook allows only `cd "<repo>" && git push -u origin <branch>` (never the default branch,
+no other flags or refspecs) and `cd "<repo>" && gh pr create` with `--title`, `--body`,
+`--body-file`, `--base`, `--head`, `--draft` and `--repo`; everything else, including
+GitHub MCP write tools, is denied.
+
 ## Recommended Settings
 
 For optimal autonomous workflow execution, copy the recommended settings to your project:
@@ -56,7 +64,7 @@ Or manually add to your `.claude/settings.json`:
 
 **How it works:** Rules evaluate in order: `deny > ask > allow`. `Bash(*)` allows all bash commands except those matched by `deny` (always blocked) or `ask` (prompts for confirmation).
 
-**Important:** The `additionalDirectories` setting grants Claude Code **read** access to workflow state directories outside your project. The path-scoped `Edit(~/.claude-workflows/**)` and `Write(~/.claude-workflows/**)` rules are what actually allow **writing** state files without permission prompts — bare `Edit`/`Write` alone only cover the working directory. Plans are stored under `~/.claude-workflows/plans/` so one entry covers both workflows and plans.
+**Important:** The `additionalDirectories` setting grants Claude Code **read** access to workflow state directories outside your project. The path-scoped `Edit(~/.claude-workflows/**)` and `Write(~/.claude-workflows/**)` rules are what actually allow **writing** state files without permission prompts — bare `Edit`/`Write` alone only cover the working directory. One entry covers the whole state directory.
 
 ## Hooks
 
@@ -64,13 +72,10 @@ The plugin ships these hooks (enabled by default, cross-platform):
 
 | Hook | Trigger | Purpose |
 |------|---------|---------|
-| Scrub gate | Before `git push`, `gh pr create` and GitHub MCP writes | Blocks internal information from reaching a public repository |
-| Stop guard / task-completed gate | Session or task end | Keeps a bound workflow from stopping with mandatory gates open |
-| Subagent tracking | Subagent end | Records gate progress in the workflow state file |
-| Session start | Session start or resume | Reports this repository's active workflows |
+| Scrub gate | Before `git push`, `gh pr create` and GitHub MCP writes | Scans the repository a push runs in (`cd <dir> && git push` or `git -C <dir> push`) and any `--body-file`, and blocks internal information from reaching a public repository |
 | Setup check | Session start (new sessions only) | Prints one line when the model-tier note, the session model or a configured scrub denylist needs attention; prints nothing otherwise |
 
-Hooks are written in Node.js for full cross-platform compatibility. The stop, task and subagent hooks only act on sessions bound to a workflow.
+Hooks are written in Node.js for full cross-platform compatibility.
 
 ## Platform Support
 

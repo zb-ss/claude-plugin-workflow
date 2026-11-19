@@ -4,11 +4,12 @@ Plans, implements and reviews code changes with a team of agents on tiered model
 strong model for judgement, a cheaper one for the work, and the cheapest for mechanical
 steps. You type one command and a task in plain words; the plugin plans it, asks you what
 it needs to know, implements it, reviews it with findings checked against the code, fixes
-what the review confirms, and signs the work off. Nothing is committed for you.
+what the review confirms, and signs the work off. Nothing is committed for you by
+`/workflow:do`; the autonomous driver is the exception and opens pull requests.
 
-It also ships a usage status line, Playwright E2E test generation, a scrub gate that
-keeps internal names and secrets out of public repositories, and an autonomous driver
-that works through a queue of GitHub issues.
+It also ships a usage status line, a browser check for user-facing changes, a scrub gate
+that keeps internal names and secrets out of public repositories, and an autonomous
+driver that works through a queue of GitHub issues.
 
 ## Quick start
 
@@ -42,7 +43,9 @@ What happens:
    by quoting the code. Minor findings come back as notes.
 5. **Fix and sign off.** Confirmed findings are fixed in bounded rounds, then a judge
    checks every acceptance criterion and runs the test suite.
-6. **Summary.** What changed, what is still open, the sign-off, and how many agents ran.
+6. **Browser check and demo.** A user-facing change is checked in a real browser before
+   sign-off, and a demo is recorded afterwards when a demo skill is configured.
+7. **Summary.** What changed, what is still open, the sign-off, and how many agents ran.
 
 Plain words change the route: `/workflow:do plan only …`, `/workflow:do review my changes`,
 `/workflow:do careful: …` (judges think longer), `/workflow:do quick: …` (cheaper).
@@ -74,8 +77,8 @@ orchestrator: it talks to you and launches the workflows, and works best on `opu
 
 | Tier | Model alias | Agents | Role |
 |------|-------------|--------|------|
-| Judge | `fable` | architect, reviewer-deep, security-deep, completion-guard, spec-conformance | Planning judgement, code and security review, sign-off |
-| Worker | `sonnet` | explorer, executor, test-writer, verifier, quality-gate, codebase-analyzer, e2e-explorer, e2e-generator, e2e-reviewer, web-tester, epic-integrator, supervisor | Exploration, coding, tests, checking findings |
+| Judge | `fable` | architect, reviewer-deep, security-deep, completion-guard | Planning judgement, code and security review, sign-off |
+| Worker | `sonnet` | explorer, executor, test-writer, verifier, web-tester | Exploration, coding, tests, checking findings |
 | Mechanical | `haiku` | scope, finding-merger | Scoping a review, merging duplicate findings |
 
 **The judge tier needs the `fable` model.** If your account cannot use it:
@@ -84,9 +87,9 @@ orchestrator: it talks to you and launches the workflows, and works best on `opu
   returns nothing once on `opus`, and their result says which stages ran on the fallback.
   Change it per run with `judge_fallback`, or for `/workflow:do` in `/workflow:setup`;
   `none` turns the retry off.
-- The previous engine (`/workflow:start`, `/workflow:resume`) and the autonomous driver
-  have no such retry: without Fable access their judge steps fail. Add a fallback to your
-  user settings (`/workflow:setup` offers to do it):
+- Agents you start yourself outside the saved workflows have no such retry. A
+  `fallbackModel` entry in your user settings covers them (`/workflow:setup` offers to
+  add it):
 
   ```json
   { "fallbackModel": ["opus"] }
@@ -106,13 +109,9 @@ orchestrator: it talks to you and launches the workflows, and works best on `opu
 | `/workflow:review` | Review uncommitted changes, with verified findings |
 | `/workflow:setup` | Permissions, the model-tier note, the judge fallback |
 | `/workflow:setup-statusline` | Turn the usage status line on or off |
-| `/workflow:test-e2e <url>` | Generate Playwright E2E tests by exploring a running app |
-| `/workflow:test-live <url>` | Interactive live testing of a running app |
 | `/workflow:verify` | Run build, type, lint, test and security checks on current changes |
 | `/workflow:queue` | Manage the autonomous task queue |
 | `/workflow:auto` | Run the autonomous driver |
-| `/workflow:start`, `/workflow:resume` | The previous engine (see below) |
-| `/workflow:migrate-legacy` | Move old flat state files into per-repository folders |
 
 ## Saved workflows
 
@@ -122,26 +121,17 @@ arguments for scope, effort, the judge fallback and an agent cap. The
 [workflows reference](docs/workflows.md) lists every argument and result field, and how
 the review spends its agents.
 
-## The previous engine: start, resume, swarm and epic
-
-`/workflow:start` and `/workflow:resume` run the plugin's earlier engine: a supervisor
-agent that drives a state machine kept in `~/.claude-workflows/`, in `swarm` mode (one
-feature, parallel executors) or `epic` mode (several components, one git worktree each).
-It is still present and unchanged apart from its agents moving to the model tiers above,
-and it is planned to be replaced by the saved workflows. Its documentation:
-[swarm mode](docs/swarm-mode.md), [review system](docs/review-system.md),
-[state files](docs/state-files.md), [parallel execution](docs/parallel-execution.md).
-
-Its review engine can add an optional Codex lens for a second model family's view;
-enable it with `"codex_review": {"enabled": true}` in `~/.claude-workflows/model-policy.json`.
-
 ## Autonomous driver and queue
 
-`/workflow:queue` manages a queue of tasks kept as issues in a private GitHub repository,
-and `/workflow:auto`, run on a schedule, works through it unattended across your
-repositories and waits out usage limits. You manage the queue from GitHub, including from
-your phone. The driver runs the previous engine (`/workflow:start`), so it needs the user
-`fallbackModel` setting above if your account cannot use Fable.
+`/workflow:queue` manages a queue of tasks kept as issues in a private GitHub repository.
+`/workflow:auto` runs on a local schedule as a headless session and works through the
+queue. For each issue it runs the plan and implement workflows in the mapped local
+checkout (`target_repos` in `preferences.json`). When the plan needs answers, it parks the
+issue as blocked with the questions in a comment. For complete work it commits on a
+branch per issue, runs the repository's full test suite locally, pushes and opens a pull
+request through the scrub gate, then moves the issue to review. It never pushes the
+default branch and never force-pushes. You manage the queue from GitHub, including from
+your phone.
 
 To set it up, point your coding agent at [SETUP.md](SETUP.md): *"Set up the autopilot
 system by following SETUP.md."* It creates the private queue repository, seeds the scrub
@@ -160,16 +150,6 @@ extra-usage spend segment (`+ 29% $11.61/$40.00`) is an opt-in, off by default; 
 on reads your local Claude credentials and calls an undocumented endpoint that may change.
 [Setup and details](docs/status-line.md)
 
-## E2E testing
-
-```bash
-/workflow:test-e2e http://localhost:8080 --framework=symfony --auth=form
-```
-
-Explores a running web app through the browser, maps its features, and generates a
-Playwright test suite. Supports Symfony, Laravel, Vue, React and Next.js with form, token
-or cookie auth. [Full guide](docs/e2e-testing.md)
-
 ## Scrub gate
 
 Before a push or pull request to a non-private repository, a hook scans the change, the
@@ -184,14 +164,9 @@ denylist.
 | Guide | Covers |
 |-------|--------|
 | [Saved workflows](docs/workflows.md) | Arguments, results, review design, effort and fallback |
-| [Status line](docs/status-line.md) | Setup, segments, the reset cache, the extra-usage opt-in |
-| [E2E testing](docs/e2e-testing.md) | Test generation, selectors, auth strategies |
+| [Status line](docs/status-line.md) | Setup, segments, the extra-usage opt-in |
 | [Settings and permissions](docs/settings.md) | Permissions, hooks, recommended configuration |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and fixes |
-| [Swarm mode](docs/swarm-mode.md) | Previous engine |
-| [Review system](docs/review-system.md) | Previous engine |
-| [State files](docs/state-files.md) | Previous engine |
-| [Parallel execution](docs/parallel-execution.md) | Previous engine |
 
 ## Requirements
 

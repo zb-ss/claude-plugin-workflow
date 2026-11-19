@@ -1,46 +1,24 @@
 ---
 name: setup
-description: Configure Claude Code permissions, initialize workflow directories and fix the startup setup reminders.
+description: Configure Claude Code permissions and fix the startup setup reminders.
 ---
 
 # Workflow Setup
 
 ## Instructions
 
-Help the user configure their Claude Code settings and initialize workflow directories for optimal execution.
+Help the user configure their Claude Code settings for optimal execution.
 
-### Step 1: Initialize Workflow Directories
+### Step 1: Make Sure the State Directory Exists
 
-**CRITICAL:** Before checking settings, ensure all required directories exist.
-
-**Step 1a: Get home directory path**
-First, get the absolute home directory path:
+Get the absolute home directory path (the Write tool does not expand `~`):
 ```bash
 echo $HOME
 ```
-This returns something like `/home/username` or `/Users/username`.
 
-**Step 1b: Create directories using ABSOLUTE paths**
-Use the Write tool to create `.gitkeep` files. **IMPORTANT:** The Write tool does NOT expand `~` - you MUST use absolute paths.
-
-Required directories (replace `/home/user` with actual home path):
-```
-/home/user/.claude-workflows/active/
-/home/user/.claude-workflows/completed/
-/home/user/.claude-workflows/context/
-/home/user/.claude-workflows/plans/
-/home/user/.claude/skills/
-/home/user/.claude/skills/learned/
-```
-
-For each directory, use Write with the FULL absolute path:
-```
-Write(file_path="/home/user/.claude-workflows/active/.gitkeep", content="")
-```
-
-**Alternative:** Run the initialization script (works with tilde expansion):
+Then create the state directory with that absolute path (default `~/.claude-workflows`):
 ```bash
-node $CLAUDE_PLUGIN_ROOT/lib/init-directories.js
+mkdir -p /home/user/.claude-workflows
 ```
 
 ### Step 2: Check Current Settings
@@ -85,7 +63,7 @@ Path-scoped Edit/Write rules are required because `additionalDirectories` only g
 }
 ```
 
-**Without these rules, every workflow will prompt for permission when writing state/org files.**
+**Without these rules, every workflow will prompt for permission when writing state files.**
 
 **Recommended for workflows (can be global or project-level):**
 ```json
@@ -117,13 +95,6 @@ Report the status in a clear format:
 
 ```
 ## Workflow Plugin Setup
-
-### Directory Status
-✓ ~/.claude-workflows/active/     (exists)
-✓ ~/.claude-workflows/completed/  (exists)
-✓ ~/.claude-workflows/context/    (exists)
-✓ ~/.claude-workflows/plans/      (exists)
-✓ ~/.claude/skills/learned/       (created)
 
 ### Settings Status
 - Global settings (~/.claude/settings.json): [found/not found]
@@ -168,7 +139,7 @@ If the user agrees, update the appropriate settings file(s):
 ### Step 7: Verify Setup
 
 After making changes, verify:
-1. All directories exist
+1. The state directory exists
 2. Settings file is valid JSON
 3. Required paths are in additionalDirectories
 
@@ -213,7 +184,7 @@ Ask one question, showing the current value (`preferences.judge_fallback`, defau
 node "${CLAUDE_PLUGIN_ROOT}/lib/tier-setup.js" set-fallback <value>
 ```
 
-Then, as a separate question, offer to add `"fallbackModel": ["opus"]` to the user settings.json (`settings_file`). If that file already has a `fallbackModel` list, show it and say this replaces it. Explain that this protects the legacy start pipeline and the autonomous driver, which do not have the saved workflows' built-in retry. Only on a yes, run:
+Then, as a separate question, offer to add `"fallbackModel": ["opus"]` to the user settings.json (`settings_file`). If that file already has a `fallbackModel` list, show it and say this replaces it. Explain that this covers agents started outside the saved workflows, which have no retry of their own. Only on a yes, run:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/tier-setup.js" add-fallback-model opus
@@ -227,7 +198,6 @@ Only when `denylist.status` is `unreadable`. Show the configured path (`denylist
 
 ### Important Notes
 
-- **Use Write tool for directory creation** (cross-platform, auto-creates parents)
 - Always preserve existing permissions
 - Don't duplicate entries
 - Use proper JSON formatting
@@ -238,18 +208,10 @@ Only when `denylist.status` is `unreadable`. Show the configured path (`denylist
 
 **Issue: Permission prompts during workflows**
 - Ensure `Bash(*)` is in the `allow` list (allows all bash commands)
-- Ensure `additionalDirectories` includes `~/.claude-workflows` (plans are under `~/.claude-workflows/plans/` so one entry covers both)
+- Ensure `additionalDirectories` includes `~/.claude-workflows`
 - Restart Claude Code after settings changes
 
-**Issue: Permission prompts when writing state/org files**
+**Issue: Permission prompts when writing under ~/.claude-workflows or ~/.claude/skills**
 - `additionalDirectories` only grants **read** access — you also need path-scoped write rules
 - Ensure these are in your allow list: `Edit(~/.claude-workflows/**)`, `Write(~/.claude-workflows/**)`, `Edit(~/.claude/skills/**)`, `Write(~/.claude/skills/**)`
 - Restart Claude Code after settings changes
-
-**Issue: State files not being created**
-- Run `/workflow:setup` to verify directory structure
-- Check that `~/.claude-workflows/active/` is writable
-- Ensure `Write(~/.claude-workflows/**)` is in your allow list
-
-**Issue: Codebase context not loading**
-- Verify `~/.claude-workflows/context/` exists

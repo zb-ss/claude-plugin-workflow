@@ -7,8 +7,9 @@ workflows (`/workflow:do`, `plan`, `implement`, `review`) retry the judge once o
 list it under `judge_fallback.used` in their result. If a judge still returns nothing,
 `/workflow:do` relays the error from the agent's transcript.
 
-The previous engine (`/workflow:start`, `/workflow:resume`) and the autonomous driver have no
-retry of their own. Add a fallback to `~/.claude/settings.json`, or let `/workflow:setup` add it:
+The autonomous driver runs the saved workflows, so it has the same retry. Agents you start
+yourself outside the saved workflows have none. Add a fallback to `~/.claude/settings.json`, or
+let `/workflow:setup` add it:
 
 ```json
 { "fallbackModel": ["opus"] }
@@ -19,7 +20,7 @@ retry of their own. Add a fallback to `~/.claude/settings.json`, or let `/workfl
 Headless `claude -p` stops background work 10 minutes after its last turn. Set
 `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` for runs that take longer. To finish a stopped run,
 resume the session with `claude -p --resume <session id>` and relaunch the workflow; agents that
-finished return their saved results.
+finished return their saved results. The driver's launcher sets the variable itself.
 
 ## Scrub Gate Says the Denylist Path Is Not Readable
 
@@ -34,11 +35,10 @@ If you're getting permission prompts for bash commands:
 
 1. **Ensure `Bash(*)` is in your allow list** - This allows all bash commands. Individual command whitelisting doesn't work for piped/complex commands.
 2. **Check deny/ask rules** - Rules evaluate: `deny > ask > allow`. Dangerous commands in `deny` are always blocked regardless of `Bash(*)`.
-3. **Check `additionalDirectories`** - Ensure `~/.claude-workflows` and `~/.claude/skills` are listed. Plans are under `~/.claude-workflows/plans/` so one entry covers both.
-4. **Restart Claude Code** after changing settings.
+3. **Check `additionalDirectories`** - Ensure `~/.claude-workflows` and `~/.claude/skills` are listed.4. **Restart Claude Code** after changing settings.
 5. **Run setup**: `/workflow:setup` to verify configuration.
 
-If you're getting permission prompts **for writing state files** (org files, state JSON):
+If you're getting permission prompts **for writing state files** (state JSON):
 
 1. **Add path-scoped Edit/Write rules** - `additionalDirectories` only grants **read** access. You need explicit rules like `Edit(~/.claude-workflows/**)` and `Write(~/.claude-workflows/**)` in your allow list.
 2. **Check your allow list contains all four rules:**
@@ -48,25 +48,7 @@ If you're getting permission prompts **for writing state files** (org files, sta
    ```
 3. **Restart Claude Code** after changes.
 
-## State Files Not Being Created
+## State Files From Earlier Versions
 
-1. Run `/workflow:setup` to verify directory structure
-2. Check that `~/.claude-workflows/active/<repo-key>/` exists and is writable (the repo-scoped bucket is created automatically on first workflow start)
-3. The plugin uses Write tool (not bash) to create files — ensure path-scoped `Write(~/.claude-workflows/**)` is in your allow list
-4. To find the active directory for the current repo: `node $CLAUDE_PLUGIN_ROOT/lib/active-dir-cli.js`
-
-## Switching Between Org and Markdown
-
-Both formats are fully supported. Use `--format=md` or `--format=org` when starting workflows:
-
-```bash
-/workflow:start swarm: "My task" --format=md
-```
-
-## Legacy State Files (pre-v2)
-
-Workflows created before the repo-scoped schema live flat under `~/.claude-workflows/active/`. `/workflow:migrate-legacy` lists them; assign each to the new per-repo buckets:
-
-```bash
-/workflow:migrate-legacy
-```
+Files under `active/` and `completed/` in the state directory are no longer read. You can
+delete them by hand.
