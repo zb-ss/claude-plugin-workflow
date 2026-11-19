@@ -17,7 +17,7 @@ const path = require('path');
 const os = require('os');
 const { getTranslateDir, getStateDir } = require('../lib/paths');
 const {
-  WINDOW_KEYS, isPlainObject, resolveResetCacheFile, syncResetCache, toIsoString, epochToIso,
+  WINDOW_KEYS, isPlainObject, toIsoString, epochToIso,
 } = require('./reset-cache');
 
 const SETTINGS_FILE_NAME = 'statusline.json';
@@ -331,7 +331,6 @@ function pickDisplayWindow(stdin_window, fetched_window, now_ms) {
 async function run(options = {}) {
   const stdin_text = options.stdin_text || '';
   const now_ms = options.now_ms === undefined ? Date.now() : options.now_ms;
-  const cache_file = options.reset_cache_file || resolveResetCacheFile();
   const settings_file = options.settings_file || path.join(getStateDir(), SETTINGS_FILE_NAME);
 
   const session = parseSession(stdin_text);
@@ -346,12 +345,6 @@ async function run(options = {}) {
   for (const key of WINDOW_KEYS) {
     const window = pickDisplayWindow(stdin_windows[key], fetched_windows[key], now_ms);
     if (window) display_windows[key] = window;
-  }
-
-  try {
-    syncResetCache({ cache_file, sources: [stdin_windows, fetched_windows], now_ms });
-  } catch {
-    // Cache problems never change the rendered line
   }
 
   return buildParts(session, display_windows, usage, now_ms).join(` ${DIM}│${RESET} `);

@@ -1,32 +1,20 @@
 'use strict';
 /**
- * Reset cache: written by the status line for other tools to read; the file
- * name and shape below are part of that contract.
- *
- * Shape: {fetched_at: <ms>, data: {five_hour: {utilization, resets_at}, seven_day: {...}}}
- * `resets_at` is always a Date#toISOString() string so the reader's string
- * sort is correct. Windows whose reset is not in the future are never kept.
+ * Shared helpers for the status line: trusted JSON reads, atomic file writes
+ * and window-reset time normalisation. Used by statusline.js and oauth-usage.js.
  */
 
 const fs = require('fs');
-const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
 
-// Other tools look this file up by name, so the name is part of the contract.
-const RESET_CACHE_FILE_NAME = 'claude-statusline-usage.json';
 const WINDOW_KEYS = ['five_hour', 'seven_day'];
 const EPOCH_MS_THRESHOLD = 1e12;
 // Last instant whose ISO string has a four-digit year. Later dates serialise
-// as "+YYYYYY-..." which breaks the reader's string sort.
+// as "+YYYYYY-..." which breaks string sorting.
 const MAX_ISO_MS = 253402300799999;
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function resolveResetCacheFile(env = process.env) {
-  return env.CLAUDE_STATUSLINE_CACHE || path.join(os.tmpdir(), RESET_CACHE_FILE_NAME);
 }
 
 function dateToIso(date) {
@@ -54,9 +42,8 @@ const OPEN_FLAGS = fs.constants.O_NONBLOCK === undefined
 
 /**
  * Parse a JSON file only if it is a regular file owned by the current user.
- * Both caches can live in a shared directory, so anything else (another
- * user's file, a FIFO, a device) is treated as absent. Returns null on any
- * failure.
+ * The file can live in a shared directory, so anything else (another user's
+ * file, a FIFO, a device) is treated as absent. Returns null on any failure.
  */
 function readTrustedJson(file) {
   let fd = null;
@@ -76,72 +63,28 @@ function readTrustedJson(file) {
   }
 }
 
-function readResetCacheData(cache_file) {
-  const parsed = readTrustedJson(cache_file);
-  return isPlainObject(parsed) && isPlainObject(parsed.data) ? parsed.data : null;
-}
-
-function buildResetCacheData(sources, now_ms) {
-  const next = {};
-  for (const key of WINDOW_KEYS) {
-    for (const source of sources) {
-      const window = isPlainObject(source) ? source[key] : null;
-      if (!isPlainObject(window)) continue;
-      const resets_at = toIsoString(window.resets_at);
-      if (resets_at === null || new Date(resets_at).getTime() <= now_ms) continue;
-      next[key] = Number.isFinite(window.utilization)
-        ? { utilization: window.utilization, resets_at }
-        : { resets_at };
-      break;
-    }
-  }
-  return next;
-}
-
-function writeFileAtomically(cache_file, json) {
+function writeFileAtomically(target_file, json) {
   // A random suffix: a temp file left behind by a crashed run must not block
   // later writes from a process that reuses the same pid.
-  const tmp_file = `${cache_file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  const tmp_file = `${target_file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   let created = false;
   try {
     fs.writeFileSync(tmp_file, json, { flag: 'wx', mode: 0o600 });
     created = true;
-    fs.renameSync(tmp_file, cache_file);
+    fs.renameSync(tmp_file, target_file);
   } catch {
-    // Cache write failure is non-fatal
+    // Write failure is non-fatal
     if (created) {
       try { fs.rmSync(tmp_file, { force: true }); } catch { /* best effort */ }
     }
   }
 }
 
-function syncResetCache({ cache_file, sources, now_ms }) {
-  let next = {};
-  try {
-    const previous = readResetCacheData(cache_file);
-    next = buildResetCacheData([...sources, previous || {}], now_ms);
-    const is_unchanged = previous
-      ? JSON.stringify(next) === JSON.stringify(previous)
-      : Object.keys(next).length === 0;
-    if (!is_unchanged) {
-      writeFileAtomically(cache_file, JSON.stringify({ fetched_at: now_ms, data: next }));
-    }
-  } catch {
-    // Never throws
-  }
-  return next;
-}
-
 module.exports = {
-  RESET_CACHE_FILE_NAME,
   WINDOW_KEYS,
   isPlainObject,
   readTrustedJson,
-  resolveResetCacheFile,
   toIsoString,
   epochToIso,
   writeFileAtomically,
-  readResetCacheData,
-  buildResetCacheData,
-  syncResetCache,
 };

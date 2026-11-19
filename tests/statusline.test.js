@@ -1,9 +1,9 @@
 /**
  * Tests for statusline/statusline.js and statusline/reset-cache.js — the
- * stdin-only default path, the reset cache file contract, and input robustness.
+ * stdin-only default path, the shared helpers, and input robustness.
  *
  * All state lives under a temp root; nothing touches ~/.claude,
- * ~/.claude-workflows, the real tmp cache or the network.
+ * ~/.claude-workflows or the network.
  */
 
 'use strict';
@@ -16,7 +16,7 @@ const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
 const { run } = require('../statusline/statusline.js');
-const { resolveResetCacheFile, toIsoString } = require('../statusline/reset-cache.js');
+const { toIsoString } = require('../statusline/reset-cache.js');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const SCRIPT = path.join(REPO_ROOT, 'statusline', 'statusline.js');
@@ -24,20 +24,13 @@ const PROBE = path.join(__dirname, 'statusline-probe.js');
 
 const NOW_MS = Date.UTC(2099, 0, 1);
 const NOW_S = NOW_MS / 1000;
-const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
 
 let tmp_root;
 let state_dir;
 let saved_state_dir;
-let saved_cache_env;
 let case_counter = 0;
-
-function freshCacheFile() {
-  case_counter += 1;
-  return path.join(tmp_root, `cache-${case_counter}.json`);
-}
 
 function fullSession(overrides = {}) {
   return Object.assign({
@@ -55,7 +48,6 @@ function runLine(session, extra = {}) {
   return run(Object.assign({
     stdin_text: typeof session === 'string' ? session : JSON.stringify(session),
     now_ms: NOW_MS,
-    reset_cache_file: freshCacheFile(),
   }, extra));
 }
 
@@ -80,7 +72,6 @@ function runChild(stdin, extra_env = {}) {
       TEMP: child_tmp,
       TMP: child_tmp,
       CLAUDE_WORKFLOW_STATE_DIR: state_dir,
-      CLAUDE_STATUSLINE_CACHE: path.join(tmp_root, `child-cache-${case_counter}.json`),
       STATUSLINE_PROBE_LOG: probe_log,
     }, extra_env),
   });
@@ -92,18 +83,14 @@ function runChild(stdin, extra_env = {}) {
 before(() => {
   tmp_root = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-statusline-'));
   saved_state_dir = process.env.CLAUDE_WORKFLOW_STATE_DIR;
-  saved_cache_env = process.env.CLAUDE_STATUSLINE_CACHE;
   state_dir = path.join(tmp_root, 'state');
   fs.mkdirSync(state_dir, { recursive: true });
   process.env.CLAUDE_WORKFLOW_STATE_DIR = state_dir;
-  process.env.CLAUDE_STATUSLINE_CACHE = path.join(tmp_root, 'cache.json');
 });
 
 after(() => {
   if (saved_state_dir === undefined) delete process.env.CLAUDE_WORKFLOW_STATE_DIR;
   else process.env.CLAUDE_WORKFLOW_STATE_DIR = saved_state_dir;
-  if (saved_cache_env === undefined) delete process.env.CLAUDE_STATUSLINE_CACHE;
-  else process.env.CLAUDE_STATUSLINE_CACHE = saved_cache_env;
   fs.rmSync(tmp_root, { recursive: true, force: true });
 });
 
@@ -185,122 +172,6 @@ describe('default path reads no credentials and makes no network call', () => {
   });
 });
 
-describe('reset cache write', () => {
-  it('writes the contract shape', async () => {
-    const cache_file = freshCacheFile();
-    await runLine(fullSession(), { reset_cache_file: cache_file });
-    const cache = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.equal(typeof cache.fetched_at, 'number');
-    assert.deepEqual(Object.keys(cache.data), ['five_hour', 'seven_day']);
-    assert.equal(cache.data.five_hour.utilization, 52);
-    assert.equal(cache.data.seven_day.utilization, 35);
-    assert.match(cache.data.five_hour.resets_at, ISO_RE);
-    assert.match(cache.data.seven_day.resets_at, ISO_RE);
-    assert.equal(cache.data.five_hour.resets_at, new Date((NOW_S + 9000) * 1000).toISOString());
-  });
-
-  it('writes epoch 4102444800 as 2100-01-01T00:00:00.000Z', async () => {
-    const cache_file = freshCacheFile();
-    await runLine({ rate_limits: { five_hour: { used_percentage: 1, resets_at: 4102444800 } } }, {
-      reset_cache_file: cache_file,
-    });
-    const cache = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.equal(cache.data.five_hour.resets_at, '2100-01-01T00:00:00.000Z');
-  });
-});
-
-describe('reset cache file', () => {
-  it('default path equals the reader default', () => {
-    assert.equal(resolveResetCacheFile({}), path.join(os.tmpdir(), 'claude-statusline-usage.json'));
-  });
-});
-
-describe('reset cache policy', () => {
-  const five = { used_percentage: 52, resets_at: NOW_S + 9000 };
-  const seven = { used_percentage: 35, resets_at: NOW_S + 86400 };
-
-  async function seed(cache_file) {
-    await run({
-      stdin_text: JSON.stringify({ rate_limits: { five_hour: five, seven_day: seven } }),
-      now_ms: NOW_MS,
-      reset_cache_file: cache_file,
-    });
-  }
-
-  it('keeps the file byte-identical when stdin has no rate_limits', async () => {
-    const cache_file = freshCacheFile();
-    await seed(cache_file);
-    const before_bytes = fs.readFileSync(cache_file);
-    await run({ stdin_text: '{}', now_ms: NOW_MS + 1000, reset_cache_file: cache_file });
-    assert.ok(before_bytes.equals(fs.readFileSync(cache_file)));
-  });
-
-  it('keeps the previous seven_day when only five_hour is on stdin', async () => {
-    const cache_file = freshCacheFile();
-    await seed(cache_file);
-    const newer = { used_percentage: 60, resets_at: NOW_S + 9100 };
-    await run({
-      stdin_text: JSON.stringify({ rate_limits: { five_hour: newer } }),
-      now_ms: NOW_MS + 1000,
-      reset_cache_file: cache_file,
-    });
-    const { data } = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.equal(data.five_hour.utilization, 60);
-    assert.equal(data.seven_day.utilization, 35);
-  });
-
-  it('removes a window after its reset', async () => {
-    const cache_file = freshCacheFile();
-    await seed(cache_file);
-    await run({ stdin_text: '{}', now_ms: (NOW_S + 9001) * 1000, reset_cache_file: cache_file });
-    const { data } = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.deepEqual(Object.keys(data), ['seven_day']);
-  });
-
-  it('leaves empty data when all windows expired', async () => {
-    const cache_file = freshCacheFile();
-    await seed(cache_file);
-    const later_ms = (NOW_S + 86401) * 1000;
-    await run({ stdin_text: '{}', now_ms: later_ms, reset_cache_file: cache_file });
-    const cache = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.deepEqual(cache, { fetched_at: later_ms, data: {} });  });
-
-  it('creates no file when there is nothing to record', async () => {
-    const cache_file = freshCacheFile();
-    await run({ stdin_text: JSON.stringify({ model: { display_name: 'Opus' } }), now_ms: NOW_MS, reset_cache_file: cache_file });
-    assert.equal(fs.existsSync(cache_file), false);
-  });
-
-  it('renders but does not write a past window', async () => {
-    const cache_file = freshCacheFile();
-    const line = await run({
-      stdin_text: JSON.stringify({ rate_limits: { five_hour: { used_percentage: 90, resets_at: NOW_S - 60 } } }),
-      now_ms: NOW_MS,
-      reset_cache_file: cache_file,
-    });
-    assert.match(stripAnsi(line), /5h .* 90% now/);
-    assert.equal(fs.existsSync(cache_file), false);
-  });
-
-  it('rewrites a legacy raw-API file in the new shape', async () => {
-    const cache_file = freshCacheFile();
-    const offset_iso = '2099-01-01T05:00:00+02:00';
-    fs.writeFileSync(cache_file, JSON.stringify({
-      fetched_at: NOW_MS - 1000,
-      data: {
-        five_hour: { utilization: 10, resets_at: offset_iso },
-        seven_day: { utilization: 20, resets_at: '2099-01-02T00:00:00.123456+00:00' },
-        extra_usage: { is_enabled: true },
-      },
-    }));
-    await run({ stdin_text: '{}', now_ms: NOW_MS, reset_cache_file: cache_file });
-    const { data } = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.deepEqual(Object.keys(data), ['five_hour', 'seven_day']);
-    assert.equal(data.five_hour.resets_at, '2099-01-01T03:00:00.000Z');
-    assert.match(data.seven_day.resets_at, ISO_RE);
-  });
-});
-
 describe('robustness against missing, malformed and wrong-typed stdin', () => {
   const bad_stdin = ['', '   \n', '{not json', 'null', '42', '"x"', '[]', 'true'];
 
@@ -345,19 +216,14 @@ describe('robustness against missing, malformed and wrong-typed stdin', () => {
     });
   }
 
-  it('a millisecond or far-future resets_at is not written as an extended-year ISO string', async () => {
-    const cache_file = freshCacheFile();
-    await run({
-      stdin_text: JSON.stringify({ rate_limits: {
+  it('a millisecond resets_at renders and a far-future one is dropped', async () => {
+    const line = stripAnsi(await runLine({
+      rate_limits: {
         five_hour: { used_percentage: 10, resets_at: (NOW_S + 9000) * 1000 },
         seven_day: { used_percentage: 10, resets_at: 1e300 },
-      } }),
-      now_ms: NOW_MS,
-      reset_cache_file: cache_file,
-    });
-    const { data } = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.equal(data.five_hour.resets_at, new Date((NOW_S + 9000) * 1000).toISOString());
-    assert.equal(data.seven_day, undefined);
+      },
+    }));
+    assert.match(line, /^5h .* 10% 2h30m │ 7d .* 10%$/);
     assert.equal(toIsoString(999999999999999), null);
   });
 
@@ -378,22 +244,12 @@ describe('robustness against missing, malformed and wrong-typed stdin', () => {
     assert.equal(line, '5h ██████████ 150% 2h30m');
   });
 
-  it('spend_limit alone renders no bars and writes no cache', async () => {
-    const cache_file = freshCacheFile();
+  it('spend_limit alone renders no bars', async () => {
     const line = await run({
       stdin_text: JSON.stringify({ rate_limits: { spend_limit: { used_percentage: 10, resets_at: NOW_S + 9000 } } }),
       now_ms: NOW_MS,
-      reset_cache_file: cache_file,
     });
     assert.equal(line, '');
-    assert.equal(fs.existsSync(cache_file), false);
-  });
-
-  it('an unwritable cache path does not change the line', async () => {
-    const good = await runLine(fullSession());
-    const bad_path = path.join(tmp_root, 'no-such-dir', 'nested', 'cache.json');
-    const bad = await runLine(fullSession(), { reset_cache_file: bad_path });
-    assert.equal(bad, good);
   });
 });
 
@@ -494,19 +350,6 @@ describe('opt-in rendering', () => {
       five_hour: { utilization: 10, resets_at: new Date(NOW_MS - 1000).toISOString() },
     });
     assert.equal(stripAnsi(line), 'Opus');
-  });
-
-  it('writes uniform ISO strings to the reset cache', async () => {
-    const cache_file = freshCacheFile();
-    const sooner_s = NOW_S + 3600;
-    await optInRun({ model: { display_name: 'Opus' } }, {
-      five_hour: { utilization: 10, resets_at: '2099-01-01T05:00:00+00:00' },
-      seven_day: { utilization: 20, resets_at: sooner_s },
-    }, { reset_cache_file: cache_file });
-    const cache = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.equal(cache.data.five_hour.resets_at, '2099-01-01T05:00:00.000Z');
-    assert.equal(cache.data.seven_day.resets_at, new Date(sooner_s * 1000).toISOString());
-    for (const key of ['five_hour', 'seven_day']) assert.match(cache.data[key].resets_at, ISO_RE);
   });
 });
 
@@ -755,23 +598,5 @@ describe('trusted read of the cache files', () => {
     ], { encoding: 'utf8', timeout: 5000 });
     assert.equal(result.signal, null, 'the read must not block on a FIFO');
     assert.equal(result.stdout, 'null');
-  });
-
-  it('renders the line when a FIFO sits at the reset cache path', { skip: no_fifo }, () => {
-    const fifo = path.join(tmp_root, 'reset-fifo.json');
-    spawnSync('mkfifo', [fifo]);
-    const result = spawnSync(process.execPath, [SCRIPT], {
-      input: JSON.stringify(fullSession()),
-      encoding: 'utf8',
-      timeout: 5000,
-      env: Object.assign({}, process.env, {
-        HOME: path.join(tmp_root, 'home'),
-        CLAUDE_WORKFLOW_STATE_DIR: state_dir,
-        CLAUDE_STATUSLINE_CACHE: fifo,
-      }),
-    });
-    assert.equal(result.signal, null, 'the status line must not hang');
-    assert.equal(result.status, 0);
-    assert.match(stripAnsi(result.stdout), /5h .* │ 7d /);
   });
 });

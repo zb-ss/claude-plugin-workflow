@@ -146,11 +146,6 @@ When the user invokes this skill:
 - Default behaviour is stdin only: no credential read and no network call
 - The status line updates after each assistant message (not real-time)
 - Colors adapt: green (< 70%), yellow (70-89%), red (90%+)
-- **Reset cache**: each run records the window resets in `$(node -e "console.log(require('os').tmpdir())")/claude-statusline-usage.json` (override with `CLAUDE_STATUSLINE_CACHE`). Shape: `{"fetched_at": <ms>, "data": {"five_hour": {"utilization": 52, "resets_at": "<ISO>"}, "seven_day": {...}}}`, with `resets_at` always an ISO 8601 UTC string. The workflow quota pause reads it to schedule the resume.
-  - A window missing from stdin keeps its last known reset until that reset passes
-  - Expired windows are removed
-  - The file is written only when its content changes
-  - It is read only when it is a regular file owned by the current user; anything else is ignored as if absent
 - With the extra-usage opt-in on, responses are cached for 60 seconds, and a failed lookup for 30 seconds, in `<state dir>/claude-statusline-oauth-usage.json` (owner-only, `0600`), not in the temp directory
 
 ## Troubleshooting
@@ -172,7 +167,3 @@ When the user invokes this skill:
 - The undocumented endpoint changed
 
 In every one of these cases the rest of the line still renders.
-
-**Inspecting or clearing the reset cache:**
-- Inspect: `cat "$(node -e "console.log(require('os').tmpdir())")/claude-statusline-usage.json"`
-- Delete: `rm "$(node -e "console.log(require('os').tmpdir())")/claude-statusline-usage.json"`
