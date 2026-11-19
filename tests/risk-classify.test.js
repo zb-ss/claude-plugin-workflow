@@ -224,3 +224,81 @@ describe('gatherFromWorktree: uncommitted work', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Auth signal: prose words must not rate a change high-risk
+// ---------------------------------------------------------------------------
+
+describe('auth signal on diff content', () => {
+  const PROSE = 'The session ends when the token expires and the credential is rotated.';
+  const diffFor = (file, line) => [
+    `diff --git a/${file} b/${file}`,
+    `--- a/${file}`,
+    `+++ b/${file}`,
+    '@@ -1 +1,2 @@',
+    ` existing`,
+    `+${line}`,
+  ].join('\n');
+
+  it('ignores prose in a Markdown line', () => {
+    const result = classify(diffFor('docs/notes.md', PROSE), ['docs/notes.md']);
+    assert.ok(!cats(result).includes('auth'), JSON.stringify(result.signals));
+    assert.notEqual(result.risk, 'high');
+  });
+
+  it('ignores prose in a code comment', () => {
+    const result = classify(diffFor('src/util.js', `// ${PROSE}`), ['src/util.js']);
+    assert.ok(!cats(result).includes('auth'), JSON.stringify(result.signals));
+    assert.notEqual(result.risk, 'high');
+  });
+
+  it('still flags a token assignment in code', () => {
+    const result = classify(diffFor('src/util.js', 'const token = readToken();'), ['src/util.js']);
+    assert.ok(cats(result).includes('auth'));
+    assert.equal(result.risk, 'high');
+  });
+
+  it('does not treat "author" as auth', () => {
+    const result = classify(diffFor('docs/notes.md', 'the author of this change'), ['docs/notes.md']);
+    assert.ok(!cats(result).includes('auth'), JSON.stringify(result.signals));
+  });
+
+  it('flags code-like uses of ambiguous terms', () => {
+    for (const line of ['$session->get()', 'session(', '$x->session()', 'auth_token', 'credentials:', 'apiSecret = 1', 'authenticate(user)', 'x = jwt']) {
+      const result = classify(diffFor('src/a.js', line), ['src/a.js']);
+      assert.ok(cats(result).includes('auth'), `expected auth for: ${line}`);
+    }
+  });
+
+  it('flags common auth identifiers in code', () => {
+    const lines = [
+      'if (!req.isAuthenticated()) return res.redirect("/");',
+      '$this->isAuthorized($user, $record);',
+      'throw new UnauthorizedException();',
+      'reauthenticate(user);',
+      'requireAuthentication();',
+      'const h = passwordHash(p);',
+      'class PasswordHasher {}',
+      'const passwords = load();',
+      'loginAttempts += 1;',
+      'class LoginController {}',
+      'new JwtService();',
+      'JWTAuth.verify(x);',
+      'class OAuthProvider {}',
+      'return token;',
+      'if (token) go();',
+      'const { token } = req.query;',
+    ];
+    for (const line of lines) {
+      const result = classify(diffFor('src/guard.js', line), ['src/guard.js']);
+      assert.ok(cats(result).includes('auth'), `expected auth for: ${line}`);
+    }
+  });
+
+  it('does not treat "authors" or "authority" as auth', () => {
+    for (const line of ['the authors of this change', 'a higher authority decides']) {
+      const result = classify(diffFor('docs/notes.md', line), ['docs/notes.md']);
+      assert.ok(!cats(result).includes('auth'), `unexpected auth for: ${line}`);
+    }
+  });
+});
