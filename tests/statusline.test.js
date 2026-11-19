@@ -1,7 +1,6 @@
 /**
  * Tests for statusline/statusline.js and statusline/reset-cache.js — the
- * stdin-only default path, the reset cache contract with
- * hooks/lib/rate-limit.js, and input robustness.
+ * stdin-only default path, the reset cache file contract, and input robustness.
  *
  * All state lives under a temp root; nothing touches ~/.claude,
  * ~/.claude-workflows, the real tmp cache or the network.
@@ -18,7 +17,6 @@ const { spawnSync } = require('node:child_process');
 
 const { run } = require('../statusline/statusline.js');
 const { resolveResetCacheFile, toIsoString } = require('../statusline/reset-cache.js');
-const { readStatuslineCache, getNextResetIso } = require('../hooks/lib/rate-limit.js');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const SCRIPT = path.join(REPO_ROOT, 'statusline', 'statusline.js');
@@ -211,15 +209,7 @@ describe('reset cache write', () => {
   });
 });
 
-describe('reset cache round trip through rate-limit.js', () => {
-  it('rate-limit.js reads what the status line wrote', async () => {
-    await run({ stdin_text: JSON.stringify(fullSession()), now_ms: NOW_MS });
-    const cache = readStatuslineCache();
-    const on_disk = JSON.parse(fs.readFileSync(process.env.CLAUDE_STATUSLINE_CACHE, 'utf8'));
-    assert.deepEqual(cache, on_disk);
-    assert.equal(getNextResetIso(), cache.data.five_hour.resets_at);
-  });
-
+describe('reset cache file', () => {
   it('default path equals the reader default', () => {
     assert.equal(resolveResetCacheFile({}), path.join(os.tmpdir(), 'claude-statusline-usage.json'));
   });
@@ -273,15 +263,7 @@ describe('reset cache policy', () => {
     const later_ms = (NOW_S + 86401) * 1000;
     await run({ stdin_text: '{}', now_ms: later_ms, reset_cache_file: cache_file });
     const cache = JSON.parse(fs.readFileSync(cache_file, 'utf8'));
-    assert.deepEqual(cache, { fetched_at: later_ms, data: {} });
-    const saved = process.env.CLAUDE_STATUSLINE_CACHE;
-    process.env.CLAUDE_STATUSLINE_CACHE = cache_file;
-    try {
-      assert.equal(getNextResetIso(), null);
-    } finally {
-      process.env.CLAUDE_STATUSLINE_CACHE = saved;
-    }
-  });
+    assert.deepEqual(cache, { fetched_at: later_ms, data: {} });  });
 
   it('creates no file when there is nothing to record', async () => {
     const cache_file = freshCacheFile();
@@ -525,14 +507,6 @@ describe('opt-in rendering', () => {
     assert.equal(cache.data.five_hour.resets_at, '2099-01-01T05:00:00.000Z');
     assert.equal(cache.data.seven_day.resets_at, new Date(sooner_s * 1000).toISOString());
     for (const key of ['five_hour', 'seven_day']) assert.match(cache.data[key].resets_at, ISO_RE);
-
-    const saved = process.env.CLAUDE_STATUSLINE_CACHE;
-    process.env.CLAUDE_STATUSLINE_CACHE = cache_file;
-    try {
-      assert.equal(getNextResetIso(), new Date(sooner_s * 1000).toISOString());
-    } finally {
-      process.env.CLAUDE_STATUSLINE_CACHE = saved;
-    }
   });
 });
 

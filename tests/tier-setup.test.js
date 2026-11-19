@@ -365,14 +365,10 @@ describe('tier-check hook', () => {
     assert.deepEqual(fs.readdirSync(c.stateDir), []);
   });
 
-  it('is registered second under SessionStart, existing entry unchanged', () => {
+  it('is registered under SessionStart', () => {
     const entries = JSON.parse(fs.readFileSync(HOOKS_JSON, 'utf8')).hooks.SessionStart;
-    assert.equal(entries.length, 2);
+    assert.equal(entries.length, 1);
     assert.deepEqual(entries[0], {
-      matcher: 'startup|resume',
-      hooks: [{ type: 'command', command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.js"', timeout: 5 }],
-    });
-    assert.deepEqual(entries[1], {
       matcher: 'startup',
       hooks: [{ type: 'command', command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/tier-check.js"', timeout: 5 }],
     });

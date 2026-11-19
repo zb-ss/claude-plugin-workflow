@@ -1,7 +1,7 @@
 'use strict';
 /**
- * Reset cache: the contract between the status line (writer) and
- * hooks/lib/rate-limit.js (reader).
+ * Reset cache: written by the status line for other tools to read; the file
+ * name and shape below are part of that contract.
  *
  * Shape: {fetched_at: <ms>, data: {five_hour: {utilization, resets_at}, seven_day: {...}}}
  * `resets_at` is always a Date#toISOString() string so the reader's string
@@ -13,7 +13,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
-// Must equal the literal in hooks/lib/rate-limit.js readStatuslineCache().
+// Other tools look this file up by name, so the name is part of the contract.
 const RESET_CACHE_FILE_NAME = 'claude-statusline-usage.json';
 const WINDOW_KEYS = ['five_hour', 'seven_day'];
 const EPOCH_MS_THRESHOLD = 1e12;
