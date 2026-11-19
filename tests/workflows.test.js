@@ -914,10 +914,43 @@ describe('implement browser check and proof video', () => {
     assert.equal(result.status, 'complete');
   });
 
-  it('skips the proof video without a demo skill', async () => {
+  it('uses the bundled recorder when no demo skill is set', async () => {
     const { result, calls } = await runScript('implement.js', { args: { plan: userPlan() }, respond: responder() });
+    const demos = calls.filter(c => c.opts.label === 'proof-video');
+    assert.equal(demos.length, 1);
+    assert.ok(demos[0].prompt.includes('workflow:record-demo'));
+    assert.equal(result.proof_video.ran, true);
+    assert.equal(result.proof_video.skill, 'workflow:record-demo');
+  });
+
+  it('turns the proof video off with demo_skill none', async () => {
+    const { result, calls } = await runScript('implement.js', { args: { plan: userPlan(), demo_skill: 'none' }, respond: responder() });
     assert.equal(calls.filter(c => c.opts.label === 'proof-video').length, 0);
-    assert.deepEqual(result.proof_video, { ran: false, skipped: true, reason: 'no demo skill configured' });
+    assert.deepEqual(result.proof_video, { ran: false, skipped: true, reason: 'disabled with demo_skill: "none"' });
+  });
+
+  it('reserves no agent slot for the proof video with demo_skill none', async () => {
+    const { result } = await runScript('implement.js', { args: { plan: userPlan(), demo_skill: 'none', max_agents: 1 }, respond: responder() });
+    assert.match(result.stopped, /agent cap of 3/);
+  });
+
+  it('reserves four agent slots when no demo skill is set', async () => {
+    const { result } = await runScript('implement.js', { args: { plan: userPlan(), max_agents: 1 }, respond: responder() });
+    assert.match(result.stopped, /agent cap of 4/);
+  });
+
+  it('skips, not fails, when the recorder dependencies are missing', async () => {
+    const missing = ['playwright', 'ffmpeg'];
+    const { result } = await runScript('implement.js', {
+      args: { plan: userPlan() },
+      respond: responder({ demo: { status: 'skipped', missing, notes: 'check failed' } }),
+    });
+    assert.equal(result.proof_video.ran, false);
+    assert.equal(result.proof_video.skipped, true);
+    assert.deepEqual(result.proof_video.missing, missing);
+    assert.match(result.proof_video.reason, /playwright, ffmpeg/);
+    assert.equal(result.status, 'complete');
+    assert.ok(!result.dropped.some(d => d.what === 'proof video'));
   });
 
   it('rejects an invalid demo_skill before any agent starts', async () => {

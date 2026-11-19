@@ -40,7 +40,8 @@ Otherwise pass nothing and the default applies.
 
 **Demo skill.** If `${CLAUDE_WORKFLOW_STATE_DIR:-~/.claude-workflows}/preferences.json`
 exists and sets `demo_skill`, pass that value as `demo_skill` to implement. Otherwise
-pass nothing and the proof video stage is skipped.
+pass nothing: implement then records the proof video with the bundled recorder
+(`workflow:record-demo`). A value of `none` turns the proof video off.
 
 ## Steps
 
@@ -75,8 +76,9 @@ Summarise the result in a few lines:
   could_not_run), what was verified and what was not, and the failures. When it failed
   or could not run, say that this is why sign-off did not run
 - proof video: recorded (with the file it reports), failed (with the reason), or
-  skipped (with the reason; `no demo skill configured` means `demo_skill` is not set
-  in preferences.json)
+  skipped (with the reason: `demo_skill` is `none` in preferences.json, or recorder
+  dependencies are missing, in which case name them from `proof_video.missing` and
+  mention that `/workflow:setup` shows the recorder's dependency check)
 - cost-relevant facts: `agents_used`, the `effort` levels used, and per-lens counts
   from `lens_stats`
 - any judge stage listed in `judge_fallback.used`: say it ran on the fallback model
