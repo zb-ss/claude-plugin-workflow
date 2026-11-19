@@ -9,6 +9,12 @@ The queue is a single **private** GitHub repository. One issue = one task.
 Labels encode the state machine. Comments are the progress log.
 The CLI adapter lives at `lib/queue-cli.js`.
 
+`/workflow:auto` works through the queue: for each issue it runs the plan and implement
+workflows in the mapped local checkout. When the plan needs answers, the issue becomes
+`blocked` with the questions in a comment. For complete work it commits on a branch,
+runs the repository's full test suite, pushes and opens a pull request through the scrub
+gate, then moves the issue to `review` with the pull request link.
+
 > **Identity note.** `gh` CLI and the GitHub MCP server may authenticate as
 > different GitHub identities. Both must be able to read/write the control repo
 > AND every `target_repo`. Verify with `gh auth status` before setting up.
