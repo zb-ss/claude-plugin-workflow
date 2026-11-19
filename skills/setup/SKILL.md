@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Configure Claude Code permissions and fix the startup setup reminders.
+description: Configure Claude Code permissions, fix the startup setup reminders, and check the browser tool and the demo recorder.
 ---
 
 # Workflow Setup
@@ -195,6 +195,34 @@ Mention that Claude Code must be restarted for the settings change to take effec
 **8d. Scrub denylist**
 
 Only when `denylist.status` is `unreadable`. Show the configured path (`denylist.configured`) and the error, and suggest writing `CLAUDE_WORKFLOW_SCRUB_DENYLIST` in the `~/` form, which resolves on every machine that shares the settings file. Do not edit it automatically.
+
+### Step 9: Browser Tool and Demo Recorder
+
+**9a. Browser automation MCP**
+
+The browser check of user-facing changes drives the app through a connected browser automation MCP (Playwright or Chrome DevTools). Run `claude mcp list` and read the output as text. A server counts when its name or command mentions `playwright`, `chrome-devtools`, `puppeteer` or `browser`. Also count browser tools already connected in this session (tool names starting `mcp__playwright__` or `mcp__chrome-devtools__`).
+
+- One is found: name it and move on.
+- `claude mcp list` itself fails: show the error and the command below, and change nothing.
+- None is found: explain that the browser check needs one. Without it the check falls back to a local Playwright script when the `playwright` package is available, and otherwise cannot run, which blocks sign-off of user-facing changes. Offer the documented command for the official Playwright MCP server:
+
+```bash
+claude mcp add playwright npx @playwright/mcp@latest
+```
+
+Say that this adds it for the current project, and that `--scope user` after `add` makes it available in every project. Run the command only after the user says yes to it explicitly. On anything else, leave the configuration alone and show the command so they can run it later. After adding, say that the server is available after Claude Code restarts.
+
+**9b. Demo recorder**
+
+Run:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/skills/record-demo/deps.js" check
+```
+
+The JSON has `ok`, `missing` and `items` (each with `name`, `ok`, `detail` and, when missing, `install`). Show one line per item in the same ✓ / ✗ form Step 4 uses, with the `install` hint for each missing item.
+
+Explain that the proof video of a user-facing change is recorded with the bundled recorder (`/workflow:record-demo`), that it is skipped, not failed, while dependencies are missing, and that `"demo_skill": "none"` in `preferences.json` turns it off (another skill name there replaces the bundled recorder). Install nothing automatically; the user runs the install commands.
 
 ### Important Notes
 

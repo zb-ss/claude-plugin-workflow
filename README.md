@@ -23,7 +23,9 @@ driver that works through a queue of GitHub issues.
 2. Run `/workflow:setup` once. It configures permissions and offers, each only with your
    yes: a short model-tier note in your global `CLAUDE.md`, the judge fallback (below),
    and the session model recommendation. A startup check reminds you in one line if one
-   of these is missing, and stays silent once they are set or you decline.
+   of these is missing, and stays silent once they are set or you decline. Setup also
+   checks for a browser automation tool, offers to add the Playwright MCP server (only
+   with your yes) and shows the demo recorder's dependency check.
 
 3. Give it a task:
 
@@ -44,7 +46,9 @@ What happens:
 5. **Fix and sign off.** Confirmed findings are fixed in bounded rounds, then a judge
    checks every acceptance criterion and runs the test suite.
 6. **Browser check and demo.** A user-facing change is checked in a real browser before
-   sign-off, and a demo is recorded afterwards when a demo skill is configured.
+   sign-off, and a demo is recorded afterwards with the bundled recorder (it needs the
+   `playwright` module, a Chromium build and ffmpeg, and is skipped when they are
+   missing; `demo_skill: "none"` in preferences.json turns it off).
 7. **Summary.** What changed, what is still open, the sign-off, and how many agents ran.
 
 Plain words change the route: `/workflow:do plan only …`, `/workflow:do review my changes`,
@@ -107,7 +111,8 @@ orchestrator: it talks to you and launches the workflows, and works best on `opu
 | `/workflow:plan` | Plan a task, or return the questions that block a plan |
 | `/workflow:implement` | Build a plan, then review, fix and sign off |
 | `/workflow:review` | Review uncommitted changes, with verified findings |
-| `/workflow:setup` | Permissions, the model-tier note, the judge fallback |
+| `/workflow:setup` | Permissions, the model-tier note, the judge fallback, the browser tool and the recorder check |
+| `/workflow:record-demo` | Record a demo video of a feature: pointer, captions, .srt and mp4 |
 | `/workflow:setup-statusline` | Turn the usage status line on or off |
 | `/workflow:verify` | Run build, type, lint, test and security checks on current changes |
 | `/workflow:queue` | Manage the autonomous task queue |
