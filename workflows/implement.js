@@ -12,7 +12,7 @@ export const meta = {
     { title: 'Fix', detail: 'executor fixes confirmed findings; bounded rounds' },
     { title: 'Browser check', detail: 'for a user-facing task: drive the running app through the golden path, an adjacent path and a failure case' },
     { title: 'Sign-off', detail: 'completion-guard checks requirements, build and tests' },
-    { title: 'Proof video', detail: 'after a passing browser check and sign-off: record a demo through the configured skill' },
+    { title: 'Proof video', detail: 'after a passing browser check and sign-off: record a demo with the bundled recorder or the configured skill' },
   ],
 }
 
@@ -25,7 +25,7 @@ export const meta = {
 //   verifiers?: number,         verifiers for CRITICAL and security MAJOR findings (default 3, majority decides)
 //   sign_off?: boolean,         run completion-guard at the end (default true)
 //   max_agents?: number,        stop spawning agents after this many; slots stay reserved for sign-off, the browser check and the proof video (default 25)
-//   demo_skill?: string,         skill that records a demo after a passing browser check (default: none, the stage is skipped)
+//   demo_skill?: string,         skill that records a demo after a passing browser check (default: the bundled recorder workflow:record-demo; 'none' = no proof video)
 //   include_optional?: boolean, also build work items the plan marked optional (default false)
 //   judge_effort?: string,      effort for the fable lenses and sign-off: low | medium | high | xhigh | max (default: frontmatter)
 //   worker_effort?: string,     effort for the sonnet executors, test-writer and verifiers (default: frontmatter)
@@ -72,7 +72,15 @@ function checkSkillName(name, value) {
   return value
 }
 const USER_FACING = PLAN.user_facing === true
-const DEMO_SKILL = checkSkillName('implement: demo_skill', input.demo_skill)
+const BUNDLED_DEMO_SKILL = 'workflow:record-demo'
+// Unset means the bundled recorder, 'none' turns the proof video off (null), any other name is used as given.
+function demoSkill(value) {
+  const name = checkSkillName('implement: demo_skill', value)
+  if (name === null) return BUNDLED_DEMO_SKILL
+  if (name === 'none') return null
+  return name
+}
+const DEMO_SKILL = demoSkill(input.demo_skill)
 const RESERVE = (SIGN_OFF ? 1 : 0) + (USER_FACING ? 1 : 0) + (USER_FACING && DEMO_SKILL ? 1 : 0)
 const MAX_AGENTS = Math.max(RESERVE + 1, input.max_agents || 25)
 const INCLUDE_OPTIONAL = input.include_optional === true
@@ -167,7 +175,12 @@ const BROWSER_SCHEMA = {
 const DEMO_SCHEMA = {
   type: 'object',
   required: ['status', 'notes'],
-  properties: { status: { type: 'string', enum: ['recorded', 'failed'] }, file: { type: 'string' }, notes: { type: 'string' } },
+  properties: {
+    status: { type: 'string', enum: ['recorded', 'failed', 'skipped'] },
+    file: { type: 'string' },
+    notes: { type: 'string' },
+    missing: { type: 'array', items: { type: 'string' }, description: 'With skipped: the recorder dependencies that are missing' },
+  },
 }
 
 // ==== shared review core: keep identical in review.js and implement.js ====
@@ -810,7 +823,7 @@ if (!USER_FACING) {
 } else if (!browser_ok) {
   proof_video = { ran: false, reason: 'no passing browser check' }
 } else if (DEMO_SKILL === null) {
-  proof_video = { ran: false, skipped: true, reason: 'no demo skill configured' }
+  proof_video = { ran: false, skipped: true, reason: 'disabled with demo_skill: "none"' }
 } else if (!complete) {
   proof_video = { ran: false, reason: 'the work is not complete' }
 } else {
@@ -818,11 +831,23 @@ if (!USER_FACING) {
   const result = await spawn(
     `${planBlock}\n\nBrowser check that passed (JSON): ${JSON.stringify(browser_check)}\n\n` +
     `Record a demo of this change with the skill named "${DEMO_SKILL}": invoke it with the Skill tool and follow it. ` +
-    'Show the golden path of the change. Report where the recording was saved. Change no project files.',
+    'Show the golden path of the change. Report where the recording was saved. Change no project files. ' +
+    'If the skill\'s dependency check reports missing dependencies, install nothing: return status "skipped" and list them in missing. ' +
+    'Save the recording outside the repository.',
     { label: 'proof-video', phase: 'Proof video', agentType: 'workflow:web-tester', schema: DEMO_SCHEMA },
     true,
   )
-  if (result) {
+  if (result && result.status === 'skipped') {
+    const missing = Array.isArray(result.missing) ? result.missing : []
+    proof_video = {
+      ran: false,
+      skipped: true,
+      skill: DEMO_SKILL,
+      missing,
+      reason: 'recorder dependencies missing: ' + (missing.join(', ') || result.notes),
+      notes: result.notes,
+    }
+  } else if (result) {
     proof_video = { ran: true, skill: DEMO_SKILL, ...result }
   } else {
     proof_video = { ran: false, reason: state.stop || 'web-tester returned no result' }

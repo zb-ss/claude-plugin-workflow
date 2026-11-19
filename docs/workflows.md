@@ -57,7 +57,7 @@ findings in bounded rounds, and ends with a sign-off.
 | `sign_off` | Run the completion-guard sign-off (default true) |
 | `max_agents` | Stop starting agents after this many (default 25); slots stay reserved for the sign-off, the browser check and the proof video |
 | `include_optional` | Also build the plan's optional work items (default false) |
-| `demo_skill` | Skill that records a proof video after a passing browser check (default none: the stage is skipped) |
+| `demo_skill` | Skill that records a proof video after a passing browser check (default: the bundled recorder `workflow:record-demo`; `none` turns the stage off) |
 | `judge_effort`, `worker_effort`, `judge_fallback` | See [Effort and fallback](#effort-and-fallback) |
 
 The result has `status` (`complete` or `needs_attention`), per-item results, the files
@@ -71,8 +71,11 @@ sign-off, a web-tester agent walks the plan's flows in a real browser, through a
 browser automation MCP or a local Playwright script. A failed check, or one that could not
 run, means the sign-off does not run and the status is `needs_attention`.
 
-**Proof video.** After a passing check and a complete run, the skill named by `demo_skill`
-records a demo. Otherwise the stage is skipped and `proof_video` says why.
+**Proof video.** After a passing check and a complete run, the bundled recorder, or the
+skill named by `demo_skill`, records a demo. The bundled recorder needs Node, the
+`playwright` module, a Chromium build and ffmpeg. With dependencies missing the stage is
+skipped, not failed, and `proof_video.missing` lists them. `demo_skill: "none"` turns the
+stage off. In every other case the stage is skipped and `proof_video` says why.
 
 ## review
 

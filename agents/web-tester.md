@@ -64,6 +64,10 @@ When the prompt names a skill, invoke it with the Skill tool and follow it.
 Report the file it saved. If the skill is not available, return status `failed`
 with the reason.
 
+When the skill's dependency check reports missing dependencies, install nothing:
+return status `skipped` with the missing names in `missing`. Save recordings
+outside the repository.
+
 ## Limits
 
 Change no project files. Temp scripts live outside the repository.

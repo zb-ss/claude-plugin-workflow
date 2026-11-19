@@ -105,7 +105,7 @@ with any existing keys:
 ```json
 { "target_repos": { "owner/repo": "~/projects/repo" } }
 ```
-Optionally add `demo_skill`, the skill that records a proof video for user-facing work.
+`demo_skill` is optional: unset means the bundled recorder (`workflow:record-demo`), `"none"` turns the proof video off, and any other skill name is used as given.
 Configure the permissions in `resources/autonomy-config.md`. **Never** weaken the deny
 list (force-push, `rm -rf`, resource deletion) and **never** bypass the scrub gate.
 

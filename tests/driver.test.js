@@ -151,6 +151,12 @@ describe('readSettings', () => {
     assert.equal(s.judge_fallback, 'none');
   });
 
+  it('passes demo_skill through unchanged and keeps null when unset', () => {
+    assert.equal(driver.readSettings({}, '/h').demo_skill, null);
+    assert.equal(driver.readSettings({ demo_skill: 'none' }, '/h').demo_skill, 'none');
+    assert.equal(driver.readSettings({ demo_skill: 'workflow:record-demo' }, '/h').demo_skill, 'workflow:record-demo');
+  });
+
   it('throws TypeError naming the key', () => {
     assert.throws(() => driver.readSettings({ target_repos: [] }, '/h'), { name: 'TypeError', message: /target_repos/ });
     assert.throws(() => driver.readSettings({ target_repos: { a: 1 } }, '/h'), /target_repos/);
@@ -334,6 +340,11 @@ describe('runCommand', () => {
       fs.readFileSync(path.join(__dirname, '..', 'lib', 'driver-wake.js'), 'utf8'),
     );
     assert.equal(run(['install-wake']).updated, false);
+    const log = path.join(path.dirname(first.path), 'wake.log');
+    assert.equal(
+      first.schedule_example,
+      `0 * * * * PATH="$HOME/.local/bin:<dir of node>:<dir of gh>:/usr/local/bin:$PATH" node "${first.path}" >> "${log}" 2>&1`,
+    );
   });
 
   it('settings prints the parsed preferences', () => {

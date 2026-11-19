@@ -19,7 +19,7 @@ Located in the state directory.
 ```json
 {
   "target_repos": { "owner/repo": "~/projects/repo" },
-  "demo_skill": "record-demo",
+  "demo_skill": "workflow:record-demo",
   "driver_max_agents": 4,
   "driver_max_attempts": 3,
   "driver_claude_args": ["--model", "opus"],
@@ -30,7 +30,7 @@ Located in the state directory.
 | Key | Meaning |
 |---|---|
 | `target_repos` | Maps a Target Repo (`owner/repo`) to a local checkout. An issue whose Target Repo is not mapped is parked as blocked with a comment. |
-| `demo_skill` | Name of the skill that records the proof video. Unset means the stage is skipped. |
+| `demo_skill` | Name of the skill that records the proof video. Unset means the bundled recorder (`workflow:record-demo`); `"none"` turns the stage off; any other skill name is used as given. |
 | `driver_max_agents` | Passed to implement as `max_agents`. Unset means the workflow default. |
 | `driver_max_attempts` | Launches per stage before the issue is parked. Default 3. |
 | `driver_pass_lock_minutes` | How long a manual `/workflow:auto` pass blocks scheduled wakes if it is not released. Default 240. |

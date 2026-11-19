@@ -184,7 +184,7 @@ reviewed diff. Launch:
 Workflow({ name: "workflow:implement", args: { plan: <the saved plan result>, repo: <repo_path>, base: <merge-base commit>, max_agents, demo_skill, judge_fallback } })
 ```
 
-Pass `max_agents`, `demo_skill` and `judge_fallback` only when settings has them.
+Pass `max_agents`, `demo_skill` and `judge_fallback` only when settings has them. When settings has no `demo_skill`, implement records the proof video with the bundled recorder (`workflow:record-demo`); `none` in preferences.json turns the proof video off; a proof video skipped for missing recorder dependencies does not change the run's status.
 Record the run with workflow `implement` as above. Save the result as
 `<data_dir>/implement-result.json`.
 
